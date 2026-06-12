@@ -1,0 +1,23 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "my-experiment",
+    "name": "My Experiment",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "image",
+        "name": "DAPI",
+        "path": {
+          "type": "zarr",
+          "path": "./image.zarr"
+        },
+        "attributes": {
+          "ngio:description": "stub-side annotation",
+          "ngio:reviewed": true
+        }
+      }
+    ]
+  }
+}

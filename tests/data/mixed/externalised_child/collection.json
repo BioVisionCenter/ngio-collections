@@ -1,0 +1,13 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "plate-1",
+    "name": "Plate 1",
+    "x-demo:source": "fixture",
+    "attributes": {
+      "x-demo:note": "externalised child document"
+    },
+    "nodes": []
+  }
+}

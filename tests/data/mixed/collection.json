@@ -1,0 +1,65 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "experiment-c",
+    "name": "Experiment C",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "thumbnail",
+        "name": "Thumbnail",
+        "attributes": {
+          "channel": "preview",
+          "coordinateSystems": [
+            {
+              "id": "physical",
+              "axes": [
+                {
+                  "name": "x",
+                  "type": "space"
+                }
+              ]
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "type": "singlescale",
+            "id": "thumbnail-s0",
+            "name": "s0",
+            "path": {
+              "type": "zarr",
+              "path": "./thumbnail.zarr/s0"
+            },
+            "attributes": {
+              "coordinateTransformations": [
+                {
+                  "type": "scale",
+                  "scale": [
+                    1.0
+                  ],
+                  "input": {
+                    "id": "thumbnail-s0"
+                  },
+                  "output": {
+                    "id": "physical"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "type": "collection",
+        "id": "plate-1",
+        "name": "Plate 1",
+        "path": {
+          "type": "json",
+          "path": "./externalised_child/collection.json"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "well_A1",
+    "name": "A1",
+    "attributes": {
+      "well": {
+        "column": {
+          "id": "1"
+        },
+        "row": {
+          "id": "A"
+        }
+      }
+    },
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "img_A1",
+        "name": "0",
+        "path": {
+          "type": "zarr",
+          "path": "./0.zarr"
+        }
+      }
+    ]
+  }
+}

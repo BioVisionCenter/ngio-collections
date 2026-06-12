@@ -1,0 +1,54 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "id": "image",
+      "name": "DAPI",
+      "attributes": {
+        "coordinateSystems": [
+          {
+            "id": "physical",
+            "name": null,
+            "axes": [
+              {
+                "name": "x",
+                "type": "space"
+              }
+            ]
+          }
+        ],
+        "labels": {
+          "labelAttributes": [
+            {
+              "labelValue": 1,
+              "color": [
+                255,
+                0,
+                0,
+                255
+              ]
+            }
+          ],
+          "source": []
+        }
+      },
+      "nodes": [
+        {
+          "type": "singlescale",
+          "id": "s0",
+          "name": "s0",
+          "path": {
+            "type": "zarr",
+            "path": "./s0"
+          },
+          "attributes": {
+            "coordinateTransformations": []
+          }
+        }
+      ]
+    }
+  }
+}

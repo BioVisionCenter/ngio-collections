@@ -1,0 +1,44 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "id": "img_B1",
+      "name": "0",
+      "attributes": {
+        "coordinateSystems": [
+          {
+            "id": "physical",
+            "name": null,
+            "axes": [
+              {
+                "name": "y",
+                "type": "space"
+              },
+              {
+                "name": "x",
+                "type": "space"
+              }
+            ]
+          }
+        ]
+      },
+      "nodes": [
+        {
+          "type": "singlescale",
+          "id": "s0_B1",
+          "name": "s0",
+          "path": {
+            "type": "zarr",
+            "path": "./s0"
+          },
+          "attributes": {
+            "coordinateTransformations": []
+          }
+        }
+      ]
+    }
+  }
+}

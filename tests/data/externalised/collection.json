@@ -1,0 +1,19 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "experiment-b",
+    "name": "Experiment B",
+    "nodes": [
+      {
+        "type": "collection",
+        "id": "plate-1",
+        "name": "Plate 1",
+        "path": {
+          "type": "json",
+          "path": "./child/collection.json"
+        }
+      }
+    ]
+  }
+}

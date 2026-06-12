@@ -1,0 +1,54 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "custom_key": 42,
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "id": "well-a01",
+      "name": "Well A01",
+      "attributes": {
+        "channel": "DAPI",
+        "coordinateSystems": [
+          {
+            "id": "physical",
+            "axes": [
+              {
+                "name": "x",
+                "type": "space"
+              }
+            ]
+          }
+        ]
+      },
+      "nodes": [
+        {
+          "type": "singlescale",
+          "id": "s0",
+          "name": "s0",
+          "path": {
+            "type": "zarr",
+            "path": "./s0"
+          },
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "type": "scale",
+                "scale": [
+                  1.0
+                ],
+                "input": {
+                  "id": "s0"
+                },
+                "output": {
+                  "id": "physical"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

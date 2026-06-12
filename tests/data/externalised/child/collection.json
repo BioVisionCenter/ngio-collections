@@ -1,0 +1,19 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "plate-1",
+    "name": "Plate 1",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "well-a01",
+        "name": "Well A01",
+        "path": {
+          "type": "zarr",
+          "path": "./well_a01.zarr"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "experiment-a",
+    "name": "Experiment A",
+    "attributes": {
+      "project": "demo"
+    },
+    "nodes": [
+      {
+        "type": "collection",
+        "id": "plate-1",
+        "name": "Plate 1",
+        "nodes": [
+          {
+            "type": "multiscale",
+            "id": "well-a01",
+            "name": "Well A01",
+            "attributes": {
+              "channel": "DAPI",
+              "coordinateSystems": [
+                {
+                  "id": "physical",
+                  "axes": [
+                    {
+                      "name": "x",
+                      "type": "space"
+                    }
+                  ]
+                }
+              ]
+            },
+            "nodes": [
+              {
+                "type": "singlescale",
+                "id": "well-a01-s0",
+                "name": "s0",
+                "path": {
+                  "type": "zarr",
+                  "path": "./well_a01.zarr/s0"
+                },
+                "attributes": {
+                  "coordinateTransformations": [
+                    {
+                      "type": "scale",
+                      "scale": [
+                        1.0
+                      ],
+                      "input": {
+                        "id": "well-a01-s0"
+                      },
+                      "output": {
+                        "id": "physical"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "multiscale",
+        "id": "thumbnail",
+        "name": "Thumbnail",
+        "attributes": {
+          "coordinateSystems": [
+            {
+              "id": "thumbnail-physical",
+              "axes": [
+                {
+                  "name": "x",
+                  "type": "space"
+                }
+              ]
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "type": "singlescale",
+            "id": "thumbnail-s0",
+            "name": "s0",
+            "path": {
+              "type": "zarr",
+              "path": "./thumbnail.zarr/s0"
+            },
+            "attributes": {
+              "coordinateTransformations": [
+                {
+                  "type": "scale",
+                  "scale": [
+                    1.0
+                  ],
+                  "input": {
+                    "id": "thumbnail-s0"
+                  },
+                  "output": {
+                    "id": "thumbnail-physical"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
