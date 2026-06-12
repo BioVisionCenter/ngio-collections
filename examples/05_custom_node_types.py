@@ -14,23 +14,23 @@ Run with:
 
 from typing import Literal
 
-import ome_zarr_collections as ozc
+import ngio_collections as ngc
 
 
-class TableNode(ozc.BaseNode):
+class TableNode(ngc.BaseNode):
     """A custom node type with its own typed field."""
 
     type: Literal["fractal:table"] = "fractal:table"
     region: str | None = None
 
 
-def build_registry() -> ozc.NodeRegistry:
+def build_registry() -> ngc.NodeRegistry:
     # A fresh registry starts empty: register the built-ins you need plus
     # your own types (DEFAULT_REGISTRY keeps the everyday ergonomics).
-    registry = ozc.NodeRegistry()
-    registry.register("collection", ozc.CollectionNode)
-    registry.register("multiscale", ozc.MultiscaleNode)
-    registry.register("singlescale", ozc.SinglescaleNode)
+    registry = ngc.NodeRegistry()
+    registry.register("collection", ngc.CollectionNode)
+    registry.register("multiscale", ngc.MultiscaleNode)
+    registry.register("singlescale", ngc.SinglescaleNode)
     registry.register("fractal:table", TableNode)
     return registry
 
@@ -55,7 +55,7 @@ DATA = {
 
 
 def main() -> None:
-    doc = ozc.parse_metadata_document(
+    doc = ngc.parse_metadata_document(
         DATA, url="memory://collection.json", registry=build_registry()
     )
     table = doc.root.find("t1")
@@ -68,7 +68,7 @@ def main() -> None:
 
     # Without the registry, the custom type is opaque too (graceful
     # degradation) — same document, no error, no custom field typing.
-    plain = ozc.parse_metadata_document(DATA, url="memory://collection.json")
+    plain = ngc.parse_metadata_document(DATA, url="memory://collection.json")
     print("without registry:", type(plain.root.find("t1")).__name__)
 
 

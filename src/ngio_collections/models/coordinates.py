@@ -10,7 +10,7 @@ from typing import ClassVar
 
 from pydantic import JsonValue
 
-from ome_zarr_collections.models.base import (
+from ngio_collections.models.base import (
     BaseAttribute,
     BaseListAttribute,
     BaseObj,

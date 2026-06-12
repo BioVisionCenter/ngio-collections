@@ -20,9 +20,9 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from ome_zarr_collections.models.base import BaseNode, PathObj
-from ome_zarr_collections.models.nodes import validate_node
-from ome_zarr_collections.registry import DEFAULT_REGISTRY, NodeRegistry
+from ngio_collections.models.base import BaseNode, PathObj
+from ngio_collections.models.nodes import validate_node
+from ngio_collections.registry import DEFAULT_REGISTRY, NodeRegistry
 
 MetadataDocumentForm = Literal["json", "zarr"]
 

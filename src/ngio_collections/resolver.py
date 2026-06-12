@@ -14,7 +14,7 @@ import posixpath
 from typing import Literal
 from urllib.parse import urljoin, urlparse
 
-from ome_zarr_collections.document import (
+from ngio_collections.document import (
     MetadataDocument,
     MetadataDocumentForm,
     NotOmeDocumentError,
@@ -22,15 +22,15 @@ from ome_zarr_collections.document import (
     _set_provenance,
     parse_metadata_document,
 )
-from ome_zarr_collections.models.base import (
+from ngio_collections.models.base import (
     BaseNode,
     JsonPath,
     PathObj,
     ZarrPath,
     merged_attributes,
 )
-from ome_zarr_collections.registry import DEFAULT_REGISTRY, NodeRegistry
-from ome_zarr_collections.store.protocols import (
+from ngio_collections.registry import DEFAULT_REGISTRY, NodeRegistry
+from ngio_collections.store.protocols import (
     ReadableStore,
     StoreReadOnlyError,
     WritableStore,

@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-import ome_zarr_collections as ozc
-from ome_zarr_collections.models import (
+import ngio_collections as ngc
+from ngio_collections.models import (
     AcquisitionObj,
     ColumnObj,
     LabelObj,
@@ -12,57 +12,57 @@ from ome_zarr_collections.models import (
 )
 
 
-def _node() -> ozc.BaseNode:
-    return ozc.BaseNode(type="x", id="n1", name="n1")
+def _node() -> ngc.BaseNode:
+    return ngc.BaseNode(type="x", id="n1", name="n1")
 
 
 def test_plate_attribute_round_trip():
-    plate = ozc.PlateAttribute(
+    plate = ngc.PlateAttribute(
         acquisitions=[AcquisitionObj(id="acq1", name="Acquisition 1")],
         columns=[ColumnObj(id="col1", name="1")],
         rows=[RowObj(id="rowA", name="A")],
     )
     node = _node()
-    node.attrs[ozc.PlateAttribute] = plate
-    assert ozc.PlateAttribute in node.attrs
-    assert node.attrs[ozc.PlateAttribute] == plate
+    node.attrs[ngc.PlateAttribute] = plate
+    assert ngc.PlateAttribute in node.attrs
+    assert node.attrs[ngc.PlateAttribute] == plate
 
 
 def test_plate_requires_columns_and_rows():
     with pytest.raises(ValidationError):
-        ozc.PlateAttribute(acquisitions=[])
+        ngc.PlateAttribute(acquisitions=[])
 
 
 def test_well_attribute_stored_spec_shaped():
-    well = ozc.WellAttribute(
-        column=ozc.ReferenceObj(id="col1"), row=ozc.ReferenceObj(id="rowA")
+    well = ngc.WellAttribute(
+        column=ngc.ReferenceObj(id="col1"), row=ngc.ReferenceObj(id="rowA")
     )
     node = _node()
-    node.attrs[ozc.WellAttribute] = well
+    node.attrs[ngc.WellAttribute] = well
     # exclude_none keeps the stored dict spec-shaped (no "path": null).
     assert node.attributes["well"] == {
         "column": {"id": "col1"},
         "row": {"id": "rowA"},
     }
-    assert node.attrs[ozc.WellAttribute] == well
+    assert node.attrs[ngc.WellAttribute] == well
 
 
 def test_acquisition_attribute_is_a_reference():
     node = _node()
-    node.attrs[ozc.AcquisitionAttribute] = ozc.AcquisitionAttribute(id="acq1")
+    node.attrs[ngc.AcquisitionAttribute] = ngc.AcquisitionAttribute(id="acq1")
     assert node.attributes["acquisition"] == {"id": "acq1"}
 
 
 def test_labels_attribute_uses_camel_case_aliases():
-    labels = ozc.LabelsAttribute(
+    labels = ngc.LabelsAttribute(
         label_attributes=[LabelObj(label_value=1, color=[255, 0, 0, 255])],
-        source=[ozc.ReferenceObj(id="raw")],
+        source=[ngc.ReferenceObj(id="raw")],
     )
     node = _node()
-    node.attrs[ozc.LabelsAttribute] = labels
+    node.attrs[ngc.LabelsAttribute] = labels
     stored = node.attributes["labels"]
     assert stored["labelAttributes"] == [{"labelValue": 1, "color": [255, 0, 0, 255]}]
-    assert node.attrs[ozc.LabelsAttribute] == labels
+    assert node.attrs[ngc.LabelsAttribute] == labels
 
 
 @pytest.mark.parametrize("color", [[255, 0, 0], [256, 0, 0, 0], [-1, 0, 0, 0]])
@@ -72,26 +72,26 @@ def test_label_color_must_be_four_uint8(color):
 
 
 def test_coordinate_systems_list_attribute_round_trip():
-    systems = ozc.CoordinateSystemsAttribute(
-        [ozc.CoordinateSystem(id="physical", axes=[{"name": "x", "type": "space"}])]
+    systems = ngc.CoordinateSystemsAttribute(
+        [ngc.CoordinateSystem(id="physical", axes=[{"name": "x", "type": "space"}])]
     )
     node = _node()
-    node.attrs[ozc.CoordinateSystemsAttribute] = systems
+    node.attrs[ngc.CoordinateSystemsAttribute] = systems
     assert node.attributes["coordinateSystems"] == [
         {"id": "physical", "axes": [{"name": "x", "type": "space"}]}
     ]
-    loaded = node.attrs.get(ozc.CoordinateSystemsAttribute)
+    loaded = node.attrs.get(ngc.CoordinateSystemsAttribute)
     assert loaded is not None
     assert loaded.root[0].id == "physical"
 
 
 def test_scene_attribute_round_trip():
-    scene = ozc.SceneAttribute(
+    scene = ngc.SceneAttribute(
         coordinate_systems=[
-            ozc.CoordinateSystem(id="world", axes=[{"name": "x", "type": "space"}])
+            ngc.CoordinateSystem(id="world", axes=[{"name": "x", "type": "space"}])
         ],
         coordinate_transformations=[
-            ozc.CoordinateTransformation.model_validate(
+            ngc.CoordinateTransformation.model_validate(
                 {
                     "type": "translation",
                     "translation": [0, 0, 100],
@@ -105,9 +105,9 @@ def test_scene_attribute_round_trip():
         ],
     )
     node = _node()
-    node.attrs[ozc.SceneAttribute] = scene
+    node.attrs[ngc.SceneAttribute] = scene
     stored = node.attributes["scene"]
     assert stored["coordinateSystems"][0]["id"] == "world"
     # Extra transform fields (translation) survive the round trip.
     assert stored["coordinateTransformations"][0]["translation"] == [0, 0, 100]
-    assert node.attrs[ozc.SceneAttribute] == scene
+    assert node.attrs[ngc.SceneAttribute] == scene

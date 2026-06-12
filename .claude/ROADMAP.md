@@ -89,7 +89,7 @@ First end-to-end vertical slice: open and navigate a collection on disk.
   surviving data paths from non-top documents are rebased to absolute URLs.
   `max_depth` (added 2026-06-12) bounds the collapse by resolution hops;
   boundary stubs are never fetched and survive verbatim (paths rebased).
-- [x] Sync convenience API `ome_zarr_collections.api` (added 2026-06-12):
+- [x] Sync convenience API `ngio_collections.api` (added 2026-06-12):
   `open_collection` / `open_multiscale` (fully inlined single tree, direct
   URL only; `max_depth=` / `on_error=` forwarded to the warming pass and
   `inline()`) and `write_collection` / `write_multiscale` (one embedded
@@ -129,9 +129,9 @@ re-evaluate once M4 is done. See also DESIGN.md §10.
 - **`RouterStore` / mixed-store collections** — longest URL-prefix dispatch
   (design in DESIGN.md §6, no code yet). Includes documenting the cross-store
   portability asymmetry.
-- **Full sync facade** (`ome_zarr_collections.sync`) — loop-runner wrapper
+- **Full sync facade** (`ngio_collections.sync`) — loop-runner wrapper
   mirroring the whole Resolver surface. Partially superseded 2026-06-12 by
-  the four-function `ome_zarr_collections.api` module; for everything else,
+  the four-function `ngio_collections.api` module; for everything else,
   `asyncio.run()`.
 - **`Resolver.write(node, url, stub_path=...)`** — externalizing a node into
   a new document (collection restructuring). Bottom-up *composition* by

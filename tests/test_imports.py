@@ -2,23 +2,23 @@
 
 import pytest
 
-import ome_zarr_collections as ozc
+import ngio_collections as ngc
 
 
 def test_public_api_complete():
-    for name in ozc.__all__:
-        assert getattr(ozc, name) is not None
+    for name in ngc.__all__:
+        assert getattr(ngc, name) is not None
 
 
 def test_resolver_defaults():
-    resolver = ozc.Resolver(ozc.LocalStore())
-    assert resolver.registry is ozc.DEFAULT_REGISTRY
+    resolver = ngc.Resolver(ngc.LocalStore())
+    assert resolver.registry is ngc.DEFAULT_REGISTRY
 
 
 def test_store_protocols():
-    assert isinstance(ozc.LocalStore(), ozc.ReadableStore)
-    assert isinstance(ozc.LocalStore(), ozc.WritableStore)
-    assert issubclass(ozc.StoreReadOnlyError, PermissionError)
+    assert isinstance(ngc.LocalStore(), ngc.ReadableStore)
+    assert isinstance(ngc.LocalStore(), ngc.WritableStore)
+    assert issubclass(ngc.StoreReadOnlyError, PermissionError)
 
 
 def test_fsspec_store_optional_dependency():
@@ -30,10 +30,10 @@ def test_fsspec_store_optional_dependency():
         has_fsspec = False
 
     if has_fsspec:
-        assert ozc.FsspecStore("https").protocol == "https"
+        assert ngc.FsspecStore("https").protocol == "https"
     else:
         with pytest.raises(ImportError, match="fsspec"):
-            ozc.FsspecStore("https")
+            ngc.FsspecStore("https")
 
 
 def test_reference_fixtures_exist(reference):

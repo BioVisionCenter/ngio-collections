@@ -10,7 +10,7 @@ class FsspecStore:
 
     Recommended default for remote collections: one dependency brings
     http/s3/gcs/local and protocol dispatch. Requires the ``fsspec`` extra
-    (``pip install ome-zarr-collections[fsspec]``).
+    (``pip install ngio-collections[fsspec]``).
 
     Args:
         protocol: fsspec protocol name (e.g. ``"https"``, ``"s3"``).
@@ -26,7 +26,7 @@ class FsspecStore:
         except ImportError as exc:
             raise ImportError(
                 "FsspecStore requires the optional 'fsspec' dependency; "
-                "install with: pip install ome-zarr-collections[fsspec]"
+                "install with: pip install ngio-collections[fsspec]"
             ) from exc
         self.protocol = protocol
         self.read_only = read_only

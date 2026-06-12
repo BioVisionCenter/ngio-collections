@@ -1,4 +1,4 @@
-# ome-zarr-collections-py — Preliminary Design
+# ngio-collections-py — Preliminary Design
 
 **Status:** draft · 2026-06-11
 **Context:** Greenfield successor to the `fractal-collections-tools` 
@@ -121,7 +121,7 @@ concurrently" — paying the design cost without the benefit. Retrofitting
 async onto a sync core is the hard direction.
 
 **Correction:** `Store` and `Resolver` are `async def` native. A thin sync
-facade (`ome_zarr_collections.sync`, a loop-runner wrapper for scripts and
+facade (`ngio_collections.sync`, a loop-runner wrapper for scripts and
 REPL use) is deferred to future work (§10); until it exists, scripts use
 `asyncio.run()`.
 
@@ -226,9 +226,9 @@ document layer; the document layer never imports the store.
 ## 5. API sketch
 
 ```python
-import ome_zarr_collections as ozc
+import ngio_collections as ngc
 
-resolver = ozc.Resolver(ozc.LocalStore())
+resolver = ngc.Resolver(ngc.LocalStore())
 
 doc = await resolver.open("/data/segmentations/experiment-1/collection.json")
 root = doc.root                                  # CollectionNode
@@ -245,10 +245,10 @@ Once remote/mixed-store support lands (§10), the only change is the store
 passed to the Resolver:
 
 ```python
-store = ozc.RouterStore(
+store = ngc.RouterStore(
     routes={
-        "https://idr.example.org/": ozc.FsspecStore("https"),   # read-only
-        "/data/segmentations/":     ozc.LocalStore(),           # writable
+        "https://idr.example.org/": ngc.FsspecStore("https"),   # read-only
+        "/data/segmentations/":     ngc.LocalStore(),           # writable
     },
 )
 ```
@@ -317,7 +317,7 @@ document), and the sync facade.
 `save()` keeps the prototype's zarr behavior: read–modify–write of
 `zarr.json`, touching only the `attributes.ome` key.
 
-### Sync convenience API (`ome_zarr_collections.api`)
+### Sync convenience API (`ngio_collections.api`)
 
 Four functions over the async core, for scripts and notebooks —
 deliberately not a mirrored facade (that stays deferred, §10):
@@ -449,7 +449,7 @@ absolutely and local derived data relatively.
 ## 8. Module layout
 
 ```
-src/ome_zarr_collections/
+src/ngio_collections/
     models/
         base.py          # BaseObj, BaseNode, IdStr, Path objects, attrs view
         nodes.py         # CollectionNode, MultiscaleNode, SinglescaleNode
@@ -501,9 +501,9 @@ future-work section):
   interface skeleton is in place.
 - `RouterStore` implementation / mixed-store collections, including
   documenting the cross-store portability asymmetry (§6).
-- The full sync facade (`ome_zarr_collections.sync`), a loop-runner wrapper
+- The full sync facade (`ngio_collections.sync`), a loop-runner wrapper
   mirroring the whole Resolver surface. Partially superseded 2026-06-12 by
-  the four-function `ome_zarr_collections.api` module (§5); for everything
+  the four-function `ngio_collections.api` module (§5); for everything
   else, `asyncio.run()`.
 - `Resolver.write(node, url, stub_path=...)` — externalizing a node into a
   new document (collection restructuring). The *composition* direction —

@@ -6,7 +6,7 @@ from typing import Annotated, ClassVar
 
 from pydantic import Field
 
-from ome_zarr_collections.models.base import (
+from ngio_collections.models.base import (
     BaseAttribute,
     BaseObj,
     IdStr,

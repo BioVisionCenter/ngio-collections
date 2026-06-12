@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-import ome_zarr_collections as ozc
-from ome_zarr_collections import parse_metadata_document
+import ngio_collections as ngc
+from ngio_collections import parse_metadata_document
 
 REFERENCE_DIR = Path(__file__).parent / "data"
 
 
-class CountingStore(ozc.LocalStore):
+class CountingStore(ngc.LocalStore):
     """LocalStore that counts get() calls, to assert cache hits."""
 
     def __init__(self):
@@ -25,7 +25,7 @@ class CountingStore(ozc.LocalStore):
 
 @pytest.fixture
 def resolver():
-    return ozc.Resolver(ozc.LocalStore())
+    return ngc.Resolver(ngc.LocalStore())
 
 
 def _collection(node_id: str, *nodes: dict, attributes: dict | None = None) -> dict:
@@ -95,12 +95,12 @@ async def test_inline_externalised_fixture_collapses_all_stubs(resolver):
 
     # Two resolution hops collapsed: collection -> child collection -> zarr.
     plate = result.root.nodes[0]
-    assert isinstance(plate, ozc.CollectionNode)
+    assert isinstance(plate, ngc.CollectionNode)
     assert plate.path is None
     assert plate.id == "plate-1"
 
     well = plate.nodes[0]
-    assert isinstance(well, ozc.MultiscaleNode)
+    assert isinstance(well, ngc.MultiscaleNode)
     assert well.path is None
     # Stub's id/name kept (they match the target's in this fixture).
     assert (well.id, well.name) == ("well-a01", "Well A01")
@@ -180,10 +180,10 @@ async def test_inline_data_leaf_skip_and_raise(resolver, tmp_path):
     result = await resolver.inline(doc)
     leaf, gone = result.root.nodes[0].nodes
     assert leaf.path.path == str(tmp_path / "array.zarr")
-    assert isinstance(leaf.path, ozc.ZarrPath)  # no zarr.json suffix appended
+    assert isinstance(leaf.path, ngc.ZarrPath)  # no zarr.json suffix appended
     assert gone.path.path == str(tmp_path / "missing.json")
 
-    with pytest.raises((ozc.NotOmeDocumentError, FileNotFoundError)):
+    with pytest.raises((ngc.NotOmeDocumentError, FileNotFoundError)):
         await resolver.inline(doc, on_error="raise")
 
 
@@ -317,7 +317,7 @@ async def test_inline_version_from_top_document(resolver, tmp_path):
 
 async def test_inline_max_depth_zero_is_pure_copy(tmp_path):
     store = CountingStore()
-    resolver = ozc.Resolver(store)
+    resolver = ngc.Resolver(store)
     doc = await resolver.open(str(_write_merge_fixture(tmp_path)))
 
     fetched = store.gets
@@ -337,20 +337,20 @@ async def test_inline_max_depth_zero_is_pure_copy(tmp_path):
 
 async def test_inline_max_depth_one_keeps_deeper_stubs(tmp_path):
     store = CountingStore()
-    resolver = ozc.Resolver(store)
+    resolver = ngc.Resolver(store)
     fixture = REFERENCE_DIR / "externalised" / "collection.json"
     doc = await resolver.open(str(fixture))
 
     result = await resolver.inline(doc, max_depth=1)
     # First hop collapsed: the plate is embedded, not a stub.
     plate = result.root.nodes[0]
-    assert isinstance(plate, ozc.CollectionNode)
+    assert isinstance(plate, ngc.CollectionNode)
     assert plate.path is None
     # Second hop survives as a stub — never fetched, attributes verbatim
     # (the target's channel/coordinateSystems are NOT merged in) — with its
     # path rebased absolute against its declaring (non-top) document.
     well = plate.nodes[0]
-    assert isinstance(well, ozc.MultiscaleNode)
+    assert isinstance(well, ngc.MultiscaleNode)
     assert well.nodes is None
     assert well.attributes == {}
     expected = str(REFERENCE_DIR / "externalised" / "child" / "well_a01.zarr")
@@ -369,7 +369,7 @@ async def test_inline_max_depth_cuts_before_cycle(tmp_path):
     (tmp_path / "b.json").write_text(
         json.dumps(_collection("b", _stub("to-a", "./a.json")))
     )
-    resolver = ozc.Resolver(ozc.LocalStore())
+    resolver = ngc.Resolver(ngc.LocalStore())
     doc = await resolver.open(str(tmp_path / "a.json"))
 
     # The b -> a edge sits past the depth boundary, so no cycle is reached.
@@ -380,7 +380,7 @@ async def test_inline_max_depth_cuts_before_cycle(tmp_path):
 
 async def test_inline_is_pure_cache_reads_after_resolve_tree(tmp_path):
     store = CountingStore()
-    resolver = ozc.Resolver(store)
+    resolver = ngc.Resolver(store)
     doc = await resolver.open(str(_write_merge_fixture(tmp_path)))
     await resolver.resolve_tree(doc)
 

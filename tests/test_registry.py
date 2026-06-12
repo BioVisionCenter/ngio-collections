@@ -2,45 +2,45 @@
 
 import pytest
 
-import ome_zarr_collections as ozc
+import ngio_collections as ngc
 
 
 def test_default_registry_builtins():
-    assert ozc.DEFAULT_REGISTRY.get("collection") is ozc.CollectionNode
-    assert ozc.DEFAULT_REGISTRY.get("multiscale") is ozc.MultiscaleNode
-    assert ozc.DEFAULT_REGISTRY.get("singlescale") is ozc.SinglescaleNode
+    assert ngc.DEFAULT_REGISTRY.get("collection") is ngc.CollectionNode
+    assert ngc.DEFAULT_REGISTRY.get("multiscale") is ngc.MultiscaleNode
+    assert ngc.DEFAULT_REGISTRY.get("singlescale") is ngc.SinglescaleNode
 
 
 def test_unregistered_type_falls_back_to_base_node():
-    assert ozc.DEFAULT_REGISTRY.get("hcs-experiment") is ozc.BaseNode
-    assert "hcs-experiment" not in ozc.DEFAULT_REGISTRY
+    assert ngc.DEFAULT_REGISTRY.get("hcs-experiment") is ngc.BaseNode
+    assert "hcs-experiment" not in ngc.DEFAULT_REGISTRY
 
 
 def test_register_custom_node_type():
-    class CustomNode(ozc.BaseNode):
+    class CustomNode(ngc.BaseNode):
         pass
 
-    registry = ozc.NodeRegistry()
+    registry = ngc.NodeRegistry()
     registry.register("custom", CustomNode)
     assert "custom" in registry
     assert registry.get("custom") is CustomNode
 
 
 def test_registries_are_isolated_instances():
-    class CustomNode(ozc.BaseNode):
+    class CustomNode(ngc.BaseNode):
         pass
 
-    a = ozc.NodeRegistry()
-    b = ozc.NodeRegistry()
+    a = ngc.NodeRegistry()
+    b = ngc.NodeRegistry()
     a.register("custom", CustomNode)
     assert "custom" in a
     assert "custom" not in b
-    assert "custom" not in ozc.DEFAULT_REGISTRY
+    assert "custom" not in ngc.DEFAULT_REGISTRY
 
 
 def test_node_registry_rejects_bad_registrations():
-    registry = ozc.NodeRegistry()
+    registry = ngc.NodeRegistry()
     with pytest.raises(ValueError):
-        registry.register("", ozc.CollectionNode)
+        registry.register("", ngc.CollectionNode)
     with pytest.raises(TypeError):
         registry.register("dict", dict)

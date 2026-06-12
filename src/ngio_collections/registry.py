@@ -10,8 +10,8 @@ context (``model_validate(..., context={"registry": ...})``), falling back to
 
 from __future__ import annotations
 
-from ome_zarr_collections.models.base import BaseNode
-from ome_zarr_collections.models.nodes import (
+from ngio_collections.models.base import BaseNode
+from ngio_collections.models.nodes import (
     CollectionNode,
     MultiscaleNode,
     SinglescaleNode,

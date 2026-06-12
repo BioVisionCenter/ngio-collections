@@ -1,4 +1,4 @@
-# ome-zarr-collections
+# ngio-collections
 
 > [!WARNING]
 > This package is a very early OME-Zarr Collections prototype, intended to explore the design space and inform the 

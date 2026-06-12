@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-import ome_zarr_collections as ozc
+import ngio_collections as ngc
 
 REFERENCE_DIR = Path(__file__).parent / "data"
 
 
-class CountingStore(ozc.LocalStore):
+class CountingStore(ngc.LocalStore):
     """LocalStore that counts get() calls, to assert cache hits."""
 
     def __init__(self):
@@ -24,7 +24,7 @@ class CountingStore(ozc.LocalStore):
 
 @pytest.fixture
 def resolver():
-    return ozc.Resolver(ozc.LocalStore())
+    return ngc.Resolver(ngc.LocalStore())
 
 
 def _collection(node_id: str, *nodes: dict) -> dict:
@@ -69,7 +69,7 @@ async def test_resolve_tree_reaches_every_document(resolver):
 
 async def test_resolve_tree_warms_cache():
     store = CountingStore()
-    resolver = ozc.Resolver(store)
+    resolver = ngc.Resolver(store)
     doc = await resolver.open(str(REFERENCE_DIR / "externalised" / "collection.json"))
     await resolver.resolve_tree(doc)
 
@@ -106,7 +106,7 @@ async def test_resolve_tree_skips_plain_zarr_target(resolver, tmp_path):
     documents = await resolver.resolve_tree(doc)
     assert documents == [doc]
 
-    with pytest.raises(ozc.NotOmeDocumentError):
+    with pytest.raises(ngc.NotOmeDocumentError):
         await resolver.resolve_tree(doc, on_error="raise")
 
 
@@ -126,7 +126,7 @@ async def test_resolve_tree_max_depth():
     url = str(REFERENCE_DIR / "externalised" / "collection.json")
 
     store = CountingStore()
-    resolver = ozc.Resolver(store)
+    resolver = ngc.Resolver(store)
     doc = await resolver.open(url)
     assert await resolver.resolve_tree(doc, max_depth=0) == [doc]
     assert store.gets == 1  # only the open() itself
@@ -160,7 +160,7 @@ async def test_resolve_tree_dedupes_shared_target(tmp_path):
     )
 
     store = CountingStore()
-    resolver = ozc.Resolver(store)
+    resolver = ngc.Resolver(store)
     doc = await resolver.open(str(root_path))
     documents = await resolver.resolve_tree(doc)
 

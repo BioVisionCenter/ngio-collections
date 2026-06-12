@@ -1,6 +1,6 @@
 """Pure Pydantic models: nodes, attributes, coordinates. No IO, no URLs."""
 
-from ome_zarr_collections.models.attributes import (
+from ngio_collections.models.attributes import (
     AcquisitionAttribute,
     AcquisitionObj,
     ColumnObj,
@@ -10,7 +10,7 @@ from ome_zarr_collections.models.attributes import (
     RowObj,
     WellAttribute,
 )
-from ome_zarr_collections.models.base import (
+from ngio_collections.models.base import (
     ID_PATTERN,
     AnyAttribute,
     AttrsView,
@@ -25,14 +25,14 @@ from ome_zarr_collections.models.base import (
     ZarrPath,
     merged_attributes,
 )
-from ome_zarr_collections.models.coordinates import (
+from ngio_collections.models.coordinates import (
     CoordinateSystem,
     CoordinateSystemsAttribute,
     CoordinateTransformation,
     CoordinateTransformationsAttribute,
     SceneAttribute,
 )
-from ome_zarr_collections.models.nodes import (
+from ngio_collections.models.nodes import (
     CollectionNode,
     CollectionRef,
     MultiscaleNode,

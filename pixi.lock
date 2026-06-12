@@ -887,7 +887,7 @@ packages:
   size: 433413
   timestamp: 1764777166076
 - pypi: .
-  name: ome-zarr-collections
+  name: ngio-collections
   requires_dist:
   - pydantic>=2.0.0,<3.0.0
   - fsspec ; extra == 'fsspec'

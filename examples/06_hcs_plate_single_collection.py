@@ -25,8 +25,8 @@ Run with:
 import shutil
 from pathlib import Path
 
-import ome_zarr_collections as ozc
-from ome_zarr_collections.models import ColumnObj, RowObj
+import ngio_collections as ngc
+from ngio_collections.models import ColumnObj, RowObj
 
 ROOT = Path(__file__).parent / "data" / "hcs_single"
 
@@ -34,28 +34,28 @@ ROWS = ["A", "B"]
 COLUMNS = ["1", "2"]
 
 
-def build_image(row: str, col: str) -> ozc.MultiscaleNode:
+def build_image(row: str, col: str) -> ngc.MultiscaleNode:
     """A one-level multiscale for field 0 of well ``{row}/{col}``.
 
     Node ids are unique per well so the whole plate stays collision-free once
     every image is inlined into one tree on read.
     """
-    systems = ozc.CoordinateSystemsAttribute(
+    systems = ngc.CoordinateSystemsAttribute(
         [
-            ozc.CoordinateSystem(
+            ngc.CoordinateSystem(
                 id="physical",
                 axes=[{"name": "y", "type": "space"}, {"name": "x", "type": "space"}],
             )
         ]
     )
-    return ozc.MultiscaleNode(
+    return ngc.MultiscaleNode(
         id=f"img_{row}{col}",
         name="0",
         nodes=[
-            ozc.SinglescaleNode(
+            ngc.SinglescaleNode(
                 id=f"s0_{row}{col}",
                 name="s0",
-                path=ozc.ZarrPath(path="./s0"),
+                path=ngc.ZarrPath(path="./s0"),
                 attributes={"coordinateTransformations": []},
             )
         ],
@@ -63,15 +63,15 @@ def build_image(row: str, col: str) -> ozc.MultiscaleNode:
     )
 
 
-def build_well(row: str, col: str) -> ozc.CollectionNode:
+def build_well(row: str, col: str) -> ngc.CollectionNode:
     """A well collection whose single child is the externalized image stub."""
-    image_ref = ozc.write_multiscale(
+    image_ref = ngc.write_multiscale(
         build_image(row, col), str(ROOT / row / col / "0.zarr")
     )
-    well = ozc.WellAttribute(
-        row=ozc.ReferenceObj(id=row), column=ozc.ReferenceObj(id=col)
+    well = ngc.WellAttribute(
+        row=ngc.ReferenceObj(id=row), column=ngc.ReferenceObj(id=col)
     )
-    return ozc.CollectionNode(
+    return ngc.CollectionNode(
         id=f"well_{row}{col}",
         name=f"{row}{col}",
         nodes=[image_ref],
@@ -81,11 +81,11 @@ def build_well(row: str, col: str) -> ozc.CollectionNode:
     )
 
 
-def show(node: ozc.BaseNode, depth: int = 0) -> None:
+def show(node: ngc.BaseNode, depth: int = 0) -> None:
     stub = f" -> {node.path.path}" if node.path is not None else ""
     print(f"{'  ' * depth}[{node.type}] {node.id} attrs={list(node.attributes)}{stub}")
     for child in getattr(node, "nodes", None) or []:
-        if isinstance(child, ozc.BaseNode):
+        if isinstance(child, ngc.BaseNode):
             show(child, depth + 1)
 
 
@@ -94,11 +94,11 @@ def main() -> None:
 
     # Wells (with their image stubs) stay inline; only images are externalized.
     wells = [build_well(row, col) for row in ROWS for col in COLUMNS]
-    plate = ozc.PlateAttribute(
+    plate = ngc.PlateAttribute(
         rows=[RowObj(id=row) for row in ROWS],
         columns=[ColumnObj(id=col) for col in COLUMNS],
     )
-    plate_node = ozc.CollectionNode(
+    plate_node = ngc.CollectionNode(
         id="plate",
         name="My Plate",
         nodes=wells,
@@ -106,26 +106,26 @@ def main() -> None:
             plate.key: plate.model_dump(mode="json", by_alias=True, exclude_none=True)
         },
     )
-    ozc.write_collection(plate_node, str(ROOT / "collection.json"))
+    ngc.write_collection(plate_node, str(ROOT / "collection.json"))
 
     print("written files:")
     for file in sorted(ROOT.rglob("*.json")):
         print(f"  {file.relative_to(ROOT)}")
 
     # Read back: open_collection inlines the image documents into the plate.
-    root = ozc.open_collection(str(ROOT / "collection.json"))
+    root = ngc.open_collection(str(ROOT / "collection.json"))
     print("\nplate tree (fully inlined):")
     show(root)
 
     # Navigate the flattened plate with walk() / find().
-    plate_attr = root.attrs[ozc.PlateAttribute]
+    plate_attr = root.attrs[ngc.PlateAttribute]
     print(
         f"\nplate: {len(plate_attr.rows)} rows x {len(plate_attr.columns)} columns, "
         f"{sum(n.type == 'collection' for n in root.walk()) - 1} wells"
     )
     well_b2 = root.find("well_B2")
     assert well_b2 is not None
-    location = well_b2.attrs[ozc.WellAttribute]
+    location = well_b2.attrs[ngc.WellAttribute]
     print(f"well_B2 at row={location.row.id!r} column={location.column.id!r}")
 
 

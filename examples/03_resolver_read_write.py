@@ -22,22 +22,22 @@ import hashlib
 import shutil
 from pathlib import Path
 
-import ome_zarr_collections as ozc
+import ngio_collections as ngc
 
 ROOT = Path(__file__).parent / "data" / "resolver"
 VERSION = "0.x"
 
 
-def build_image() -> ozc.MultiscaleNode:
+def build_image() -> ngc.MultiscaleNode:
     """A multiscale image with one resolution level.
 
     The singlescale's path points at the array data; its scale transformation
     maps it into the "physical" coordinate system declared on the multiscale.
     """
-    s0 = ozc.SinglescaleNode(
+    s0 = ngc.SinglescaleNode(
         id="s0",
         name="s0",
-        path=ozc.ZarrPath(path="./s0"),
+        path=ngc.ZarrPath(path="./s0"),
         attributes={
             "coordinateTransformations": [
                 {
@@ -49,7 +49,7 @@ def build_image() -> ozc.MultiscaleNode:
             ]
         },
     )
-    physical = ozc.CoordinateSystem(
+    physical = ngc.CoordinateSystem(
         id="physical",
         axes=[
             {"name": "z", "type": "space", "unit": "micrometer"},
@@ -57,8 +57,8 @@ def build_image() -> ozc.MultiscaleNode:
             {"name": "x", "type": "space", "unit": "micrometer"},
         ],
     )
-    systems = ozc.CoordinateSystemsAttribute([physical])
-    return ozc.MultiscaleNode(
+    systems = ngc.CoordinateSystemsAttribute([physical])
+    return ngc.MultiscaleNode(
         id="image",
         name="DAPI",
         nodes=[s0],
@@ -70,20 +70,20 @@ def build_image() -> ozc.MultiscaleNode:
     )
 
 
-async def write_fixture(resolver: ozc.Resolver) -> None:
+async def write_fixture(resolver: ngc.Resolver) -> None:
     """One MetadataDocument per externalized node; the root references them
     through path stubs. ``stub_path`` is how the parent document will
     reference each child document."""
-    image_doc = ozc.MetadataDocument(
+    image_doc = ngc.MetadataDocument(
         root=build_image(),
         url=str(ROOT / "image.zarr" / "zarr.json"),
         form="zarr",
         version=VERSION,
-        stub_path=ozc.ZarrPath(path="./image.zarr"),
+        stub_path=ngc.ZarrPath(path="./image.zarr"),
     )
     await resolver.save(image_doc)
 
-    tables = ozc.CollectionNode(
+    tables = ngc.CollectionNode(
         id="tables",
         name="Tables",
         nodes=[
@@ -92,40 +92,40 @@ async def write_fixture(resolver: ozc.Resolver) -> None:
             {"type": "fractal:table", "id": "t1", "name": "regionprops"},
         ],
     )
-    tables_doc = ozc.MetadataDocument(
+    tables_doc = ngc.MetadataDocument(
         root=tables,
         url=str(ROOT / "tables" / "measurements.json"),
         form="json",
         version=VERSION,
-        stub_path=ozc.JsonPath(path="./tables/measurements.json"),
+        stub_path=ngc.JsonPath(path="./tables/measurements.json"),
     )
     await resolver.save(tables_doc)
 
-    root = ozc.CollectionNode(
+    root = ngc.CollectionNode(
         id="my-experiment",
         name="My Experiment",
         nodes=[
-            ozc.MultiscaleNode(
-                id="image", name="DAPI", path=ozc.ZarrPath(path="./image.zarr")
+            ngc.MultiscaleNode(
+                id="image", name="DAPI", path=ngc.ZarrPath(path="./image.zarr")
             ),
-            ozc.CollectionNode(
+            ngc.CollectionNode(
                 id="tables",
                 name="Tables",
-                path=ozc.JsonPath(path="./tables/measurements.json"),
+                path=ngc.JsonPath(path="./tables/measurements.json"),
             ),
         ],
     )
-    root_doc = ozc.MetadataDocument(
+    root_doc = ngc.MetadataDocument(
         root=root, url=str(ROOT / "collection.json"), form="json", version=VERSION
     )
     await resolver.save(root_doc)
 
 
-def print_tree(node: ozc.BaseNode, indent: int = 0) -> None:
+def print_tree(node: ngc.BaseNode, indent: int = 0) -> None:
     stub = f" -> {node.path.path}" if node.path is not None else ""
     print(f"{'  ' * indent}[{node.type}] {node.id}{stub}")
     for child in getattr(node, "nodes", None) or []:
-        if isinstance(child, ozc.BaseNode):
+        if isinstance(child, ngc.BaseNode):
             print_tree(child, indent + 1)
 
 
@@ -135,10 +135,10 @@ def snapshot() -> dict[Path, str]:
 
 async def main() -> None:
     shutil.rmtree(ROOT, ignore_errors=True)
-    await write_fixture(ozc.Resolver(ozc.LocalStore()))
+    await write_fixture(ngc.Resolver(ngc.LocalStore()))
 
     # A fresh resolver, so open() parses the documents from disk.
-    resolver = ozc.Resolver(ozc.LocalStore())
+    resolver = ngc.Resolver(ngc.LocalStore())
 
     # --- Open only reads the root document; children stay as stubs ----------
     doc = await resolver.open(str(ROOT / "collection.json"))
@@ -151,7 +151,7 @@ async def main() -> None:
     # document lives in the resolver's URL-keyed cache.
     image_stub = root.find("image")
     image_doc = await resolver.resolve(image_stub)
-    systems = image_doc.root.attrs[ozc.CoordinateSystemsAttribute]
+    systems = image_doc.root.attrs[ngc.CoordinateSystemsAttribute]
     print(
         f"\nResolved {image_doc.root.id!r}: "
         f"coordinate systems = {[cs.id for cs in systems.root]}"

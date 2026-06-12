@@ -5,8 +5,8 @@ from typing import Literal
 import pytest
 from pydantic import ValidationError
 
-import ome_zarr_collections as ozc
-from ome_zarr_collections.models import validate_node
+import ngio_collections as ngc
+from ngio_collections.models import validate_node
 
 COORD_SYSTEMS = [{"id": "physical", "axes": [{"name": "x", "type": "space"}]}]
 SCALE_TRANSFORMS = [
@@ -19,33 +19,33 @@ SCALE_TRANSFORMS = [
 ]
 
 
-def _singlescale_stub() -> ozc.SinglescaleNode:
-    return ozc.SinglescaleNode(id="s0", name="s0", path=ozc.ZarrPath(path="./s0"))
+def _singlescale_stub() -> ngc.SinglescaleNode:
+    return ngc.SinglescaleNode(id="s0", name="s0", path=ngc.ZarrPath(path="./s0"))
 
 
 def test_collection_requires_nodes_xor_path():
     with pytest.raises(ValidationError, match="exactly one"):
-        ozc.CollectionNode(id="c", name="c")
+        ngc.CollectionNode(id="c", name="c")
     with pytest.raises(ValidationError, match="exactly one"):
-        ozc.CollectionNode(id="c", name="c", nodes=[], path=ozc.ZarrPath(path="./x"))
-    assert ozc.CollectionNode(id="c", name="c", nodes=[]).nodes == []
+        ngc.CollectionNode(id="c", name="c", nodes=[], path=ngc.ZarrPath(path="./x"))
+    assert ngc.CollectionNode(id="c", name="c", nodes=[]).nodes == []
     assert (
-        ozc.CollectionNode(id="c", name="c", path=ozc.ZarrPath(path="./x")).nodes
+        ngc.CollectionNode(id="c", name="c", path=ngc.ZarrPath(path="./x")).nodes
         is None
     )
 
 
 def test_child_names_unique_within_collection():
-    child_a = ozc.BaseNode(type="x", id="a", name="same")
-    child_b = ozc.BaseNode(type="x", id="b", name="same")
+    child_a = ngc.BaseNode(type="x", id="a", name="same")
+    child_b = ngc.BaseNode(type="x", id="b", name="same")
     with pytest.raises(ValidationError, match="duplicate child name"):
-        ozc.CollectionNode(id="c", name="c", nodes=[child_a, child_b])
+        ngc.CollectionNode(id="c", name="c", nodes=[child_a, child_b])
 
 
 def test_multiscale_inline_requires_coordinate_systems():
     with pytest.raises(ValidationError, match="coordinateSystems"):
-        ozc.MultiscaleNode(id="m", name="m", nodes=[_singlescale_stub()])
-    node = ozc.MultiscaleNode(
+        ngc.MultiscaleNode(id="m", name="m", nodes=[_singlescale_stub()])
+    node = ngc.MultiscaleNode(
         id="m",
         name="m",
         nodes=[_singlescale_stub()],
@@ -53,21 +53,21 @@ def test_multiscale_inline_requires_coordinate_systems():
     )
     assert node.nodes is not None
     # A path stub carries no attributes (RFC tiles example).
-    stub = ozc.MultiscaleNode(id="m2", name="m2", path=ozc.ZarrPath(path="./m2.zarr"))
+    stub = ngc.MultiscaleNode(id="m2", name="m2", path=ngc.ZarrPath(path="./m2.zarr"))
     assert stub.attributes == {}
 
 
 def test_multiscale_requires_nodes_xor_path():
     with pytest.raises(ValidationError, match="exactly one"):
-        ozc.MultiscaleNode(
+        ngc.MultiscaleNode(
             id="m", name="m", attributes={"coordinateSystems": COORD_SYSTEMS}
         )
 
 
 def test_singlescale_requires_transformations_when_inline():
     with pytest.raises(ValidationError, match="coordinateTransformations"):
-        ozc.SinglescaleNode(id="s0", name="s0")
-    inline = ozc.SinglescaleNode(
+        ngc.SinglescaleNode(id="s0", name="s0")
+    inline = ngc.SinglescaleNode(
         id="s0",
         name="s0",
         attributes={"coordinateTransformations": SCALE_TRANSFORMS},
@@ -81,12 +81,12 @@ def test_unknown_type_is_opaque_and_round_trips_extras():
     node = validate_node(
         {"type": "mobie:table", "id": "t1", "name": "table", "customField": 42}
     )
-    assert type(node) is ozc.BaseNode
+    assert type(node) is ngc.BaseNode
     assert node.model_dump(by_alias=True)["customField"] == 42
 
 
 def test_children_parse_through_default_registry():
-    collection = ozc.CollectionNode.model_validate(
+    collection = ngc.CollectionNode.model_validate(
         {
             "type": "collection",
             "id": "c",
@@ -102,17 +102,17 @@ def test_children_parse_through_default_registry():
             ],
         }
     )
-    assert isinstance(collection.nodes[0], ozc.MultiscaleNode)
+    assert isinstance(collection.nodes[0], ngc.MultiscaleNode)
     # Unregistered types degrade to the opaque BaseNode.
-    assert type(collection.nodes[1]) is ozc.BaseNode
+    assert type(collection.nodes[1]) is ngc.BaseNode
 
 
 def test_registry_from_validation_context():
-    class FractalRoiNode(ozc.BaseNode):
+    class FractalRoiNode(ngc.BaseNode):
         type: Literal["fractal:roi"] = "fractal:roi"
 
-    registry = ozc.NodeRegistry()
-    registry.register("collection", ozc.CollectionNode)
+    registry = ngc.NodeRegistry()
+    registry.register("collection", ngc.CollectionNode)
     registry.register("fractal:roi", FractalRoiNode)
 
     data = {
@@ -121,22 +121,22 @@ def test_registry_from_validation_context():
         "name": "c",
         "nodes": [{"type": "fractal:roi", "id": "r1", "name": "roi"}],
     }
-    with_context = ozc.CollectionNode.model_validate(
+    with_context = ngc.CollectionNode.model_validate(
         data, context={"registry": registry}
     )
     assert isinstance(with_context.nodes[0], FractalRoiNode)
 
     # Without the context, the custom type is unknown to DEFAULT_REGISTRY.
-    without_context = ozc.CollectionNode.model_validate(data)
-    assert type(without_context.nodes[0]) is ozc.BaseNode
+    without_context = ngc.CollectionNode.model_validate(data)
+    assert type(without_context.nodes[0]) is ngc.BaseNode
 
 
 def test_context_registry_threads_through_nested_documents():
-    class FractalRoiNode(ozc.BaseNode):
+    class FractalRoiNode(ngc.BaseNode):
         type: Literal["fractal:roi"] = "fractal:roi"
 
-    registry = ozc.NodeRegistry()
-    registry.register("collection", ozc.CollectionNode)
+    registry = ngc.NodeRegistry()
+    registry.register("collection", ngc.CollectionNode)
     registry.register("fractal:roi", FractalRoiNode)
 
     data = {
@@ -152,9 +152,9 @@ def test_context_registry_threads_through_nested_documents():
             }
         ],
     }
-    parsed = ozc.CollectionNode.model_validate(data, context={"registry": registry})
+    parsed = ngc.CollectionNode.model_validate(data, context={"registry": registry})
     inner = parsed.nodes[0]
-    assert isinstance(inner, ozc.CollectionNode)
+    assert isinstance(inner, ngc.CollectionNode)
     assert isinstance(inner.nodes[0], FractalRoiNode)
 
 
@@ -163,8 +163,8 @@ def test_validate_node_rejects_non_node_values():
         validate_node(42)
 
 
-def _nested_collection() -> ozc.CollectionNode:
-    return ozc.CollectionNode.model_validate(
+def _nested_collection() -> ngc.CollectionNode:
+    return ngc.CollectionNode.model_validate(
         {
             "type": "collection",
             "id": "root",
@@ -200,7 +200,7 @@ def test_walk_on_leaf_yields_only_itself():
 def test_walk_yields_stubs_without_descending():
     collection = _nested_collection()
     stub = next(node for node in collection.walk() if node.id == "m")
-    assert isinstance(stub, ozc.MultiscaleRef)
+    assert isinstance(stub, ngc.MultiscaleRef)
     assert list(stub.walk()) == [stub]
 
 

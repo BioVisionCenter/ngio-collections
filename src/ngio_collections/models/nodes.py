@@ -17,7 +17,7 @@ from pydantic import (
     model_validator,
 )
 
-from ome_zarr_collections.models.base import BaseNode, PathObj
+from ngio_collections.models.base import BaseNode, PathObj
 
 
 def validate_node(value: Any, *, context: dict[str, Any] | None = None) -> BaseNode:
@@ -27,7 +27,7 @@ def validate_node(value: Any, *, context: dict[str, Any] | None = None) -> BaseN
     (``context={"registry": ...}``); without one, ``DEFAULT_REGISTRY`` is used.
     """
     # Imported lazily: the registry module imports this one at load time.
-    from ome_zarr_collections.registry import DEFAULT_REGISTRY
+    from ngio_collections.registry import DEFAULT_REGISTRY
 
     registry = (context or {}).get("registry") or DEFAULT_REGISTRY
 

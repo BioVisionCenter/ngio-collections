@@ -31,7 +31,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 if TYPE_CHECKING:
-    from ome_zarr_collections.document import MetadataDocument
+    from ngio_collections.document import MetadataDocument
 
 ID_PATTERN = r"^[a-zA-Z0-9\-_.]+$"
 
@@ -148,7 +148,7 @@ class BaseNode(BaseObj):
 
     Unregistered node types parse as a plain ``BaseNode`` (graceful
     degradation). Note: no ``version`` field — the ``ome`` version lives on
-    :class:`~ome_zarr_collections.document.MetadataDocument` (DESIGN.md §3.1).
+    :class:`~ngio_collections.document.MetadataDocument` (DESIGN.md §3.1).
     """
 
     type: str

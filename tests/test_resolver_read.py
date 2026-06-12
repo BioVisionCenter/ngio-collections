@@ -6,20 +6,20 @@ from pathlib import Path
 
 import pytest
 
-import ome_zarr_collections as ozc
+import ngio_collections as ngc
 
 REFERENCE_DIR = Path(__file__).parent / "data"
 
 
 @pytest.fixture
 def resolver():
-    return ozc.Resolver(ozc.LocalStore())
+    return ngc.Resolver(ngc.LocalStore())
 
 
 async def test_open_parses_and_caches(resolver):
     url = str(REFERENCE_DIR / "externalised" / "collection.json")
     doc = await resolver.open(url)
-    assert isinstance(doc.root, ozc.CollectionNode)
+    assert isinstance(doc.root, ngc.CollectionNode)
     assert doc.root.id == "experiment-b"
     assert doc.form == "json"
     # Cached by URL: a second open returns the same MetadataDocument.
@@ -32,7 +32,7 @@ async def test_resolve_json_stub_against_declaring_document(resolver):
     assert stub.path is not None
 
     child = await resolver.resolve(stub)
-    assert isinstance(child.root, ozc.CollectionNode)
+    assert isinstance(child.root, ngc.CollectionNode)
     assert child.root.id == "plate-1"
     assert child.form == "json"
     assert child.stub_path == stub.path
@@ -45,12 +45,12 @@ async def test_resolve_zarr_stub_targets_zarr_json(resolver):
         str(REFERENCE_DIR / "externalised" / "child" / "collection.json")
     )
     stub = child.root.nodes[0]
-    assert isinstance(stub.path, ozc.ZarrPath)
+    assert isinstance(stub.path, ngc.ZarrPath)
 
     image = await resolver.resolve(stub)
     assert image.form == "zarr"
     assert image.url.endswith("well_a01.zarr/zarr.json")
-    assert isinstance(image.root, ozc.MultiscaleNode)
+    assert isinstance(image.root, ngc.MultiscaleNode)
     assert image.root.nodes[0].id == "s0"
 
 
@@ -61,9 +61,9 @@ async def test_children_replaces_stubs_without_mutating(resolver):
     assert len(children) == 2
     # The inline child is returned as-is.
     assert children[0] is doc.root.nodes[0]
-    assert isinstance(children[0], ozc.MultiscaleNode)
+    assert isinstance(children[0], ngc.MultiscaleNode)
     # The stub is transparently replaced by the resolved document root...
-    assert isinstance(children[1], ozc.CollectionNode)
+    assert isinstance(children[1], ngc.CollectionNode)
     assert children[1].nodes == []
     # ...but the parsed tree itself keeps the stub in place (DESIGN.md §3.3).
     assert doc.root.nodes[1].path is not None
@@ -98,8 +98,8 @@ async def test_resolve_pathless_inline_node_rejected(resolver):
 
 
 async def test_resolve_detached_node_rejected(resolver):
-    foreign = ozc.CollectionNode(
-        id="x", name="x", path=ozc.JsonPath(path="./nowhere.json")
+    foreign = ngc.CollectionNode(
+        id="x", name="x", path=ngc.JsonPath(path="./nowhere.json")
     )
     with pytest.raises(ValueError, match="detached"):
         await resolver.resolve(foreign)
@@ -180,11 +180,11 @@ async def test_open_zarr_group_directory_appends_zarr_json(resolver):
     doc = await resolver.open(url)
     assert doc.form == "zarr"
     assert doc.url.endswith("well_a01.zarr/zarr.json")
-    assert isinstance(doc.root, ozc.MultiscaleNode)
+    assert isinstance(doc.root, ngc.MultiscaleNode)
 
 
 async def test_resolver_uses_its_registry(tmp_path):
-    registry = ozc.NodeRegistry()  # nothing registered
-    resolver = ozc.Resolver(ozc.LocalStore(), registry=registry)
+    registry = ngc.NodeRegistry()  # nothing registered
+    resolver = ngc.Resolver(ngc.LocalStore(), registry=registry)
     doc = await resolver.open(str(REFERENCE_DIR / "inline" / "collection.json"))
-    assert type(doc.root) is ozc.BaseNode
+    assert type(doc.root) is ngc.BaseNode

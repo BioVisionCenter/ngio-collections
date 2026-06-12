@@ -3,20 +3,20 @@ the right subtypes (ROADMAP M1)."""
 
 import json
 
-import ome_zarr_collections as ozc
-from ome_zarr_collections.models import validate_node
+import ngio_collections as ngc
+from ngio_collections.models import validate_node
 
 EXPECTED_TYPES = {
-    "collection": ozc.CollectionNode,
-    "multiscale": ozc.MultiscaleNode,
-    "singlescale": ozc.SinglescaleNode,
+    "collection": ngc.CollectionNode,
+    "multiscale": ngc.MultiscaleNode,
+    "singlescale": ngc.SinglescaleNode,
 }
 
 # Path-bearing collections/multiscales parse as the narrowed reference form.
 EXPECTED_REF_TYPES = {
-    "collection": ozc.CollectionRef,
-    "multiscale": ozc.MultiscaleRef,
-    "singlescale": ozc.SinglescaleNode,
+    "collection": ngc.CollectionRef,
+    "multiscale": ngc.MultiscaleRef,
+    "singlescale": ngc.SinglescaleNode,
 }
 
 
@@ -54,5 +54,5 @@ def test_fixture_stubs_keep_their_path(reference):
     data = json.loads((directory / "collection.json").read_text())
     root = validate_node(data["ome"])
     stub = next(n for n in root.nodes if n.path is not None)
-    assert isinstance(stub, ozc.CollectionRef)
+    assert isinstance(stub, ngc.CollectionRef)
     assert stub.nodes is None

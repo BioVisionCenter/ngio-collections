@@ -14,28 +14,28 @@ Run with:
 import shutil
 from pathlib import Path
 
-import ome_zarr_collections as ozc
+import ngio_collections as ngc
 
 ROOT = Path(__file__).parent / "data" / "sync_api"
 
 
-def build_multiscale() -> ozc.MultiscaleNode:
-    systems = ozc.CoordinateSystemsAttribute(
+def build_multiscale() -> ngc.MultiscaleNode:
+    systems = ngc.CoordinateSystemsAttribute(
         [
-            ozc.CoordinateSystem(
+            ngc.CoordinateSystem(
                 id="physical",
                 axes=[{"name": "y", "type": "space"}, {"name": "x", "type": "space"}],
             )
         ]
     )
-    return ozc.MultiscaleNode(
+    return ngc.MultiscaleNode(
         id="image",
         name="DAPI",
         nodes=[
-            ozc.SinglescaleNode(
+            ngc.SinglescaleNode(
                 id="s0",
                 name="s0",
-                path=ozc.ZarrPath(path="./s0"),
+                path=ngc.ZarrPath(path="./s0"),
                 attributes={"coordinateTransformations": []},
             )
         ],
@@ -43,10 +43,10 @@ def build_multiscale() -> ozc.MultiscaleNode:
     )
 
 
-def show(node: ozc.BaseNode, depth: int = 0) -> None:
+def show(node: ngc.BaseNode, depth: int = 0) -> None:
     print(f"{'  ' * depth}{node.type} {node.id!r} attrs={list(node.attributes)}")
     for child in getattr(node, "nodes", None) or []:
-        if isinstance(child, ozc.BaseNode):
+        if isinstance(child, ngc.BaseNode):
             show(child, depth + 1)
 
 
@@ -55,7 +55,7 @@ def main() -> None:
 
     # A multiscale as its own zarr-form document (singlescales embedded).
     # The writer hands back the reference form: {type, id, name, path}.
-    ref: ozc.MultiscaleRef = ozc.write_multiscale(
+    ref: ngc.MultiscaleRef = ngc.write_multiscale(
         build_multiscale(), str(ROOT / "image.zarr")
     )
     # Parent-level attributes live on the stub; they win over the target's
@@ -64,13 +64,13 @@ def main() -> None:
 
     # The collection references the existing document instead of embedding it;
     # the stub path is relativized on write ("./image.zarr").
-    collection = ozc.CollectionNode(
+    collection = ngc.CollectionNode(
         id="experiment",
         name="My Experiment",
         nodes=[ref],
     )
-    ozc.write_collection(collection, str(ROOT / "collection.json"))
-    root = ozc.open_collection(str(ROOT / "collection.json"))
+    ngc.write_collection(collection, str(ROOT / "collection.json"))
+    root = ngc.open_collection(str(ROOT / "collection.json"))
     print("collection tree (fully inlined):")
     show(root)
 
@@ -86,8 +86,8 @@ def main() -> None:
 
     # A multiscale document can also be opened directly, and its attributes
     # read through the typed attrs view.
-    image = ozc.open_multiscale(str(ROOT / "image.zarr"))
-    systems = image.attrs[ozc.CoordinateSystemsAttribute]
+    image = ngc.open_multiscale(str(ROOT / "image.zarr"))
+    systems = image.attrs[ngc.CoordinateSystemsAttribute]
     print(f"\nopen_multiscale: coordinate systems = {[cs.id for cs in systems.root]}")
 
     # the stub's path is the target URL, even on the inlined document

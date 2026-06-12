@@ -21,8 +21,8 @@ import hashlib
 import shutil
 from pathlib import Path
 
-import ome_zarr_collections as ozc
-from ome_zarr_collections.models import LabelObj
+import ngio_collections as ngc
+from ngio_collections.models import LabelObj
 
 ROOT = Path(__file__).parent / "data" / "inline"
 VERSION = "0.x"
@@ -34,49 +34,49 @@ def digest(path: Path) -> str:
 
 async def write_fixture() -> None:
     """A collection whose stub annotates an externalized multiscale."""
-    resolver = ozc.Resolver(ozc.LocalStore())
-    systems = ozc.CoordinateSystemsAttribute(
-        [ozc.CoordinateSystem(id="physical", axes=[{"name": "x", "type": "space"}])]
+    resolver = ngc.Resolver(ngc.LocalStore())
+    systems = ngc.CoordinateSystemsAttribute(
+        [ngc.CoordinateSystem(id="physical", axes=[{"name": "x", "type": "space"}])]
     )
-    image = ozc.MultiscaleNode(
+    image = ngc.MultiscaleNode(
         id="image",
         name="DAPI",
         nodes=[
-            ozc.SinglescaleNode(
+            ngc.SinglescaleNode(
                 id="s0",
                 name="s0",
-                path=ozc.ZarrPath(path="./s0"),
+                path=ngc.ZarrPath(path="./s0"),
                 attributes={"coordinateTransformations": []},
             )
         ],
         attributes={systems.key: systems.model_dump(mode="json", by_alias=True)},
     )
-    image.attrs[ozc.LabelsAttribute] = ozc.LabelsAttribute(
+    image.attrs[ngc.LabelsAttribute] = ngc.LabelsAttribute(
         label_attributes=[LabelObj(label_value=1, color=[255, 0, 0, 255])]
     )
     await resolver.save(
-        ozc.MetadataDocument(
+        ngc.MetadataDocument(
             root=image,
             url=str(ROOT / "image.zarr" / "zarr.json"),
             form="zarr",
             version=VERSION,
-            stub_path=ozc.ZarrPath(path="./image.zarr"),
+            stub_path=ngc.ZarrPath(path="./image.zarr"),
         )
     )
-    root = ozc.CollectionNode(
+    root = ngc.CollectionNode(
         id="my-experiment",
         name="My Experiment",
         nodes=[
-            ozc.MultiscaleNode(
+            ngc.MultiscaleNode(
                 id="image",
                 name="DAPI",
-                path=ozc.ZarrPath(path="./image.zarr"),
+                path=ngc.ZarrPath(path="./image.zarr"),
                 attributes={"ngio:description": "stub-side annotation"},
             )
         ],
     )
     await resolver.save(
-        ozc.MetadataDocument(
+        ngc.MetadataDocument(
             root=root, url=str(ROOT / "collection.json"), form="json", version=VERSION
         )
     )
@@ -87,7 +87,7 @@ async def main() -> None:
     await write_fixture()
 
     # A fresh resolver, so open() parses the documents from disk.
-    resolver = ozc.Resolver(ozc.LocalStore())
+    resolver = ngc.Resolver(ngc.LocalStore())
     doc = await resolver.open(str(ROOT / "collection.json"))
     stub = doc.root.nodes[0]
 
@@ -102,7 +102,7 @@ async def main() -> None:
     print("merged attributes:", list(image.attributes))
 
     # The inlined node is a real node: typed reads via the normal attrs view.
-    labels = image.attrs[ozc.LabelsAttribute]
+    labels = image.attrs[ngc.LabelsAttribute]
     print("label colors:", [label.color for label in labels.label_attributes])
 
     # The originals are untouched: the parsed tree keeps its stub.

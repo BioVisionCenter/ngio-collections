@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-import ome_zarr_collections as ozc
+import ngio_collections as ngc
 
 REFERENCE_DIR = Path(__file__).parent / "data"
 
@@ -25,7 +25,7 @@ def layout(tmp_path):
 
 @pytest.fixture
 def resolver():
-    return ozc.Resolver(ozc.LocalStore())
+    return ngc.Resolver(ngc.LocalStore())
 
 
 def _all_files(directory: Path) -> dict[str, bytes]:
@@ -57,7 +57,7 @@ async def test_edit_save_reopen_round_trip(layout, resolver):
     child_doc.root.attributes["custom:stage"] = "reviewed"
     await resolver.save(child_doc)
 
-    fresh = ozc.Resolver(ozc.LocalStore())
+    fresh = ngc.Resolver(ngc.LocalStore())
     reopened_root = await fresh.open(str(layout / "collection.json"))
     reopened_child = await fresh.resolve(reopened_root.root.nodes[0])
     assert reopened_child.root.attributes["custom:stage"] == "reviewed"
@@ -114,30 +114,30 @@ async def test_save_zarr_creates_default_envelope_when_absent(layout, resolver):
 
 
 async def test_save_read_only_store_fails_early(layout):
-    class ReadOnlyLocalStore(ozc.LocalStore):
+    class ReadOnlyLocalStore(ngc.LocalStore):
         read_only = True
 
         async def put(self, url: str, data: bytes) -> None:  # pragma: no cover
             raise AssertionError("save() must fail before reaching put()")
 
-    resolver = ozc.Resolver(ReadOnlyLocalStore())
+    resolver = ngc.Resolver(ReadOnlyLocalStore())
     doc = await resolver.open(str(layout / "collection.json"))
     before = (layout / "collection.json").read_bytes()
-    with pytest.raises(ozc.StoreReadOnlyError):
+    with pytest.raises(ngc.StoreReadOnlyError):
         await resolver.save(doc)
     assert (layout / "collection.json").read_bytes() == before
 
 
 async def test_save_store_without_put_fails_early(layout):
-    local = ozc.LocalStore()
+    local = ngc.LocalStore()
 
     class GetOnlyStore:
         async def get(self, url: str) -> bytes:
             return await local.get(url)
 
-    resolver = ozc.Resolver(GetOnlyStore())
+    resolver = ngc.Resolver(GetOnlyStore())
     doc = await resolver.open(str(layout / "collection.json"))
-    with pytest.raises(ozc.StoreReadOnlyError):
+    with pytest.raises(ngc.StoreReadOnlyError):
         await resolver.save(doc)
 
 

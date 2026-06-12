@@ -28,26 +28,26 @@ import copy
 import threading
 from typing import Any, Coroutine, Literal, TypeVar
 
-from ome_zarr_collections.document import (
+from ngio_collections.document import (
     DEFAULT_VERSION,
     MetadataDocument,
     _set_provenance,
 )
-from ome_zarr_collections.models.base import BaseNode
-from ome_zarr_collections.models.nodes import (
+from ngio_collections.models.base import BaseNode
+from ngio_collections.models.nodes import (
     CollectionNode,
     CollectionRef,
     MultiscaleNode,
     MultiscaleRef,
     validate_node,
 )
-from ome_zarr_collections.resolver import (
+from ngio_collections.resolver import (
     Resolver,
     _classify_url,
     _relativize_url,
     _stub_path_for,
 )
-from ome_zarr_collections.store.local import LocalStore
+from ngio_collections.store.local import LocalStore
 
 T = TypeVar("T")
 
@@ -63,7 +63,7 @@ def _get_loop() -> asyncio.AbstractEventLoop:
             loop = asyncio.new_event_loop()
             threading.Thread(
                 target=loop.run_forever,
-                name="ome-zarr-collections-sync",
+                name="ngio-collections-sync",
                 daemon=True,
             ).start()
             _loop = loop

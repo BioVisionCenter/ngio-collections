@@ -1,7 +1,7 @@
 [project]
 authors = [{ name = "lorenzo", email = "lorenzo.cerrone@uzh.ch" }]
 dependencies = ["pydantic>=2.0.0,<3.0.0"]
-name = "ome-zarr-collections"
+name = "ngio-collections"
 requires-python = ">= 3.11"
 version = "0.1.0"
 
@@ -13,14 +13,14 @@ build-backend = "hatchling.build"
 requires = ["hatchling"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ome_zarr_collections"]
+packages = ["src/ngio_collections"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["osx-arm64", "linux-64"]
 
 [tool.pixi.pypi-dependencies]
-ome_zarr_collections = { path = ".", editable = true }
+ngio_collections = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 
