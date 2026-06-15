@@ -7,7 +7,6 @@ Pydantic validation context (DESIGN.md §3.4), falling back to
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Annotated, Any, Literal
 
 from pydantic import (
@@ -79,19 +78,6 @@ def _check_nodes_xor_path(node: BaseNode) -> None:
         )
 
 
-def _check_child_names_unique(children: Sequence[BaseNode] | None) -> None:
-    if not children:
-        return
-    seen: set[str] = set()
-    for child in children:
-        name = getattr(child, "name", None)
-        if not isinstance(name, str):
-            continue
-        if name in seen:
-            raise ValueError(f"duplicate child name {name!r} within the enclosing node")
-        seen.add(name)
-
-
 class CollectionNode(BaseNode):
     type: Literal["collection"] = "collection"
     nodes: list[Node] | None = None
@@ -99,7 +85,6 @@ class CollectionNode(BaseNode):
     @model_validator(mode="after")
     def _check_structure(self) -> CollectionNode:
         _check_nodes_xor_path(self)
-        _check_child_names_unique(self.nodes)
         return self
 
 
@@ -125,7 +110,6 @@ class MultiscaleNode(BaseNode):
     @model_validator(mode="after")
     def _check_structure(self) -> MultiscaleNode:
         _check_nodes_xor_path(self)
-        _check_child_names_unique(self.nodes)
         # Path-stub multiscales (see the RFC's tiles example) carry no
         # attributes; the MUST applies to the full, inlined form only.
         if self.nodes is not None and "coordinateSystems" not in self.attributes:

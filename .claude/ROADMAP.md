@@ -30,8 +30,7 @@ in place; behavior stubbed), trimmed to the local-scope surface.
 The models layer becomes fully spec-faithful; infrastructure catches up.
 
 - [x] Structural validators (currently TODO stubs in `models/nodes.py`):
-  - `CollectionNode` / `MultiscaleNode`: exactly one of `nodes`/`path`;
-    child names unique.
+  - `CollectionNode` / `MultiscaleNode`: exactly one of `nodes`/`path`.
   - `MultiscaleNode`: inlined form requires `coordinateSystems` attribute.
   - `SinglescaleNode`: requires `coordinateTransformations` attribute when
     no `path` is set.

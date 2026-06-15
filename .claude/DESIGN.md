@@ -423,7 +423,7 @@ absolutely and local derived data relatively.
   `attrs` typed view (§3.5). **No `version` field** — that lives on
   `MetadataDocument`.
 - Built-in node types with their structural validators:
-  - `CollectionNode` — exactly one of `nodes`/`path`; child names unique.
+  - `CollectionNode` — exactly one of `nodes`/`path`.
   - `MultiscaleNode` — exactly one of `nodes`/`path`; full (inlined) form
     requires `coordinateSystems` in attributes; path-stub form carries none.
   - `SinglescaleNode` — requires `coordinateTransformations` in attributes

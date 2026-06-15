@@ -35,13 +35,6 @@ def test_collection_requires_nodes_xor_path():
     )
 
 
-def test_child_names_unique_within_collection():
-    child_a = ngc.BaseNode(type="x", id="a", name="same")
-    child_b = ngc.BaseNode(type="x", id="b", name="same")
-    with pytest.raises(ValidationError, match="duplicate child name"):
-        ngc.CollectionNode(id="c", name="c", nodes=[child_a, child_b])
-
-
 def test_multiscale_inline_requires_coordinate_systems():
     with pytest.raises(ValidationError, match="coordinateSystems"):
         ngc.MultiscaleNode(id="m", name="m", nodes=[_singlescale_stub()])
