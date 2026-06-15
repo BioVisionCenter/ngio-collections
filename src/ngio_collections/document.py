@@ -20,7 +20,7 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from ngio_collections.models.base import BaseNode, PathObj
+from ngio_collections.models.base import BaseNode, JsonPath, PathObj, ZarrPath
 from ngio_collections.models.nodes import validate_node
 from ngio_collections.registry import DEFAULT_REGISTRY, NodeRegistry
 
@@ -58,6 +58,19 @@ class MetadataDocument:
     form: MetadataDocumentForm
     version: str
     stub_path: PathObj | None = None
+
+    def self_path(self) -> PathObj:
+        """How this document is addressed as a typed :class:`PathObj`.
+
+        A ``json`` document is addressed by its URL directly; a ``zarr``
+        document by its group directory (resolution re-appends ``zarr.json``,
+        DESIGN.md §6). ``resolver._stub_path_for(doc_url, form)`` encodes the
+        same mapping and could later delegate here.
+        """
+        if self.form == "zarr":
+            directory = self.url.removesuffix("zarr.json").rstrip("/")
+            return ZarrPath(path=directory)
+        return JsonPath(path=self.url)
 
     def serialize_payload(self) -> dict[str, JsonValue]:
         """The value of this document's ``ome`` key (version on the root).

@@ -207,6 +207,53 @@ def test_target_url_absolute_path_passes_through():
     assert root.nodes[0].target_url == "/elsewhere/image.zarr"
 
 
+def test_target_path_of_pathless_node_is_its_source_document():
+    # A parsed pathless node points at the document it was declared in.
+    root = _parsed_root("./image.zarr", url="/data/collection.json")
+    assert root.path is None
+    assert isinstance(root.target_path, ngc.JsonPath)
+    assert root.target_path.path == "/data/collection.json"
+    assert root.target_url == "/data/collection.json"
+
+
+def test_target_path_of_pathless_node_in_zarr_document():
+    doc = ngc.parse_metadata_document(
+        {
+            "zarr_format": 3,
+            "node_type": "group",
+            "attributes": {
+                "ome": {
+                    "version": "0.x",
+                    "type": "multiscale",
+                    "id": "image",
+                    "name": "image",
+                    "nodes": [
+                        {
+                            "type": "singlescale",
+                            "id": "s0",
+                            "name": "s0",
+                            "path": {"type": "zarr", "path": "./s0"},
+                        }
+                    ],
+                    "attributes": {"coordinateSystems": []},
+                }
+            },
+        },
+        url="/data/image.zarr/zarr.json",
+    )
+    # A zarr-form document is addressed by its group directory.
+    assert isinstance(doc.root.target_path, ngc.ZarrPath)
+    assert doc.root.target_path.path == "/data/image.zarr"
+
+
+def test_target_path_preserves_type_for_path_bearing_node():
+    root = _parsed_root("./image.zarr", url="/data/collection.json")
+    child = root.nodes[0]
+    assert isinstance(child.target_path, ngc.ZarrPath)
+    assert child.target_path.path == "/data/image.zarr"
+    assert child.target_url == child.target_path.path
+
+
 def test_attribute_namespace():
     class VendorAttribute(ngc.BaseAttribute):
         key = "acme:thing"

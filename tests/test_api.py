@@ -67,6 +67,34 @@ def test_open_collection_returns_inlined_tree():
     )
 
 
+def test_inlined_nodes_report_their_source_document():
+    base = REFERENCE_DIR / "externalised"
+    root = ngc.open_collection(str(base / "collection.json"))
+
+    # Every node resolves to a real on-disk location, even the metadata
+    # nodes whose stub path was consumed by inlining.
+    for node in root.walk():
+        assert node.target_path is not None
+        assert node.target_url == node.target_path.path
+
+    experiment = root
+    plate = experiment.nodes[0]
+    well = plate.nodes[0]
+    s0 = well.nodes[0]
+
+    # Metadata nodes point at the document they were declared in (typed).
+    assert isinstance(experiment.target_path, ngc.JsonPath)
+    assert experiment.target_path.path == str(base / "collection.json")
+    assert isinstance(plate.target_path, ngc.JsonPath)
+    assert plate.target_path.path == str(base / "child" / "collection.json")
+    assert isinstance(well.target_path, ngc.ZarrPath)
+    assert well.target_path.path == str(base / "child" / "well_a01.zarr")
+
+    # The singlescale data leaf still points at its array.
+    assert isinstance(s0.target_path, ngc.ZarrPath)
+    assert s0.target_path.path == str(base / "child" / "well_a01.zarr" / "s0")
+
+
 def test_open_multiscale_direct_url_only():
     url = str(REFERENCE_DIR / "externalised" / "child" / "well_a01.zarr")
     image = ngc.open_multiscale(url)

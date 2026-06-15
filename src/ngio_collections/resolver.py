@@ -335,6 +335,9 @@ class Resolver:
             # A root-level path is a data pointer (resolve_tree never
             # traverses it); keep it, rebased into the top document's frame.
             copied.path = self._rebased_path(doc, node.path, top_url)
+        # Stamp origin: this node was declared in `doc`. Survives the final
+        # `_set_provenance(result)`, which only sets `_document`/`_parent`.
+        copied._source_path = doc.self_path()
         return copied
 
     async def _inline_stub(
@@ -351,18 +354,22 @@ class Resolver:
         if depth_left is not None and depth_left <= 0:
             # Depth boundary: never fetched (so no §5 merge, and on_error
             # cannot fire), survives as a stub like a data leaf below.
-            return stub.model_copy(
+            survived = stub.model_copy(
                 deep=True, update={"path": self._rebased_path(doc, stub.path, top_url)}
             )
+            survived._source_path = doc.self_path()
+            return survived
         try:
             target = await self.resolve(stub)
         except (FileNotFoundError, NotOmeDocumentError):
             if on_error == "raise":
                 raise
             # Data leaf: survives as a stub, path rebased to stay resolvable.
-            return stub.model_copy(
+            leaf = stub.model_copy(
                 deep=True, update={"path": self._rebased_path(doc, stub.path, top_url)}
             )
+            leaf._source_path = doc.self_path()
+            return leaf
         if target.url in ancestors:
             raise ValueError(
                 f"reference cycle while inlining: {target.url!r} is its own ancestor"
@@ -377,13 +384,17 @@ class Resolver:
         )
         # The §5 collapse: stub's id/name win, attributes merge (stub wins);
         # the stub's path is consumed by resolution.
-        return inlined.model_copy(
+        collapsed = inlined.model_copy(
             update={
                 "id": stub.id,
                 "name": stub.name,
                 "attributes": copy.deepcopy(merged_attributes(stub, target.root)),
             }
         )
+        # The collapsed node represents `target`'s root: its origin is the
+        # resolved document, not the one that declared the stub.
+        collapsed._source_path = target.self_path()
+        return collapsed
 
     def _rebased_path(
         self, doc: MetadataDocument, path: PathObj, top_url: str

@@ -1,8 +1,9 @@
 """Base model classes and shared field types.
 
 Pure Pydantic layer: no IO (DESIGN.md §7); the only URL handling is the pure
-string join in :attr:`BaseNode.target_url`. Models never import the document,
-resolver, or store layers.
+string join in :attr:`BaseNode.target_path` (and its string view
+:attr:`BaseNode.target_url`). Models never import the document, resolver, or
+store layers.
 """
 
 from __future__ import annotations
@@ -168,18 +169,26 @@ class BaseNode(BaseObj):
     _document: MetadataDocument | None = PrivateAttr(default=None)
     _parent: BaseNode | None = PrivateAttr(default=None)
 
+    # The typed path of the document this node was originally declared in,
+    # stamped by `Resolver.inline` so origin survives inlining (which re-owns
+    # the whole tree to one synthetic document). `None` on parsed trees, where
+    # `target_path` falls back to `_document.self_path()`.
+    _source_path: PathObj | None = PrivateAttr(default=None)
+
     # Copies are detached (DESIGN.md §3.1): provenance describes the original
     # tree, never the copy. `model_copy()` delegates to these.
     def __copy__(self) -> Self:
         copied = super().__copy__()
         copied._document = None
         copied._parent = None
+        copied._source_path = None
         return copied
 
     def __deepcopy__(self, memo: dict[int, Any] | None = None) -> Self:
         copied = super().__deepcopy__(memo)
         copied._document = None
         copied._parent = None
+        copied._source_path = None
         return copied
 
     @property
@@ -188,24 +197,47 @@ class BaseNode(BaseObj):
         return AttrsView(self)
 
     @property
-    def target_url(self) -> str | None:
-        """Full URL this node's ``path`` points to, in the store frame.
+    def target_path(self) -> PathObj | None:
+        """Typed on-disk location of this node, in the store frame.
 
-        Relative paths are document-relative (DESIGN.md §6), so the join
-        needs the owning document's URL — the same base the resolver uses
-        when it fetches a stub's target. Pure string manipulation, no IO.
-        ``None`` when the node has no ``path``; raises ``ValueError`` on a
-        detached node (relative or not, a detached path has no frame).
+        A node with its own ``path`` (e.g. a singlescale's array) returns that
+        path made absolute, preserving its ``type``. A node without a ``path``
+        (a collection/multiscale inlined from its own metadata document)
+        returns the typed path of that source document. The ``type`` field
+        distinguishes a Zarr location from a standalone JSON document.
+
+        Relative paths are document-relative (DESIGN.md §6), so the join needs
+        the owning document's URL — the same base the resolver uses when it
+        fetches a stub's target. Pure (no IO). ``None`` when the node has
+        neither a path nor known provenance (a bare, detached node); raises
+        ``ValueError`` on a detached node that *has* a path (a detached path
+        has no frame).
         """
-        if self.path is None:
-            return None
-        if self._document is None:
-            raise ValueError(
-                f"node {self.id!r} is detached (no owning document); paths "
-                "need the declaring document's URL — use nodes from an "
-                "opened tree"
+        if self.path is not None:
+            if self._document is None:
+                raise ValueError(
+                    f"node {self.id!r} is detached (no owning document); paths "
+                    "need the declaring document's URL — use nodes from an "
+                    "opened tree"
+                )
+            return self.path.model_copy(
+                update={"path": urljoin(self._document.url, self.path.path)}
             )
-        return urljoin(self._document.url, self.path.path)
+        if self._source_path is not None:
+            return self._source_path
+        if self._document is not None:
+            return self._document.self_path()
+        return None
+
+    @property
+    def target_url(self) -> str | None:
+        """String view of :attr:`target_path`: the URL this node resolves to.
+
+        ``None`` when :attr:`target_path` is ``None``; raises ``ValueError`` on
+        a detached node that has a ``path`` (see :attr:`target_path`).
+        """
+        target = self.target_path
+        return target.path if target is not None else None
 
     def walk(self) -> Iterator[BaseNode]:
         """Yield this node and every descendant, depth-first in document order.
