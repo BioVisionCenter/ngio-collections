@@ -210,9 +210,11 @@ def _stub_for(child: BaseNode) -> dict[str, JsonValue]:
             f"{child._document.url!r} which has no stub_path; the enclosing "
             "document cannot reference it"
         )
-    return {
+    data: dict[str, JsonValue] = {
         "type": child.type,
         "id": child.id,
-        "name": child.name,
         "path": stub_path.model_dump(mode="json", by_alias=True),
     }
+    if child.name is not None:
+        data["name"] = child.name
+    return data

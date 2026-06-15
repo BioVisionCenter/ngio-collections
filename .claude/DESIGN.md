@@ -50,8 +50,8 @@ listed in §10 and in ROADMAP.md's future-work section.
 
 These were deliberate in the prototype and remain in force:
 
-1. **Both `id` and `name` are required on nodes** — a deliberate deviation
-   from the RFC draft, where `id` is optional.
+1. **`id` is required on nodes** — a deliberate deviation from the RFC draft,
+   where `id` is optional. `name` is optional (`str | None`).
 2. **Resolution is lazy.** Opening a collection reads exactly one metadata
    document; path-bearing stubs are only fetched on demand.
 3. **Saves are document-granular.** Editing a node rewrites only its owning
@@ -418,8 +418,8 @@ absolutely and local derived data relatively.
 ## 7. Models layer (mostly unchanged from the prototype)
 
 - `BaseObj`: camelCase aliasing, `populate_by_name`, `extra="allow"`.
-- `BaseNode`: `type`, `id` (pattern-validated), `name` (required,
-  non-empty), `path: ZarrPath | JsonPath | None`, raw `attributes` dict,
+- `BaseNode`: `type`, `id` (pattern-validated, required), `name`
+  (`str | None`, optional), `path: ZarrPath | JsonPath | None`, raw `attributes` dict,
   `attrs` typed view (§3.5). **No `version` field** — that lives on
   `MetadataDocument`.
 - Built-in node types with their structural validators:

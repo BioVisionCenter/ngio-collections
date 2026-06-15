@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from urllib.parse import urljoin
+from uuid import uuid4
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -154,7 +155,7 @@ class BaseNode(BaseObj):
 
     type: str
     id: IdStr
-    name: str = Field(min_length=1)
+    name: str | None = None
     path: PathObj | None = None
     attributes: dict[str, JsonValue] = Field(default_factory=dict)
 
@@ -162,6 +163,17 @@ class BaseNode(BaseObj):
     # no embedded children); `validate_node` routes path-bearing dicts to it.
     # Assigned after the ref class definition; None means no narrowed form.
     ref_form: ClassVar[type[BaseNode] | None] = None
+
+    @classmethod
+    def new(cls, **kwargs: Any) -> Self:
+        """Construct a node, generating a random UUID ``id`` if omitted.
+
+        ``id`` remains a required model field — parsing a document without
+        ``"id"`` still fails as before; this is a construction-time
+        convenience so new nodes get collection-wide-unique ids by default.
+        """
+        kwargs.setdefault("id", str(uuid4()))
+        return cls(**kwargs)
 
     # Provenance back-references, set during parsing. Private attrs never
     # serialize, so the model stays spec-pure on the wire. A node produced by

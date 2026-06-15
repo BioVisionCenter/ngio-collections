@@ -35,8 +35,23 @@ def test_id_pattern():
     ngc.BaseNode(type="t", id="a-Z_0.9", name="n")
     with pytest.raises(ValidationError):
         ngc.BaseNode(type="t", id="not/allowed", name="n")
-    with pytest.raises(ValidationError):
-        ngc.BaseNode(type="t", id="x", name="")
+
+
+def test_name_is_optional():
+    node = ngc.BaseNode(type="t", id="x")
+    assert node.name is None
+
+
+def test_new_generates_unique_id():
+    a = ngc.BaseNode.new(type="t", name="a")
+    b = ngc.BaseNode.new(type="t", name="b")
+    assert a.id != b.id
+    # Generated ids satisfy IdStr's pattern.
+    ngc.BaseNode(type="t", id=a.id, name="a")
+
+    # An explicit id is respected, not overridden.
+    explicit = ngc.BaseNode.new(type="t", id="custom", name="c")
+    assert explicit.id == "custom"
 
 
 def test_path_discriminated_union():
