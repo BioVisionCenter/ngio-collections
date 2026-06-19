@@ -1,11 +1,49 @@
 # ngio-collections-py — Preliminary Design
 
-**Status:** draft · 2026-06-11
+**Status:** draft · 2026-06-11 · **partly superseded by the functional rewrite
+(see banner)**
 **Context:** Greenfield successor to the `fractal-collections-tools` 
 (/Users/locerr/Projects/Fractal/fractal-v3-prototyping/fractal-collections-tools)
 prototype (an implementation of the OME-NGFF RFC-8 *Collections* draft). This document
 records what the prototype got right, what it got wrong, and the architecture
 this package starts from. 
+
+---
+
+## Implementation note — functional rewrite (2026-06-19)
+
+The shipped package took a **functional / immutable** direction that supersedes
+several specifics below. The **rationale still holds** (RFC-8 round-trip
+fidelity, lazy resolution, document-granular saves, async-native core,
+URL-addressed stores, mixed-store as the eventual goal, graceful degradation of
+unknown types/attributes). What changed in the implementation:
+
+- **Single frozen node layer, not a Stored/Resolved split (§11).** Nodes are
+  frozen Pydantic values (`Node` / `RefNode` and the `Collection*`/`Multiscale*`
+  subtypes); editing returns a NEW tree and never mutates the source. There is
+  no `StoredNode`/`ResolvedNode` pair and no `models/nodes.py` / `resolved.py`.
+- **Provenance is `PrivateAttr` on the node** (`_document`, and `_origin` on a
+  collapsed boundary — an `Origin`/`NodeMetaInfos` snapshot), carried only via
+  `model_copy`. The §5 merge rule lives in one place — `merge` / `split` in
+  `models._base` — and `split` inverts the merge by origin (§9.4).
+- **No registry.** Node type is chosen by the `type` discriminator with a
+  graceful fallback to generic `Node`/`RefNode` (`build_node` / `build_ref_node`
+  / `build_any_node`). `NodeRegistry` / `DEFAULT_REGISTRY` / validation-context
+  registration (§2.6, §3.4) are not implemented.
+- **No typed `attrs` view and no attribute model classes** (§3.5, §7).
+  `attributes` stays a raw `dict[str, JsonValue]` for round-trip fidelity;
+  `PlateAttribute` / `LabelObj` / `SinglescaleNode` etc. do not exist.
+- **No sync facade / `ngio_collections.api`** (§5). The Resolver is async; use
+  `asyncio.run(...)`.
+- **Resolver surface is `inline` / `create` / `save` / `delete_subtree`** (not
+  `open` / `children` / `resolve_tree` / `save_tree`). `MetadataDocument` is a
+  Protocol over one file (`content` / `store` / `url` + `deserialize_payload` /
+  `serialize_payload`), not a root-bearing object with `form`/`version`/`stub_path`.
+
+The authoritative module map is **§8 (Module layout)** and the architecture
+overview is **§4**, both updated to the rewrite. Sections §2–§3, §5 (API
+sketch / sync API), §7, and §11 are kept as historical design narrative; read
+them through this banner.
 
 ---
 
@@ -200,26 +238,29 @@ a stub using that document's `stub_path`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  models/      pure Pydantic: BaseNode, node types,       │
-│               attributes, coordinates. No IO, no URLs.   │
+│  models/_base.py   pure Pydantic: frozen Node / RefNode  │
+│                    (+ Collection/Multiscale subtypes),   │
+│                    PathObj, the §5 merge/split rule, and  │
+│                    the functional edit engine. No IO.    │
 ├──────────────────────────────────────────────────────────┤
-│  document     MetadataDocument: provenance + pure        │
-│               (de)serialize of ONE metadata file         │
-│               (json or zarr form).                       │
+│  _document.py      MetadataDocument Protocol + Json/Zarr  │
+│                    impls: pure (de)serialize of ONE       │
+│                    metadata file's `ome` payload.         │
 ├──────────────────────────────────────────────────────────┤
-│  resolver     async open / resolve / children /          │
-│               resolve_tree / save / write.               │
-│               URL-keyed MetadataDocument cache.          │
-│               The only caller of the Store.              │
+│  _resolver.py      async Resolver: inline / create /      │
+│                    save / delete_subtree. URL-keyed       │
+│                    document cache. The only Store caller. │
 ├──────────────────────────────────────────────────────────┤
-│  store/       ReadableStore / WritableStore protocols,   │
-│               fsspec-backed default, zero-dep LocalStore.│
+│  store/            ReadableStore / WritableStore protocols│
+│                    (_protocols), zero-dep LocalStore      │
+│                    (_local), FsspecStore skeleton (_fsspec)│
 └──────────────────────────────────────────────────────────┘
-        sync.py — thin synchronous facade over resolver
 ```
 
 Dependency rule: each layer imports only downward. Models never import the
-document layer; the document layer never imports the store.
+document layer; the document layer never imports the store. Editing is
+functional — every edit returns a new frozen tree; the parsed source is never
+mutated.
 
 ---
 
@@ -281,9 +322,11 @@ multiscale that lives on a read-only store). `inline()` is where the merge
 is materialized: when a stub is collapsed into its resolved subtree, the
 collapsed node carries the target root's attributes overlaid by the stub's
 own — **shallow, key-level, stub wins** (the stub annotates the reference;
-the nearer scope overrides) — and the stub's `id`/`name`. The rule lives in
-one pure function, `models.merged_attributes(stub, target_root)`, the single
-home of the §5 merge.
+the nearer scope overrides) — and the stub's `id`/`name`. The rule has a single
+home in `models._base`: `merged_attributes(stub, target)` computes the overlay,
+`merge(stub, target)` materializes the collapsed boundary node (recording an
+`Origin` so the merge is invertible), and `split(node)` inverts it by origin on
+write-back (§9.4).
 
 `inline()` is copy-building end to end: the input tree, the cached
 documents, and the resolver cache are never touched, and the result is a
@@ -450,19 +493,28 @@ absolutely and local derived data relatively.
 
 ```
 src/ngio_collections/
+    __init__.py          # the public surface (19 names): Resolver, stores +
+                         # protocols, node/path model types
+    _document.py         # MetadataDocument Protocol + Json/Zarr impls
+    _resolver.py         # async Resolver (inline / create / save / delete_subtree)
     models/
-        base.py          # BaseObj, BaseNode, IdStr, Path objects, attrs view
-        nodes.py         # CollectionNode, MultiscaleNode, SinglescaleNode
-        attributes.py    # plate / well / acquisition / labels
-        coordinates.py   # CoordinateSystem, CoordinateTransformation, scene
-    registry.py          # NodeRegistry (no singletons)
-    document.py          # MetadataDocument, parse_metadata_document, single serialize path
-    resolver.py          # async Resolver
+        __init__.py      # re-exports the model public subset
+        _base.py         # BaseObj; frozen Node / RefNode (+ Collection/Multiscale
+                         # subtypes); ZarrPath / JsonPath / PathObj; NodeState;
+                         # the §5 merge/split rule; build_* constructors;
+                         # the functional edit engine (update/add/remove/…)
     store/
-        protocols.py     # ReadableStore, WritableStore, StoreReadOnlyError
-        local.py         # LocalStore (zero-dep)
-        fsspec.py        # FsspecStore skeleton (optional dependency)
+        __init__.py      # re-exports the store public subset
+        _protocols.py    # ReadableStore, WritableStore, StoreReadOnlyError
+        _local.py        # LocalStore (zero-dep)
+        _fsspec.py       # FsspecStore skeleton (optional dependency)
 ```
+
+Every module under `models/` and `store/` is private (`_*.py`); the public
+names are re-exported from each subpackage's `__init__` and from the top-level
+`ngio_collections`. The merge engine, node constructors, provenance dataclasses
+(`Origin` / `NodeMetaInfos`), and the document layer are intentionally NOT part
+of the public surface.
 
 ---
 
@@ -488,7 +540,12 @@ Tracked here because the implementation takes a position on each:
    be able to override metadata on read-only targets; the merged view's
    `id`/`name` are likewise the stub's. Worth an RFC clarification,
    including whether a stub may satisfy an attribute MUST (e.g.
-   `coordinateSystems`) on the parent side.
+   `coordinateSystems`) on the parent side. **Write-back position (§11):** the
+   merge is invertible — *by origin, edge keeps overrides*. An edited key that
+   originated on the stub is written back to the parent edge (the target keeps
+   its original, shadowed value); every other current key — including
+   brand-new ones — is written to the home (target) document; a removed key
+   drops from both layers.
 
 ---
 
@@ -528,3 +585,58 @@ future-work section):
   `gather` when frontier sizes get large).
 - Optional dirty tracking on top of document-granular saves.
 - A typed RFC-5 transformation union once that spec settles.
+
+---
+
+## 11. Stored/Resolved node split (2026-06-18)
+
+The headline use case — open an inlined collection, edit it in memory, write it
+back keeping the file structure and attributes correct — was blocked by
+`BaseNode` wearing three hats: the on-disk wire model, the parsed/provenance
+node, and (post-`inline`) the merged editing surface. The merge was lossy (a
+key present on both stub and target lost the target's value) and the inlined
+tree was one synthetic document, so saving it flattened the whole collection
+into one file. The fix splits the node into two layers.
+
+- **`StoredNode`** (`models/base.py`, `models/nodes.py`) — the faithful
+  Pydantic mirror of one document's node (`extra="allow"`, structural
+  validators, `path`/ref forms, `_document`/`_parent` provenance). The
+  pre-split names (`BaseNode`, `CollectionNode`, …) stay as back-compat
+  aliases. Each stored type gets a `resolved_form` ClassVar (mirroring
+  `ref_form`); `None` ⇒ the generic fallback.
+- **`ResolvedNode`** (`models/resolved.py`) — produced ONLY by `inline()`: a
+  plain (non-Pydantic) mutable working model holding private references back
+  into the stored layer (`_home` document, `_stored` node, `_edge` →
+  `EdgeRef`), with the ergonomic edit API (`attrs`, `add`, `pop`, `walk`,
+  `find`, `target_path`). Typed twins exist for the built-ins; custom types
+  fall back to the generic `ResolvedNode` (or opt into a twin via
+  `resolved_form`). No on-mutation validation — invariants re-apply once, at
+  `to_stored_root()`.
+
+Resolution vocabulary, made consistent: `inline()` (verb) → `ResolvedNode`
+(fully-resolved result); `resolve()` / `resolve_tree()` are the lazy partial
+steps that leave stubs in place (§3.3). So `inline()` reframes as
+**StoredNode-tree → ResolvedNode-tree**, and write-back as
+**ResolvedNode-tree → StoredNode-documents**.
+
+**`Resolver.save_tree(root)`** is the inverse of `inline()`: it partitions the
+resolved tree by home document (each boundary node — `_edge` set — roots its
+own document and is re-emitted as a path stub in its parent), rebuilds each
+document via `to_stored_root` (attributes un-merged by origin per §9.4; added
+nodes embedded in their parent's document; unknown `extra` keys carried through
+from the cached original `StoredNode` by `model_copy`), and saves only the
+documents whose serialized payload changed. A tree saved with no edits writes
+nothing. **`Resolver.delete_subtree(node)`** (with a new `WritableStore.delete`)
+is the destructive companion to `pop()`'s in-memory unlink: deletes the
+external file(s) of the boundary nodes in a subtree (call before popping).
+
+Sync API: `open_collection` / `open_multiscale` now return the `ResolvedNode`
+root; `write_collection_back` / `write_multiscale_back` wrap `save_tree`. The
+compose-by-reference writers (`write_collection` / `write_multiscale`) keep
+taking `StoredNode`s — the document-granular `save()` editing path is
+unchanged.
+
+Partly retires §10's `write()` item: bottom-up composition (writers) and
+write-back of an opened tree (`save_tree`) are now covered; restructuring by
+*externalizing* an added node into its own new document stays deferred (added
+nodes embed in their parent's document).

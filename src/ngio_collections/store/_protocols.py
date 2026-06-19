@@ -1,8 +1,8 @@
 """Store protocols: the only IO boundary of the package.
 
-Stores are URL-addressed, not rooted (DESIGN.md §2.5): ``get(url)`` takes a
-full URL. This makes mixed-store routing pure composition and keeps the
-resolver's document cache globally coherent.
+Stores are URL-addressed, not rooted: ``get(url)`` takes a full URL. This makes
+mixed-store routing pure composition and keeps the resolver's document cache
+globally coherent.
 """
 
 from __future__ import annotations
@@ -25,4 +25,9 @@ class ReadableStore(Protocol):
 class WritableStore(ReadableStore, Protocol):
     async def put(self, url: str, data: bytes) -> None:
         """Write ``data`` at ``url``, creating parents as needed."""
+        ...
+
+    async def delete(self, url: str) -> None:
+        """Delete the object at ``url``. MUST be idempotent — a missing
+        ``url`` is not an error (used by ``Resolver.delete_subtree``)."""
         ...

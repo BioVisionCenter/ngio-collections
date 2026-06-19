@@ -39,3 +39,7 @@ class FsspecStore:
     async def put(self, url: str, data: bytes) -> None:
         """Write ``data`` at ``url``; StoreReadOnlyError when read-only."""
         raise NotImplementedError
+
+    async def delete(self, url: str) -> None:
+        """Delete the object at ``url``; StoreReadOnlyError when read-only."""
+        raise NotImplementedError

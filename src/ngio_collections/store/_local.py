@@ -26,3 +26,7 @@ class LocalStore:
         path = _to_path(url)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
+
+    async def delete(self, url: str) -> None:
+        """Delete the file at ``url``; idempotent (a missing file is fine)."""
+        _to_path(url).unlink(missing_ok=True)

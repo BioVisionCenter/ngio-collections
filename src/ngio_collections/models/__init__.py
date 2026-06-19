@@ -1,79 +1,38 @@
-"""Pure Pydantic models: nodes, attributes, coordinates. No IO, no URLs."""
+"""Pure model layer: frozen nodes, paths, the merge/split rule, edit engine.
 
-from ngio_collections.models.attributes import (
-    AcquisitionAttribute,
-    AcquisitionObj,
-    ColumnObj,
-    LabelObj,
-    LabelsAttribute,
-    PlateAttribute,
-    RowObj,
-    WellAttribute,
-)
-from ngio_collections.models.base import (
-    ID_PATTERN,
-    AnyAttribute,
-    AttrsView,
-    BaseAttribute,
-    BaseListAttribute,
-    BaseNode,
-    BaseObj,
-    IdStr,
-    JsonPath,
-    PathObj,
-    ReferenceObj,
-    ZarrPath,
-    merged_attributes,
-)
-from ngio_collections.models.coordinates import (
-    CoordinateSystem,
-    CoordinateSystemsAttribute,
-    CoordinateTransformation,
-    CoordinateTransformationsAttribute,
-    SceneAttribute,
-)
-from ngio_collections.models.nodes import (
+This subpackage re-exports the model types that make up the public API. The
+merge engine, node constructors, and provenance plumbing stay internal to
+``ngio_collections.models._base``.
+"""
+
+from ngio_collections.models._base import (
+    AnyNode,
     CollectionNode,
-    CollectionRef,
+    JsonPath,
     MultiscaleNode,
-    MultiscaleRef,
     Node,
-    SinglescaleNode,
-    validate_node,
+    NodeState,
+    NodeStateError,
+    PathObj,
+    RefCollectionNode,
+    RefMultiscaleNode,
+    RefNode,
+    RefSinglescaleNode,
+    ZarrPath,
 )
 
 __all__ = [
-    "ID_PATTERN",
-    "AcquisitionAttribute",
-    "AcquisitionObj",
-    "AnyAttribute",
-    "AttrsView",
-    "BaseAttribute",
-    "BaseListAttribute",
-    "BaseNode",
-    "BaseObj",
+    "AnyNode",
     "CollectionNode",
-    "CollectionRef",
-    "ColumnObj",
-    "CoordinateSystem",
-    "CoordinateSystemsAttribute",
-    "CoordinateTransformation",
-    "CoordinateTransformationsAttribute",
-    "IdStr",
     "JsonPath",
-    "LabelObj",
-    "LabelsAttribute",
     "MultiscaleNode",
-    "MultiscaleRef",
     "Node",
+    "NodeState",
+    "NodeStateError",
     "PathObj",
-    "PlateAttribute",
-    "ReferenceObj",
-    "RowObj",
-    "SceneAttribute",
-    "SinglescaleNode",
-    "WellAttribute",
+    "RefCollectionNode",
+    "RefMultiscaleNode",
+    "RefNode",
+    "RefSinglescaleNode",
     "ZarrPath",
-    "merged_attributes",
-    "validate_node",
 ]

@@ -1,48 +1,31 @@
-"""ngio-collections: OME-NGFF RFC-8 collection metadata.
+"""ngio_collections: functional, immutable, round-trip-safe OME collections.
 
-Parse, validate, navigate, edit, and write back collection metadata
-documents. Async-first. See DESIGN.md for the architecture.
+Frozen node values; resolution and editing return new trees and never mutate the
+source; provenance lives off the wire in PrivateAttr. The §5 merge rule has a
+single home (``merge`` / ``split``, internal to ``models._base``).
+
+The public surface is deliberately small: the :class:`Resolver`, the store
+backends and protocols, and the node/path model types needed to build and
+annotate trees. The merge engine, node constructors, provenance dataclasses, and
+the document layer are internal (reachable via the private modules if needed).
 """
 
-from ngio_collections.api import (
-    open_collection,
-    open_multiscale,
-    write_collection,
-    write_multiscale,
-)
-from ngio_collections.document import (
-    MetadataDocument,
-    MetadataDocumentForm,
-    NotOmeDocumentError,
-    parse_metadata_document,
-)
+from ngio_collections._resolver import Resolver
 from ngio_collections.models import (
-    AcquisitionAttribute,
-    BaseAttribute,
-    BaseListAttribute,
-    BaseNode,
-    BaseObj,
+    AnyNode,
     CollectionNode,
-    CollectionRef,
-    CoordinateSystem,
-    CoordinateSystemsAttribute,
-    CoordinateTransformation,
-    CoordinateTransformationsAttribute,
     JsonPath,
-    LabelsAttribute,
     MultiscaleNode,
-    MultiscaleRef,
+    Node,
+    NodeState,
+    NodeStateError,
     PathObj,
-    PlateAttribute,
-    ReferenceObj,
-    SceneAttribute,
-    SinglescaleNode,
-    WellAttribute,
+    RefCollectionNode,
+    RefMultiscaleNode,
+    RefNode,
+    RefSinglescaleNode,
     ZarrPath,
-    merged_attributes,
 )
-from ngio_collections.registry import DEFAULT_REGISTRY, NodeRegistry
-from ngio_collections.resolver import Resolver
 from ngio_collections.store import (
     FsspecStore,
     LocalStore,
@@ -51,46 +34,24 @@ from ngio_collections.store import (
     WritableStore,
 )
 
-__version__ = "0.1.0"
-
 __all__ = [
-    "DEFAULT_REGISTRY",
-    "AcquisitionAttribute",
-    "BaseAttribute",
-    "BaseListAttribute",
-    "BaseNode",
-    "BaseObj",
+    "AnyNode",
     "CollectionNode",
-    "CollectionRef",
-    "CoordinateSystem",
-    "CoordinateSystemsAttribute",
-    "CoordinateTransformation",
-    "CoordinateTransformationsAttribute",
-    "MetadataDocument",
-    "MetadataDocumentForm",
     "FsspecStore",
     "JsonPath",
-    "LabelsAttribute",
     "LocalStore",
     "MultiscaleNode",
-    "MultiscaleRef",
-    "NodeRegistry",
-    "NotOmeDocumentError",
+    "Node",
+    "NodeState",
+    "NodeStateError",
     "PathObj",
-    "PlateAttribute",
     "ReadableStore",
-    "ReferenceObj",
+    "RefCollectionNode",
+    "RefMultiscaleNode",
+    "RefNode",
+    "RefSinglescaleNode",
     "Resolver",
-    "SceneAttribute",
-    "SinglescaleNode",
     "StoreReadOnlyError",
-    "WellAttribute",
     "WritableStore",
     "ZarrPath",
-    "merged_attributes",
-    "open_collection",
-    "open_multiscale",
-    "parse_metadata_document",
-    "write_collection",
-    "write_multiscale",
 ]
