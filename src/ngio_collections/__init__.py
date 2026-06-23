@@ -2,7 +2,7 @@
 
 Frozen node values; resolution and editing return new trees and never mutate the
 source; provenance lives off the wire in PrivateAttr. The §5 merge rule has a
-single home (``merge`` / ``split``, internal to ``models._base``).
+single home (`merge` / `split`, internal to `models._base`).
 
 The public surface is deliberately small: the :class:`Resolver`, the store
 backends and protocols, and the node/path model types needed to build and

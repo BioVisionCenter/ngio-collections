@@ -1,12 +1,12 @@
 """Frozen node models, the pure merge/split rule, and the functional edit engine.
 
-Pure Pydantic layer: no IO. Nodes are **frozen** (immutable) with ``tuple``
+Pure Pydantic layer: no IO. Nodes are **frozen** (immutable) with `tuple`
 children, so the parsed tree is a value that resolution and editing never mutate
-— they return new trees. Provenance lives in ``PrivateAttr`` (``_document`` /
-``_origin``); it never serializes and, because nodes are frozen and never
-re-validated, it can only travel via ``model_copy`` (which carries private
-state). The single invariant every rebuild honors: **edit through ``model_copy``,
-never ``model_validate``**, so provenance rides along untouched.
+— they return new trees. Provenance lives in `PrivateAttr` (`_document` /
+`_origin`); it never serializes and, because nodes are frozen and never
+re-validated, it can only travel via `model_copy` (which carries private
+state). The single invariant every rebuild honors: **edit through `model_copy`,
+never `model_validate`**, so provenance rides along untouched.
 """
 
 from __future__ import annotations
@@ -42,6 +42,8 @@ if TYPE_CHECKING:
 
 
 class BaseObj(BaseModel):
+    """Frozen, camelCase-aliased Pydantic base shared by all OME objects."""
+
     # frozen → immutable value; extra="allow" round-trips unknown / custom keys.
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -54,8 +56,9 @@ class BaseObj(BaseModel):
 class NodeStateError(ValueError):
     """A node is in the wrong state for the requested operation.
 
-    Subclasses ``ValueError`` so callers can keep catching ``ValueError``. The
-    message points to the API that fits the node's actual state."""
+    Subclasses `ValueError` so callers can keep catching `ValueError`. The
+    message points to the API that fits the node's actual state.
+    """
 
 
 class NodeState(StrEnum):
@@ -70,10 +73,21 @@ class NodeState(StrEnum):
 
 
 def _path_resolve(path: str, document: MetadataDocument | None) -> str:
-    """Resolve a stored ``path`` to an absolute URL for IO.
+    """Resolve a stored `path` to an absolute URL for IO.
 
     The stored value is never rewritten — relative stays relative, absolute stays
     absolute — so a tree can be re-rooted later without rewriting references.
+
+    Args:
+        path: The raw path string as stored in the node (relative or absolute).
+        document: The owning document, required to resolve relative paths.
+
+    Returns:
+        An absolute URL suitable for use with a store.
+
+    Raises:
+        ValueError: If `path` is relative but `document` is `None`, or if
+            the path format is not recognised.
     """
     if path.startswith("/"):
         return path
@@ -89,18 +103,38 @@ def _path_resolve(path: str, document: MetadataDocument | None) -> str:
 
 
 class ZarrPath(BaseObj):
+    """A `zarr`-typed path reference to an external document."""
+
     type: Literal["zarr"] = "zarr"
     path: str
 
     def resolve(self, document: MetadataDocument | None) -> str:
+        """Return the absolute URL for this path.
+
+        Args:
+            document: Owning document, required for relative paths.
+
+        Returns:
+            Absolute URL string.
+        """
         return _path_resolve(self.path, document)
 
 
 class JsonPath(BaseObj):
+    """A `json`-typed path reference to an external document."""
+
     type: Literal["json"] = "json"
     path: str
 
     def resolve(self, document: MetadataDocument | None) -> str:
+        """Return the absolute URL for this path.
+
+        Args:
+            document: Owning document, required for relative paths.
+
+        Returns:
+            Absolute URL string.
+        """
         return _path_resolve(self.path, document)
 
 
@@ -121,9 +155,12 @@ class NodeMetaInfos:
 
 @dataclass(frozen=True)
 class Origin:
-    """A boundary node's merge provenance: the pre-merge stub and target
-    identities plus the full original stub (kept so :func:`split` can re-emit the
-    parent reference with its path / type / unknown extra keys intact)."""
+    """A boundary node's merge provenance.
+
+    Stores the pre-merge stub and target identities plus the full original stub
+    (kept so :func:`split` can re-emit the parent reference with its path / type
+    / unknown extra keys intact).
+    """
 
     ref: NodeMetaInfos  # pre-merge stub (edge layer)
     node: NodeMetaInfos  # pre-merge target (home layer)
@@ -134,13 +171,26 @@ class Origin:
 
 
 def _set_private(node: BaseNode, name: str, value: Any) -> None:
-    """Set a private attr on a frozen node (provenance plumbing only)."""
+    """Set a private attr on a frozen node (provenance plumbing only).
+
+    Args:
+        node: The frozen node whose private attribute should be mutated.
+        name: The `PrivateAttr` field name (e.g. `"_document"`).
+        value: The value to assign.
+    """
     private = node.__pydantic_private__
     assert private is not None
     private[name] = value
 
 
 class BaseNode(BaseObj):
+    """Base class for all OME collection nodes.
+
+    Holds the common fields (`id`, `name`, `attributes`) and the full
+    suite of functional edit methods that return new trees without mutating
+    `self`.
+    """
+
     type: str
     id: str
     name: str | None = None
@@ -155,35 +205,50 @@ class BaseNode(BaseObj):
     # --- navigation ------------------------------------------------------
 
     def walk(self) -> Generator[AnyNode, None, None]:
-        """Yield this node and every descendant, depth-first in order."""
+        """Yield this node and every descendant, depth-first in order.
+
+        Yields:
+            Each node in the subtree, starting with `self`.
+        """
         yield cast("AnyNode", self)
         children: tuple[AnyNode, ...] = getattr(self, "nodes", None) or ()
         for child in children:
             yield from child.walk()
 
     def find(self, id: str) -> AnyNode | None:
-        """First node in ``walk()`` order whose ``id`` matches, or ``None``."""
+        """Return the first node in `walk()` order whose `id` matches.
+
+        Args:
+            id: The node id to search for.
+
+        Returns:
+            The matching node, or `None` if not found.
+        """
         return next((n for n in self.walk() if n.id == id), None)
 
     @property
     def state(self) -> NodeState:
-        """How this node relates to storage: ``DETACHED`` (in memory only),
-        ``DOCUMENT`` (lives in a document), or ``BOUNDARY`` (an inlined stub that
-        roots its own external document)."""
+        """How this node relates to storage.
+
+        `DETACHED` = in memory only; `DOCUMENT` = backed by a document;
+        `BOUNDARY` = an inlined stub that roots its own external document.
+        """
         if self._document is None:
             return NodeState.DETACHED
         return NodeState.BOUNDARY if self._origin is not None else NodeState.DOCUMENT
 
     @property
     def is_detached(self) -> bool:
-        """True iff this node is fully in memory — built from scratch and not yet
-        written (use ``Resolver.create``), or a just-added child not yet saved."""
+        """True iff this node has no backing document.
+
+        Set for nodes built from scratch (use `Resolver.create` to persist) and
+        for freshly added children not yet saved.
+        """
         return self._document is None
 
     @property
     def is_boundary(self) -> bool:
-        """True iff this node was an inlined stub — i.e. it roots its own
-        external document."""
+        """True iff this node was an inlined stub that roots its own external document."""
         return self._origin is not None
 
     @property
@@ -194,26 +259,53 @@ class BaseNode(BaseObj):
     # --- functional edits (return a new root; self is untouched) ----------
 
     def update(self, id: str, fn: Callable[[AnyNode], AnyNode]) -> Self:
-        """Replace the node with ``id`` by ``fn(node)``, returning a new tree.
+        """Replace the node with `id` by `fn(node)`, returning a new tree.
 
         The only spine-rebuild engine: it rebuilds the path from the root to the
-        target via ``model_copy`` (carrying provenance), leaving every other
-        branch shared with the original. ``fn`` must itself return a node built
-        with ``model_copy`` so its provenance survives."""
+        target via `model_copy` (carrying provenance), leaving every other
+        branch shared with the original. `fn` must itself return a node built
+        with `model_copy` so its provenance survives.
+
+        Args:
+            id: The id of the node to replace.
+            fn: Callable that receives the current node and returns the replacement.
+
+        Returns:
+            A new root with the targeted node replaced; `self` is untouched.
+
+        Raises:
+            KeyError: If no node with `id` exists in the tree.
+        """
         new, found = _rebuild(cast("AnyNode", self), id, fn)
         if not found:
             raise KeyError(f"no node with id {id!r} in this tree")
         return cast("Self", new)
 
     def set_attrs(self, id: str, values: dict[str, JsonValue]) -> Self:
-        """Merge ``values`` into the ``attributes`` of node ``id``."""
+        """Merge `values` into the `attributes` of node `id`.
+
+        Args:
+            id: The id of the node whose attributes should be updated.
+            values: Key-value pairs to merge in (existing keys are overwritten).
+
+        Returns:
+            A new root with the node's attributes updated.
+        """
         return self.update(
             id,
             lambda n: n.model_copy(update={"attributes": {**n.attributes, **values}}),
         )
 
     def drop_attrs(self, id: str, *keys: str) -> Self:
-        """Remove ``keys`` from the ``attributes`` of node ``id``."""
+        """Remove `keys` from the `attributes` of node `id`.
+
+        Args:
+            id: The id of the node whose attributes should be modified.
+            *keys: Attribute keys to remove (unknown keys are silently ignored).
+
+        Returns:
+            A new root with the specified attribute keys removed.
+        """
         return self.update(
             id,
             lambda n: n.model_copy(
@@ -226,16 +318,36 @@ class BaseNode(BaseObj):
         )
 
     def rename(self, id: str, name: str | None) -> Self:
-        """Set the ``name`` of node ``id``."""
+        """Set the `name` of node `id`.
+
+        Args:
+            id: The id of the node to rename.
+            name: The new name, or `None` to clear it.
+
+        Returns:
+            A new root with the node's name updated.
+        """
         return self.update(id, lambda n: n.model_copy(update={"name": name}))
 
     def add(self, parent_id: str, child: AnyNode) -> Self:
-        """Append ``child`` to node ``parent_id``'s children.
+        """Append `child` to node `parent_id`'s children.
 
-        A freshly built ``child`` (DETACHED) embeds into the parent's document on
-        write-back — no new file. Raises if ``parent_id`` is a reference stub
-        (resolve it with ``Resolver.inline`` first) or if ``child.id`` already
-        exists in the tree (ids must be unique within a collection)."""
+        A freshly built `child` (DETACHED) embeds into the parent's document on
+        write-back — no new file. Raises if `parent_id` is a reference stub
+        (resolve it with `Resolver.inline` first) or if `child.id` already
+        exists in the tree (ids must be unique within a collection).
+
+        Args:
+            parent_id: The id of the node that will receive the new child.
+            child: The node to append; must have a unique id within this tree.
+
+        Returns:
+            A new root with `child` appended to the parent's `nodes`.
+
+        Raises:
+            NodeStateError: If `child.id` already exists in the tree, or if
+                the parent is a `RefNode` stub (must be resolved first).
+        """
         if self.find(child.id) is not None:
             raise NodeStateError(
                 f"duplicate node id {child.id!r}; ids must be unique within a "
@@ -253,10 +365,20 @@ class BaseNode(BaseObj):
         return self.update(parent_id, _append)
 
     def remove(self, id: str) -> Self:
-        """Remove the node with ``id`` from the tree (an in-memory unlink).
+        """Remove the node with `id` from the tree (an in-memory unlink).
 
         Any external document the node rooted stays on disk; use
-        ``Resolver.delete_subtree`` (before removing) to delete its file(s)."""
+        `Resolver.delete_subtree` (before removing) to delete its file(s).
+
+        Args:
+            id: The id of the node to remove.
+
+        Returns:
+            A new root with the node removed from its parent's `nodes`.
+
+        Raises:
+            KeyError: If no node with `id` exists in the tree.
+        """
         new, found = _remove(cast("AnyNode", self), id)
         if not found:
             raise KeyError(f"no node with id {id!r} in this tree")
@@ -264,35 +386,54 @@ class BaseNode(BaseObj):
 
 
 class Node(BaseNode):
+    """An embedded (inline) node: children are held in `nodes`; no path."""
+
     path: Literal[None] = None
     nodes: tuple[AnyNode, ...] = ()
 
 
 class RefNode(BaseNode):
+    """A reference stub: `path` points to an external document; `nodes` is None."""
+
     path: PathObj
     nodes: Literal[None] = None
 
     def resolve_path(self) -> str:
+        """Return the absolute URL this stub references.
+
+        Returns:
+            Absolute URL string resolved against the owning document.
+        """
         return self.path.resolve(self._document)
 
 
 class CollectionNode(Node):
+    """An embedded OME collection node."""
+
     type: Literal["collection"] = "collection"
 
 
 class MultiscaleNode(Node):
+    """An embedded OME multiscale node."""
+
     type: Literal["multiscale"] = "multiscale"
 
 
 class RefCollectionNode(RefNode):
+    """A reference stub pointing to an OME collection document."""
+
     type: Literal["collection"] = "collection"
 
 
 class RefMultiscaleNode(RefNode):
+    """A reference stub pointing to an OME multiscale document."""
+
     type: Literal["multiscale"] = "multiscale"
 
 
 class RefSinglescaleNode(RefNode):
+    """A reference stub pointing to an OME singlescale document."""
+
     type: Literal["singlescale"] = "singlescale"
 
 
@@ -302,6 +443,16 @@ class RefSinglescaleNode(RefNode):
 def _rebuild(
     node: AnyNode, id: str, fn: Callable[[AnyNode], AnyNode]
 ) -> tuple[AnyNode, bool]:
+    """Apply `fn` to the node with `id`, rebuilding the spine bottom-up.
+
+    Args:
+        node: Current node (root of the subtree being searched).
+        id: Target node id.
+        fn: Transformation to apply to the matched node.
+
+    Returns:
+        A `(new_root, found)` pair; `found` is `False` if `id` is absent.
+    """
     if node.id == id:
         return fn(node), True
     children: tuple[AnyNode, ...] | None = getattr(node, "nodes", None)
@@ -322,6 +473,15 @@ def _rebuild(
 
 
 def _remove(node: AnyNode, id: str) -> tuple[AnyNode, bool]:
+    """Remove the node with `id` from `node`'s children.
+
+    Args:
+        node: Current node (root of the subtree being searched).
+        id: Id of the node to remove.
+
+    Returns:
+        A `(new_root, found)` pair; `found` is `False` if `id` is absent.
+    """
     children: tuple[AnyNode, ...] | None = getattr(node, "nodes", None)
     if children is None:
         return node, False
@@ -346,6 +506,18 @@ def _remove(node: AnyNode, id: str) -> tuple[AnyNode, bool]:
 
 
 def _find_type_path(value: Any) -> tuple[str | None, bool]:
+    """Extract `(type_str, has_path)` from a raw dict or node instance.
+
+    Args:
+        value: A `dict` payload or a `Node`/`RefNode` instance.
+
+    Returns:
+        A `(type, has_path)` tuple where `has_path` is `True` when the
+        value carries a non-`None` `path` field.
+
+    Raises:
+        ValueError: If `value` is neither a dict nor a node instance.
+    """
     if isinstance(value, dict):
         # A path key serialized as None (an embedded Node round-tripped through
         # model_dump) is not a reference; only a non-None path makes a RefNode.
@@ -367,6 +539,19 @@ _REF_TYPES: dict[str, type[RefNode]] = {
 
 
 def build_node(value: Any) -> Node:
+    """Build a concrete `Node` subtype from a dict or node instance.
+
+    Args:
+        value: A `dict` payload or an existing node instance.
+
+    Returns:
+        A typed `Node` subclass (e.g. `CollectionNode`), or a plain
+        `Node` when the `type` field is unknown.
+
+    Raises:
+        ValueError: If `value` carries a `path` field (use
+            :func:`build_ref_node` for reference nodes).
+    """
     node_type, has_path = _find_type_path(value)
     if has_path:
         raise ValueError("An embedded node must not have a path")
@@ -375,6 +560,19 @@ def build_node(value: Any) -> Node:
 
 
 def build_ref_node(value: Any) -> RefNode:
+    """Build a concrete `RefNode` subtype from a dict or node instance.
+
+    Args:
+        value: A `dict` payload or an existing node instance.
+
+    Returns:
+        A typed `RefNode` subclass (e.g. `RefCollectionNode`), or a plain
+        `RefNode` when the `type` field is unknown.
+
+    Raises:
+        ValueError: If `value` has no `path` field (use :func:`build_node`
+            for embedded nodes).
+    """
     node_type, has_path = _find_type_path(value)
     if not has_path:
         raise ValueError("A reference node must have a path")
@@ -383,6 +581,15 @@ def build_ref_node(value: Any) -> RefNode:
 
 
 def build_any_node(value: Any) -> AnyNode:
+    """Dispatch to :func:`build_ref_node` or :func:`build_node` based on `path`.
+
+    Args:
+        value: A `dict` payload or an existing node instance.
+
+    Returns:
+        A `RefNode` subclass if `value` has a path, otherwise a `Node`
+        subclass.
+    """
     _, has_path = _find_type_path(value)
     return build_ref_node(value) if has_path else build_node(value)
 
@@ -391,18 +598,33 @@ def build_any_node(value: Any) -> AnyNode:
 
 
 def merged_attributes(stub: BaseNode, target: BaseNode) -> dict[str, JsonValue]:
-    """Effective attributes of a resolved stub: the target's overlaid by the
-    stub's own — shallow, key-level, stub wins."""
+    """Effective attributes of a resolved stub — shallow, key-level, stub wins.
+
+    Args:
+        stub: The edge-layer node (its attributes take priority).
+        target: The home-layer node whose attributes form the base.
+
+    Returns:
+        A merged dict with stub attributes overriding target attributes.
+    """
     return {**target.attributes, **stub.attributes}
 
 
 def merge(stub: RefNode, target: Node) -> Node:
-    """Materialize the stub-wins merge of ``stub`` onto resolved ``target``.
+    """Materialize the stub-wins merge of `stub` onto resolved `target`.
 
     Returns a NEW frozen node that keeps the target's document ownership and
     children, takes the stub's id/name and the merged attributes, and records an
-    :class:`Origin` so :func:`split` can invert it. ``_origin`` set marks a
-    document boundary."""
+    :class:`Origin` so :func:`split` can invert it. `_origin` set marks a
+    document boundary.
+
+    Args:
+        stub: The edge-layer reference node (provides id, name, attributes).
+        target: The home-layer resolved node (provides document, children).
+
+    Returns:
+        A new frozen `Node` with merged identity and an `_origin` snapshot.
+    """
     origin = Origin(
         ref=NodeMetaInfos(stub.id, stub.name, deepcopy(stub.attributes)),
         node=NodeMetaInfos(target.id, target.name, deepcopy(target.attributes)),
@@ -425,7 +647,18 @@ def split(node: Node) -> tuple[RefNode, Node]:
     Reconciles the live (possibly edited) id/name/attributes against the two
     pre-merge snapshots — id/name and any stub-origin key route to the stub;
     target-origin and brand-new keys route to the target; a key deleted from the
-    live node drops from both. Valid only on a boundary node."""
+    live node drops from both. Valid only on a boundary node.
+
+    Args:
+        node: A boundary `Node` (one whose `_origin` is set).
+
+    Returns:
+        A `(stub, home)` tuple: the reconstructed edge-layer `RefNode` and
+        the home-layer root `Node` with `_origin` cleared.
+
+    Raises:
+        ValueError: If `node` is not a boundary node (`_origin` is `None`).
+    """
     origin = node._origin
     if origin is None:
         raise ValueError("split() is valid only on a boundary node")
@@ -450,10 +683,18 @@ def split(node: Node) -> tuple[RefNode, Node]:
 
 
 def assert_unique_ids(root: AnyNode) -> None:
-    """Node ids MUST be unique across the inlined (single-document) tree.
+    """Assert that every node id in the tree is unique.
 
+    Node ids MUST be unique across the inlined (single-document) tree.
     Inlining merges several source documents into one, where ids are only unique
-    per source — so collisions surface here."""
+    per source — so collisions surface here.
+
+    Args:
+        root: The root of the tree to validate.
+
+    Raises:
+        ValueError: If any id appears more than once in the tree.
+    """
     seen: set[str] = set()
     for node in root.walk():
         if node.id in seen:

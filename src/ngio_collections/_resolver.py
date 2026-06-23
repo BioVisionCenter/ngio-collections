@@ -1,7 +1,7 @@
 """Lazy, async, non-mutating resolver over a URL-addressed store.
 
 Opening a collection reads exactly one metadata document; path-bearing stubs are
-fetched only on demand. ``inline`` builds the resolved tree bottom-up (it never
+fetched only on demand. `inline` builds the resolved tree bottom-up (it never
 mutates the parsed source or the cache). Saves are document-granular: editing a
 node rewrites only its owning document, and an unedited tree writes nothing.
 """
@@ -40,6 +40,7 @@ ZARR_METADATA_FILE = "zarr.json"
 
 
 def _clean_url(url: str) -> str:
+    """Normalise `url` to always end with a metadata filename."""
     if url.endswith(ZARR_METADATA_FILE) or url.endswith(".json"):
         return url
     # Anything else is taken to be a Zarr group directory.
@@ -47,24 +48,36 @@ def _clean_url(url: str) -> str:
 
 
 def _classify_url(url: str) -> Type[MetadataDocument]:
+    """Return the document class that should parse `url`."""
     if url.endswith(".json") and not url.endswith(ZARR_METADATA_FILE):
         return JsonMetadataDocument
     return ZarrMetadataDocument
 
 
 def _assign_document(node: AnyNode, doc: MetadataDocument) -> None:
-    """Stamp ``doc`` as the owning document of every node in a parsed tree."""
+    """Stamp `doc` as the owning document of every node in a parsed tree.
+
+    Args:
+        node: Root of the tree to stamp.
+        doc: The document that owns `node` and all its descendants.
+    """
     _set_private(node, "_document", doc)
     for child in getattr(node, "nodes", None) or ():
         _assign_document(child, doc)
 
 
 def _dump_node(node: AnyNode) -> dict:
-    """Serialize one node to its OME-payload dict, re-emitting boundary children
-    (merged stubs) as path references.
+    """Serialize one node to its OME-payload dict.
 
-    None fields and an empty ``attributes`` dict are dropped so an unedited
+    Boundary children (merged stubs) are re-emitted as path references.
+    None fields and an empty `attributes` dict are dropped so an unedited
     document re-serializes identically (only-changed-docs-written relies on it).
+
+    Args:
+        node: The node to serialize.
+
+    Returns:
+        A JSON-serializable dict representing `node` in the OME wire format.
     """
     data = node.model_dump(
         mode="json", by_alias=True, exclude_none=True, exclude={"nodes"}
@@ -87,8 +100,17 @@ def _dump_node(node: AnyNode) -> dict:
 
 
 def _doc_payload(doc_root: AnyNode) -> dict:
-    """The OME payload for the document ``doc_root`` owns. A boundary node is
-    rendered as its home (target) layer; a plain root as itself."""
+    """Return the OME payload for the document `doc_root` owns.
+
+    A boundary node is rendered as its home (target) layer; a plain root as
+    itself.
+
+    Args:
+        doc_root: The root node of a document (may be a boundary node).
+
+    Returns:
+        A JSON-serializable dict representing the document's OME payload.
+    """
     if doc_root._origin is not None:
         _, home = split(cast("Node", doc_root))
         return _dump_node(home)
@@ -96,12 +118,25 @@ def _doc_payload(doc_root: AnyNode) -> dict:
 
 
 class Resolver:
+    """Async resolver that opens, inlines, and persists OME collection trees.
+
+    Maintains a URL-keyed document cache so repeated reads of the same URL cost
+    only one IO call. The cache is not thread-safe; use one `Resolver` per
+    event loop (or per `_sync` background loop).
+    """
+
     def __init__(self, store: ReadableStore | None = None) -> None:
+        """Initialise the resolver with an optional backing store.
+
+        Args:
+            store: The store to use for all IO; defaults to :class:`LocalStore`.
+        """
         self.store = store if store is not None else LocalStore()
         # URL-keyed document cache: the single source of resolution state.
         self._cache: dict[str, MetadataDocument] = {}
 
     async def _open_document(self, url: str) -> MetadataDocument:
+        """Fetch and cache the document at `url`; return cached copy if already loaded."""
         url = _clean_url(url)
         if url in self._cache:
             return self._cache[url]
@@ -112,7 +147,14 @@ class Resolver:
         return doc
 
     async def _resolve_node(self, url: str) -> Node:
-        """Parse one document into a node tree (stubs left in place)."""
+        """Parse one document into a node tree (stubs left in place).
+
+        Args:
+            url: Document URL to fetch and parse.
+
+        Returns:
+            The root `Node` with `_document` stamped on every descendant.
+        """
         doc = await self._open_document(url)
         node = build_node(doc.deserialize_payload(doc.content))
         _assign_document(node, doc)
@@ -127,10 +169,21 @@ class Resolver:
         """Resolve a tree across document boundaries, inlining RefNode stubs.
 
         Builds a NEW tree bottom-up (the parsed source and cache are never
-        mutated): each resolvable RefNode is replaced by ``merge(ref, target)``.
-        ``depth`` bounds the hops to follow (``None`` unlimited, ``0`` root only);
-        ``on_error="skip"`` leaves an unresolvable stub (data leaf / open
-        failure) in place. Cycles are always skipped.
+        mutated): each resolvable RefNode is replaced by `merge(ref, target)`.
+        Cycles are always skipped.
+
+        Args:
+            url: Entry-point document URL.
+            depth: Maximum boundary hops to follow; `None` = unlimited,
+                `0` = root only (no inlining).
+            on_error: `"skip"` leaves unresolvable stubs (data leaf / open
+                failure) in place; `"raise"` propagates the exception.
+
+        Returns:
+            Fully inlined node tree with all resolvable stubs collapsed.
+
+        Raises:
+            ValueError: If duplicate node ids are found after inlining.
         """
         root = await self._resolve_node(url)
         assert root._document is not None
@@ -184,11 +237,17 @@ class Resolver:
         return await self._inline(child, depth, on_error, ancestors)
 
     async def open(self, url: str) -> Node:
-        """Open the document at ``url`` as a node tree, RefNode stubs left in place.
+        """Open the document at `url` as a node tree, RefNode stubs left in place.
 
         Reads exactly one document (no boundary inlining): every cross-document
         reference stays a RefNode stub. Use :meth:`inline` to collapse boundaries
         into one resolved tree.
+
+        Args:
+            url: Document URL to open.
+
+        Returns:
+            Root node of the parsed document with stubs intact.
         """
         return await self._resolve_node(url)
 
@@ -199,13 +258,25 @@ class Resolver:
         *,
         overwrite: bool = False,
     ) -> Node:
-        """Write a freshly built (DETACHED) tree to a NEW document at ``url``.
+        """Write a freshly built (DETACHED) tree to a NEW document at `url`.
 
-        Returns ``root`` stamped with its document (now DOCUMENT) so later edits +
-        ``save`` round-trip. The form (JSON / Zarr) is inferred from ``url``; the
-        OME payload is stamped with ``VERSION``. Raises if ``root`` is already
-        backed by a document (use ``save``) or if a document already exists at
-        ``url`` and ``overwrite`` is False (``inline`` it and use ``save``).
+        Returns `root` stamped with its document (now DOCUMENT) so later edits +
+        `save` round-trip. The form (JSON / Zarr) is inferred from `url`; the
+        OME payload is stamped with `VERSION`.
+
+        Args:
+            url: Destination document URL (JSON or Zarr inferred from suffix).
+            root: A DETACHED node tree to persist.
+            overwrite: If `False` (default), raise when a document already
+                exists at `url`.
+
+        Returns:
+            `root` stamped with the new document (state changes to DOCUMENT).
+
+        Raises:
+            NodeStateError: If `root` is already backed by a document (use
+                :meth:`save` instead), or if a document exists at `url` and
+                `overwrite` is `False`.
         """
         if not root.is_detached:
             raise NodeStateError(
@@ -228,14 +299,23 @@ class Resolver:
         return root
 
     async def save(self, root: Node) -> list[str]:
-        """Write an opened/created tree back, document-granularly (the inverse of
-        inline).
+        """Write an opened/created tree back, document-granularly.
 
-        ``root`` and every boundary node (``_origin`` set) roots its own
+        Inverse of :meth:`inline`. `root` and every boundary node (`_origin`
+        set) roots its own
         document; each is rebuilt (boundary children re-emitted as path stubs,
         attributes un-merged by origin, unknown keys carried through) and written
-        only if its serialized payload changed. Returns the URLs written. Use
-        ``create`` for a tree built from scratch.
+        only if its serialized payload changed.
+
+        Args:
+            root: The root node of a previously opened or created tree.
+
+        Returns:
+            List of URLs that were actually written (empty if nothing changed).
+
+        Raises:
+            NodeStateError: If `root` has no backing document (use
+                :meth:`create` for trees built from scratch).
         """
         if root.is_detached:
             raise NodeStateError(
@@ -254,9 +334,17 @@ class Resolver:
         return written
 
     async def delete_subtree(self, node: Node) -> list[str]:
-        """Delete the on-disk document of every boundary in ``node``'s subtree
-        (``node`` itself included if it is a boundary). Call BEFORE removing the
-        node in memory, while provenance is intact. Idempotent."""
+        """Delete the on-disk document of every boundary in `node`'s subtree.
+
+        `node` itself is included if it is a boundary. Call BEFORE removing the
+        node in memory, while provenance is intact. Idempotent.
+
+        Args:
+            node: Root of the subtree whose boundary documents should be deleted.
+
+        Returns:
+            List of URLs that were deleted.
+        """
         store = self._writable_store()
         deleted: list[str] = []
         for descendant in node.walk():
@@ -269,7 +357,12 @@ class Resolver:
         return deleted
 
     async def _save_document(self, url: str, content: dict) -> None:
-        """Write the full document ``content`` at ``url`` and refresh the cache."""
+        """Write `content` at `url` and refresh the in-memory cache entry.
+
+        Args:
+            url: Document URL to write.
+            content: Full document dict to serialise as JSON.
+        """
         store = self._writable_store()
         await store.put(url, json.dumps(content, indent=2).encode())
         cached = self._cache.get(url)
@@ -277,6 +370,7 @@ class Resolver:
             cached.content = content
 
     async def _exists(self, url: str) -> bool:
+        """Return `True` if a document exists at `url` (cache or store)."""
         if url in self._cache:
             return True
         try:
@@ -286,6 +380,7 @@ class Resolver:
         return True
 
     def _writable_store(self) -> WritableStore:
+        """Return the store cast to `WritableStore`, or raise if read-only."""
         store = self.store
         if not isinstance(store, WritableStore) or getattr(store, "read_only", False):
             raise StoreReadOnlyError(f"store {type(store).__name__!r} cannot write")

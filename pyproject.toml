@@ -58,3 +58,13 @@ python = ".pixi/envs/dev"
 # Tests freely subscript JsonValue-typed JSON test data; only the package
 # itself is held to ty's standards.
 include = ["src"]
+
+[tool.ruff.lint]
+select = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+"examples/*" = ["D"]

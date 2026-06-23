@@ -6,15 +6,15 @@ from typing import Any
 
 
 class FsspecStore:
-    """Store backed by an fsspec ``AsyncFileSystem``.
+    """Store backed by an fsspec `AsyncFileSystem`.
 
     Recommended default for remote collections: one dependency brings
-    http/s3/gcs/local and protocol dispatch. Requires the ``fsspec`` extra
-    (``pip install ngio-collections[fsspec]``).
+    http/s3/gcs/local and protocol dispatch. Requires the `fsspec` extra
+    (`pip install ngio-collections[fsspec]`).
 
     Args:
-        protocol: fsspec protocol name (e.g. ``"https"``, ``"s3"``).
-        read_only: Reject ``put()`` with StoreReadOnlyError when True.
+        protocol: fsspec protocol name (e.g. `"https"`, `"s3"`).
+        read_only: Reject `put()` with StoreReadOnlyError when True.
         **storage_options: Passed through to the fsspec filesystem.
     """
 
@@ -33,13 +33,39 @@ class FsspecStore:
         self.storage_options = storage_options
 
     async def get(self, url: str) -> bytes:
-        """Bytes at ``url``; raises FileNotFoundError if absent."""
+        """Return the raw bytes stored at `url`.
+
+        Args:
+            url: Absolute URL of the resource to fetch.
+
+        Returns:
+            Raw bytes content of the resource.
+
+        Raises:
+            FileNotFoundError: If no resource exists at `url`.
+            NotImplementedError: Until the fsspec backend is fully implemented.
+        """
         raise NotImplementedError
 
     async def put(self, url: str, data: bytes) -> None:
-        """Write ``data`` at ``url``; StoreReadOnlyError when read-only."""
+        """Write `data` at `url`.
+
+        Args:
+            url: Absolute URL of the destination.
+            data: Raw bytes to write.
+
+        Raises:
+            StoreReadOnlyError: If the store was created with `read_only=True`.
+        """
         raise NotImplementedError
 
     async def delete(self, url: str) -> None:
-        """Delete the object at ``url``; StoreReadOnlyError when read-only."""
+        """Delete the object at `url`; idempotent.
+
+        Args:
+            url: Absolute URL of the resource to delete.
+
+        Raises:
+            StoreReadOnlyError: If the store was created with `read_only=True`.
+        """
         raise NotImplementedError
