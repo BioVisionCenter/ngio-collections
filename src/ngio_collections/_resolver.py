@@ -13,6 +13,7 @@ import json
 from typing import Literal, Type, cast
 
 from ngio_collections._document import (
+    VERSION,
     JsonMetadataDocument,
     MetadataDocument,
     ZarrMetadataDocument,
@@ -182,19 +183,27 @@ class Resolver:
             )
         return await self._inline(child, depth, on_error, ancestors)
 
+    async def open(self, url: str) -> Node:
+        """Open the document at ``url`` as a node tree, RefNode stubs left in place.
+
+        Reads exactly one document (no boundary inlining): every cross-document
+        reference stays a RefNode stub. Use :meth:`inline` to collapse boundaries
+        into one resolved tree.
+        """
+        return await self._resolve_node(url)
+
     async def create(
         self,
         url: str,
         root: Node,
         *,
-        version: str | None = None,
         overwrite: bool = False,
     ) -> Node:
         """Write a freshly built (DETACHED) tree to a NEW document at ``url``.
 
         Returns ``root`` stamped with its document (now DOCUMENT) so later edits +
-        ``save`` round-trip. The form (JSON / Zarr) is inferred from ``url``; pass
-        ``version`` to set the OME payload version. Raises if ``root`` is already
+        ``save`` round-trip. The form (JSON / Zarr) is inferred from ``url``; the
+        OME payload is stamped with ``VERSION``. Raises if ``root`` is already
         backed by a document (use ``save``) or if a document already exists at
         ``url`` and ``overwrite`` is False (``inline`` it and use ``save``).
         """
@@ -213,9 +222,7 @@ class Resolver:
         assert_unique_ids(root)
         doc = _classify_url(url)(content={}, store=self.store, url=url)
         _assign_document(root, doc)
-        payload = _doc_payload(root)
-        if version is not None:
-            payload = {"version": version, **payload}
+        payload = {"version": VERSION, **_doc_payload(root)}
         self._cache[url] = doc
         await self._save_document(url, doc.serialize_payload(payload, {}))
         return root

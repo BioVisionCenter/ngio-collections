@@ -11,6 +11,10 @@ from typing import Protocol
 
 from ngio_collections.store import ReadableStore
 
+# The models are not versioned: there is exactly one OME payload version, stamped
+# on every document written by Resolver.create.
+VERSION = "0.x"
+
 
 class MetadataDocument(Protocol):
     content: dict

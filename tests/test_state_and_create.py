@@ -87,7 +87,7 @@ async def test_create_persists_and_stamps_document(resolver, tmp_path):
         attributes={"a": 1},
         nodes=(ngc.MultiscaleNode(id="img", attributes={"b": 2}),),
     )
-    saved = await resolver.create(url, root, version="0.x")
+    saved = await resolver.create(url, root)
 
     assert saved.state is ngc.NodeState.DOCUMENT
     assert saved.document_url == url
@@ -104,7 +104,6 @@ async def test_create_reopens_equal(resolver, tmp_path):
         ngc.CollectionNode(
             id="root", nodes=(ngc.MultiscaleNode(id="img", attributes={"b": 2}),)
         ),
-        version="0.x",
     )
     reopened = await ngc.Resolver(ngc.LocalStore()).inline(url)
     assert reopened.id == "root"
@@ -116,7 +115,6 @@ async def test_create_then_edit_save_roundtrips(resolver, tmp_path):
     root = await resolver.create(
         url,
         ngc.CollectionNode(id="root", nodes=(ngc.MultiscaleNode(id="img"),)),
-        version="0.x",
     )
     root = root.set_attrs("img", {"x": 9})
     assert await resolver.save(root) == [url]
@@ -130,7 +128,6 @@ async def test_bottom_up_composition(resolver, tmp_path):
     await resolver.create(
         str(tmp_path / "child.zarr"),
         ngc.MultiscaleNode(id="img", attributes={"k": 1}),
-        version="0.x",
     )
     root = ngc.CollectionNode(
         id="plate",
@@ -138,7 +135,7 @@ async def test_bottom_up_composition(resolver, tmp_path):
             ngc.RefMultiscaleNode(id="img", path=ngc.ZarrPath(path="./child.zarr")),
         ),
     )
-    await resolver.create(str(tmp_path / "collection.json"), root, version="0.x")
+    await resolver.create(str(tmp_path / "collection.json"), root)
 
     reopened = await ngc.Resolver(ngc.LocalStore()).inline(
         str(tmp_path / "collection.json")

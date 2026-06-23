@@ -347,7 +347,9 @@ def _remove(node: AnyNode, id: str) -> tuple[AnyNode, bool]:
 
 def _find_type_path(value: Any) -> tuple[str | None, bool]:
     if isinstance(value, dict):
-        return value.get("type"), "path" in value
+        # A path key serialized as None (an embedded Node round-tripped through
+        # model_dump) is not a reference; only a non-None path makes a RefNode.
+        return value.get("type"), value.get("path") is not None
     if isinstance(value, (Node, RefNode)):
         return value.type, isinstance(value, RefNode)
     raise ValueError(f"Invalid node value {type(value)}")

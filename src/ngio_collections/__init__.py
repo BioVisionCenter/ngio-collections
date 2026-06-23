@@ -11,6 +11,12 @@ the document layer are internal (reachable via the private modules if needed).
 """
 
 from ngio_collections._resolver import Resolver
+from ngio_collections._sync import (
+    create,
+    delete,
+    open,
+    save,
+)
 from ngio_collections.models import (
     AnyNode,
     CollectionNode,
@@ -54,4 +60,8 @@ __all__ = [
     "StoreReadOnlyError",
     "WritableStore",
     "ZarrPath",
+    "create",
+    "delete",
+    "open",
+    "save",
 ]
