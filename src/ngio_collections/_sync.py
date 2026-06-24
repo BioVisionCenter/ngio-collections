@@ -1,8 +1,9 @@
 """Synchronous IO entry points over the async :class:`Resolver`.
 
-Four free functions mirroring the resolver's IO surface — `open`, `create`,
-`save`, `delete` — for scripts and notebooks. Node editing is already
-synchronous; only IO is async, so this is all the sync facade needs.
+Free functions mirroring the resolver's IO surface — `open`, `open_inlined`,
+`create`, `save`, `save_inlined`, `delete` — for scripts and notebooks. Node
+editing is already synchronous; only IO is async, so this is all the sync facade
+needs.
 
 Each call submits the async work to a persistent event loop running on a daemon
 background thread, so the functions work both in plain scripts and inside
@@ -19,7 +20,7 @@ import threading
 from typing import Any, Coroutine, Literal, TypeVar
 
 from ngio_collections._resolver import Resolver
-from ngio_collections.models import Node
+from ngio_collections.models import BaseNode, InlinedNode, Node, RefNode
 from ngio_collections.store import LocalStore, ReadableStore
 
 T = TypeVar("T")
@@ -67,39 +68,39 @@ def _resolver(resolver: Resolver | None, store: ReadableStore | None) -> Resolve
     return resolver if resolver is not None else Resolver(store or LocalStore())
 
 
-def open(
-    url: str,
-    resolver: Resolver | None = None,
-    *,
-    inline: bool = True,
-    depth: int | None = None,
-    on_error: Literal["skip", "raise"] = "skip",
-) -> Node:
-    """Open the tree at `url` synchronously.
-
-    With `inline` (the default) RefNode stubs are collapsed across document
-    boundaries into one resolved tree (:meth:`Resolver.inline`); `depth` and
-    `on_error` bound that collapse. With `inline=False` exactly one document
-    is read and every stub is left in place (:meth:`Resolver.open`); `depth` and
-    `on_error` then have no effect.
+def open(url: str, resolver: Resolver | None = None) -> Node:
+    """Synchronous :meth:`Resolver.open`: read ONE document, stubs left in place.
 
     Args:
         url: Entry-point document URL.
         resolver: Optional shared resolver; a fresh one is created if omitted.
-        inline: If `True` (default), inline RefNode stubs across document
-            boundaries. If `False`, return the root document only.
-        depth: Maximum boundary hops when inlining; `None` = unlimited.
-            Ignored when `inline=False`.
-        on_error: `"skip"` leaves unresolvable stubs in place; `"raise"`
-            propagates. Ignored when `inline=False`.
 
     Returns:
-        The resolved (or partially resolved) node tree.
+        The editable root node with cross-document references left as stubs.
     """
-    r = _resolver(resolver, None)
-    if inline:
-        return _run(r.inline(url, depth, on_error))
-    return _run(r.open(url))
+    return _run(_resolver(resolver, None).open(url))
+
+
+def open_inlined(
+    url: str,
+    resolver: Resolver | None = None,
+    *,
+    depth: int | None = None,
+    on_error: Literal["skip", "raise"] = "skip",
+) -> InlinedNode:
+    """Synchronous :meth:`Resolver.open_inlined`: resolve stubs into a read-only tree.
+
+    Args:
+        url: Entry-point document URL.
+        resolver: Optional shared resolver; a fresh one is created if omitted.
+        depth: Maximum boundary hops when inlining; `None` = unlimited.
+        on_error: `"skip"` leaves unresolvable stubs in place; `"raise"`
+            propagates.
+
+    Returns:
+        The read-only inlined node tree.
+    """
+    return _run(_resolver(resolver, None).open_inlined(url, depth, on_error))
 
 
 def create(
@@ -108,7 +109,8 @@ def create(
     resolver: Resolver | None = None,
     *,
     overwrite: bool = False,
-) -> Node:
+    relativize: bool = True,
+) -> RefNode:
     """Synchronous :meth:`Resolver.create`: write a detached tree to a new document.
 
     Args:
@@ -116,34 +118,67 @@ def create(
         root: A DETACHED node tree to persist.
         resolver: Optional shared resolver; a fresh one is created if omitted.
         overwrite: If `False` (default), raise when a document already exists.
+        relativize: If `True` (default), relativize co-located local stub paths.
 
     Returns:
-        `root` stamped with the new document (state changes to DOCUMENT).
+        A typed `RefNode` stub locating `root` in the new document.
     """
-    return _run(_resolver(resolver, None).create(url, root, overwrite=overwrite))
+    return _run(
+        _resolver(resolver, None).create(
+            url, root, overwrite=overwrite, relativize=relativize
+        )
+    )
 
 
-def save(root: Node, resolver: Resolver | None = None) -> list[str]:
-    """Synchronous :meth:`Resolver.save`: write an opened/created tree back.
+def save(root: Node, resolver: Resolver | None = None, *, relativize: bool = True) -> RefNode:
+    """Synchronous :meth:`Resolver.save`: write an opened tree back to its document.
 
     Args:
         root: The root node of a previously opened or created tree.
         resolver: Optional shared resolver; a fresh one is created if omitted.
+        relativize: If `True` (default), relativize co-located local stub paths.
 
     Returns:
-        List of URLs that were actually written (empty if nothing changed).
+        A typed `RefNode` stub locating `root` in its document.
     """
-    return _run(_resolver(resolver, None).save(root))
+    return _run(_resolver(resolver, None).save(root, relativize=relativize))
 
 
-def delete(node: Node, resolver: Resolver | None = None) -> list[str]:
-    """Synchronous :meth:`Resolver.delete_subtree`: delete boundary documents.
+def save_inlined(
+    view: InlinedNode,
+    url: str,
+    resolver: Resolver | None = None,
+    *,
+    overwrite: bool = False,
+    relativize: bool = True,
+) -> RefNode:
+    """Synchronous :meth:`Resolver.save_inlined`: snapshot an inlined tree to one file.
 
     Args:
-        node: Root of the subtree whose boundary documents should be deleted.
+        view: The read-only inlined tree to flatten.
+        url: Destination document URL.
+        resolver: Optional shared resolver; a fresh one is created if omitted.
+        overwrite: If `False` (default), raise when a document already exists.
+        relativize: If `True` (default), relativize co-located local stub paths.
+
+    Returns:
+        A typed `RefNode` stub locating the snapshot's root in the new document.
+    """
+    return _run(
+        _resolver(resolver, None).save_inlined(
+            view, url, overwrite=overwrite, relativize=relativize
+        )
+    )
+
+
+def delete(node: BaseNode, resolver: Resolver | None = None) -> list[str]:
+    """Synchronous :meth:`Resolver.delete`: remove a node from its document on disk.
+
+    Args:
+        node: A document-backed node to delete.
         resolver: Optional shared resolver; a fresh one is created if omitted.
 
     Returns:
-        List of URLs that were deleted.
+        The URL(s) affected (written or deleted); empty if nothing changed.
     """
-    return _run(_resolver(resolver, None).delete_subtree(node))
+    return _run(_resolver(resolver, None).delete(node))

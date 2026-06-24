@@ -18,13 +18,6 @@
         "path": {
           "type": "zarr",
           "path": "./labels.zarr"
-        },
-        "attributes": {
-          "ngio": {
-            "multiscale": {
-              "type": "2"
-            }
-          }
         }
       }
     ]

@@ -16,10 +16,11 @@ import ngio_collections as ngc
 def single_scales(prefix: str) -> tuple[ngc.RefSinglescaleNode, ...]:
     # Single scales point at the on-disk zarr arrays ("0", "1"); they are
     # references, not embedded data, so the resolver leaves them as leaves.
-    # Ids must be unique across the whole collection, so we prefix them.
+    # Ids must be unique across the whole collection (and match the id pattern,
+    # which is alphanumeric + -_. ), so we prefix them.
     return (
-        ngc.RefSinglescaleNode(id=f"{prefix}/0", path=ngc.ZarrPath(path="./0")),
-        ngc.RefSinglescaleNode(id=f"{prefix}/1", path=ngc.ZarrPath(path="./1")),
+        ngc.RefSinglescaleNode(id=f"{prefix}_0", path=ngc.ZarrPath(path="./0")),
+        ngc.RefSinglescaleNode(id=f"{prefix}_1", path=ngc.ZarrPath(path="./1")),
     )
 
 

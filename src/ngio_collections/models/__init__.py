@@ -1,13 +1,19 @@
-"""Pure model layer: frozen nodes, paths, the merge/split rule, edit engine.
+"""Pure model layer: frozen nodes, paths, references, and the edit engine.
 
-This subpackage re-exports the model types that make up the public API. The
-merge engine, node constructors, and provenance plumbing stay internal to
+This subpackage re-exports the model types that make up the public API. The node
+constructors and `_document` plumbing stay internal to
 ``ngio_collections.models._base``.
 """
 
 from ngio_collections.models._base import (
+    AnyInlinedNode,
     AnyNode,
+    BaseNode,
     CollectionNode,
+    IdStr,
+    InlinedCollectionNode,
+    InlinedMultiscaleNode,
+    InlinedNode,
     JsonPath,
     MultiscaleNode,
     Node,
@@ -18,12 +24,19 @@ from ngio_collections.models._base import (
     RefMultiscaleNode,
     RefNode,
     RefSinglescaleNode,
+    ReferenceObj,
     ZarrPath,
 )
 
 __all__ = [
+    "AnyInlinedNode",
     "AnyNode",
+    "BaseNode",
     "CollectionNode",
+    "IdStr",
+    "InlinedCollectionNode",
+    "InlinedMultiscaleNode",
+    "InlinedNode",
     "JsonPath",
     "MultiscaleNode",
     "Node",
@@ -34,5 +47,6 @@ __all__ = [
     "RefMultiscaleNode",
     "RefNode",
     "RefSinglescaleNode",
+    "ReferenceObj",
     "ZarrPath",
 ]

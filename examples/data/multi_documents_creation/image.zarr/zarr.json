@@ -5,17 +5,10 @@
       "type": "multiscale",
       "id": "image",
       "name": "image",
-      "attributes": {
-        "ngio": {
-          "multiscale": {
-            "type": "1"
-          }
-        }
-      },
       "nodes": [
         {
           "type": "singlescale",
-          "id": "image/0",
+          "id": "image_0",
           "path": {
             "type": "zarr",
             "path": "./0"
@@ -23,7 +16,7 @@
         },
         {
           "type": "singlescale",
-          "id": "image/1",
+          "id": "image_1",
           "path": {
             "type": "zarr",
             "path": "./1"

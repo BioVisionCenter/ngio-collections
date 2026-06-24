@@ -8,7 +8,7 @@
       "nodes": [
         {
           "type": "singlescale",
-          "id": "labels/0",
+          "id": "labels_0",
           "path": {
             "type": "zarr",
             "path": "./0"
@@ -16,7 +16,7 @@
         },
         {
           "type": "singlescale",
-          "id": "labels/1",
+          "id": "labels_1",
           "path": {
             "type": "zarr",
             "path": "./1"

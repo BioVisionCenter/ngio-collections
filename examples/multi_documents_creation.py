@@ -1,71 +1,42 @@
-"""Build a small collection in memory and write it to disk.
+"""Compose a multi-document collection bottom-up with references.
 
-    root (collection)
-    ├── image  (multiscale, 2 single scales)
-    └── labels (collection)
-        └── nuclei (multiscale label, 2 single scales)
+Each multiscale is written to its own zarr document; `create()` returns a typed
+`RefNode` stub locating it. The parent collection is built in memory and the
+references are attached with `add_ref()`; the stored paths are relativized
+against the parent document when it is written.
 
-Run with: pixi run python examples/basic_creation.py
+    root (collection.json)
+    ├── image  -> ./image.zarr
+    └── labels -> ./labels.zarr
+
+Run with: pixi run python examples/multi_documents_creation.py
 """
 
 from pathlib import Path
 
+from basic_creation import build_multiscale
+
 import ngio_collections as ngc
-
-
-def single_scales(prefix: str) -> tuple[ngc.RefSinglescaleNode, ...]:
-    # Single scales point at the on-disk zarr arrays ("0", "1"); they are
-    # references, not embedded data, so the resolver leaves them as leaves.
-    # Ids must be unique across the whole collection, so we prefix them.
-    return (
-        ngc.RefSinglescaleNode(id=f"{prefix}/0", path=ngc.ZarrPath(path="./0")),
-        ngc.RefSinglescaleNode(id=f"{prefix}/1", path=ngc.ZarrPath(path="./1")),
-    )
-
-
-def build_multiscale(prefix: str, attributes: dict | None = None) -> ngc.MultiscaleNode:
-    attributes = attributes or {}
-    return ngc.MultiscaleNode(
-        id=prefix, name=prefix, nodes=single_scales(prefix), attributes=attributes
-    )
-
-
-def build_collection() -> ngc.CollectionNode:
-    """The in-memory tree. Frozen and detached until a Resolver writes it."""
-    return ngc.CollectionNode(
-        id="root",
-        nodes=(
-            build_multiscale("image"),
-            ngc.CollectionNode(
-                id="labels",
-                nodes=(build_multiscale("nuclei"),),
-            ),
-        ),
-    )
 
 
 def main() -> None:
     base_path = Path(__file__).parent / "data" / Path(__file__).stem
     url = str(base_path / "collection.json")
 
-    # Write each multiscale to its own zarr on disk.
-    multiscale_image = build_multiscale("image")
-    ngc.create(str(base_path / "image.zarr"), multiscale_image, overwrite=True)
+    # Write each multiscale to its own zarr; keep the returned stubs.
+    rf_image = ngc.create(str(base_path / "image.zarr"), build_multiscale("image"), overwrite=True)
+    rf_labels = ngc.create(str(base_path / "labels.zarr"), build_multiscale("labels"), overwrite=True)
+    print("image  stub:", rf_image.model_dump())
+    print("labels stub:", rf_labels.model_dump())
 
-    multiscale_labels = build_multiscale("labels")
-    ngc.create(str(base_path / "labels.zarr"), multiscale_labels, overwrite=True)
-
-    # Build the root with reference stubs pointing at the on-disk zarrs.
-    root = ngc.CollectionNode(
-        id="root",
-        nodes=(
-            ngc.RefMultiscaleNode(id="image", path=ngc.ZarrPath(path="./image.zarr")),
-            ngc.RefMultiscaleNode(id="labels", path=ngc.ZarrPath(path="./labels.zarr")),
-        ),
-    )
+    # Build the parent in memory and attach the references. The parent can be
+    # detached here — paths are relativized when the document is written.
+    root = ngc.CollectionNode(id="root")
+    root = root.add_ref(parent_id="root", ref=rf_image)
+    root = root.add_ref(parent_id="root", ref=rf_labels)
     ngc.create(url, root, overwrite=True)
 
-    print(f"wrote {url}\n")
+    print(f"\nwrote {url}\n")
     print(Path(url).read_text())
 
 

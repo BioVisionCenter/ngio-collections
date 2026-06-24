@@ -7,7 +7,7 @@ preserving every sibling key so an unedited round-trip is byte-identical.
 """
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from ngio_collections.store import ReadableStore
 
@@ -15,11 +15,27 @@ from ngio_collections.store import ReadableStore
 # on every document written by Resolver.create.
 VERSION = "0.x"
 
+ZARR_METADATA_FILE = "zarr.json"
+
 
 class MetadataDocument(Protocol):
     content: dict
     store: ReadableStore
     url: str
+
+    @property
+    def kind(self) -> Literal["zarr", "json"]:
+        """The path form (`zarr` / `json`) a reference to this document uses."""
+        ...
+
+    @property
+    def ref_url(self) -> str:
+        """The URL a `ReferenceObj` stores for this document.
+
+        For JSON this is the document URL; for Zarr it is the group directory
+        (the URL without the trailing `zarr.json`).
+        """
+        ...
 
     def deserialize_payload(self, payload: dict) -> dict:
         """Extract the OME payload dict from the raw document content.
@@ -65,6 +81,13 @@ class BaseMetadataDocument:
 class JsonMetadataDocument(BaseMetadataDocument):
     """A parsed JSON metadata document and its provenance."""
 
+    kind = "json"
+
+    @property
+    def ref_url(self) -> str:
+        """A JSON reference stores the document URL verbatim."""
+        return self.url
+
     def deserialize_payload(self, payload: dict) -> dict:
         """Extract the OME payload from a top-level `ome` key.
 
@@ -92,6 +115,14 @@ class JsonMetadataDocument(BaseMetadataDocument):
 @dataclass
 class ZarrMetadataDocument(BaseMetadataDocument):
     """A parsed Zarr metadata document and its provenance."""
+
+    kind = "zarr"
+
+    @property
+    def ref_url(self) -> str:
+        """A Zarr reference stores the group directory, not the `zarr.json`."""
+        suffix = "/" + ZARR_METADATA_FILE
+        return self.url[: -len(suffix)] if self.url.endswith(suffix) else self.url
 
     def _get_attributes(self, payload: dict) -> dict:
         """Return the `attributes` sub-dict, defaulting to empty."""

@@ -1,14 +1,22 @@
 """Lazy, async, non-mutating resolver over a URL-addressed store.
 
-Opening a collection reads exactly one metadata document; path-bearing stubs are
-fetched only on demand. `inline` builds the resolved tree bottom-up (it never
-mutates the parsed source or the cache). Saves are document-granular: editing a
-node rewrites only its owning document, and an unedited tree writes nothing.
+`open` reads exactly one metadata document into an editable tree (cross-document
+references stay `RefNode` stubs). `open_inlined` resolves those stubs across
+document boundaries — loading each target document and locating the referenced
+node *by id* inside it — into a read-only `InlinedNode` tree; a stub's
+attributes overlay the resolved target on read (stub wins). Inlining is a
+read-only operation: it builds a new tree and never mutates the parsed source or
+the cache, and it cannot be written back through its origins.
+
+Writing is single-document. `create` writes a detached tree to a new file;
+`save` writes an opened tree back to its own document; `save_inlined` snapshots
+an inlined tree to one self-contained file. Each returns a `ReferenceObj` so the
+written node can be composed into a parent in another document. `delete` removes
+a node from its on-disk document, unlinking the file only when it is left empty.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Literal, Type, cast
 
@@ -19,15 +27,18 @@ from ngio_collections._document import (
     ZarrMetadataDocument,
 )
 from ngio_collections.models._base import (
-    AnyNode,
+    BaseNode,
+    InlinedNode,
     Node,
     NodeStateError,
     RefNode,
+    _relativize_path,
+    _remove,
     _set_private,
     assert_unique_ids,
+    build_inlined,
     build_node,
-    merge,
-    split,
+    stub_to,
 )
 from ngio_collections.store import (
     LocalStore,
@@ -54,7 +65,7 @@ def _classify_url(url: str) -> Type[MetadataDocument]:
     return ZarrMetadataDocument
 
 
-def _assign_document(node: AnyNode, doc: MetadataDocument) -> None:
+def _assign_document(node: BaseNode, doc: MetadataDocument) -> None:
     """Stamp `doc` as the owning document of every node in a parsed tree.
 
     Args:
@@ -66,15 +77,22 @@ def _assign_document(node: AnyNode, doc: MetadataDocument) -> None:
         _assign_document(child, doc)
 
 
-def _dump_node(node: AnyNode) -> dict:
-    """Serialize one node to its OME-payload dict.
+def _dump_node(
+    node: BaseNode, document: MetadataDocument, relativize: bool
+) -> dict:
+    """Serialize one node (and its subtree) to its OME-payload dict.
 
-    Boundary children (merged stubs) are re-emitted as path references.
-    None fields and an empty `attributes` dict are dropped so an unedited
-    document re-serializes identically (only-changed-docs-written relies on it).
+    Embedded children serialize inline; `RefNode` stubs serialize as path
+    references. When `relativize` is `True`, a stub's path is rewritten relative
+    to `document` if it is a co-located local path (best-effort: http,
+    different-directory, and already-relative paths are kept verbatim). None
+    fields and an empty `attributes` dict are dropped so an unedited document
+    re-serializes identically.
 
     Args:
         node: The node to serialize.
+        document: The document being written, used as the relativization base.
+        relativize: Whether to relativize co-located local stub paths.
 
     Returns:
         A JSON-serializable dict representing `node` in the OME wire format.
@@ -84,37 +102,45 @@ def _dump_node(node: AnyNode) -> dict:
     )
     if data.get("attributes") == {}:
         data.pop("attributes")
-    children: tuple[AnyNode, ...] | None = getattr(node, "nodes", None)
+    if isinstance(node, RefNode):
+        path = _relativize_path(node.path, document) if relativize else node.path
+        data["path"] = path.model_dump(mode="json", by_alias=True)
+    children: tuple[BaseNode, ...] | None = getattr(node, "nodes", None)
     if children is None:  # a RefNode leaf: no embedded children
         return data
-    dumped: list = []
-    for child in children:
-        if isinstance(child, Node) and child._origin is not None:
-            # A document boundary: re-emit the parent reference (path stub).
-            stub, _ = split(child)
-            dumped.append(_dump_node(stub))
-        else:
-            dumped.append(_dump_node(child))
-    data["nodes"] = dumped
+    data["nodes"] = [_dump_node(child, document, relativize) for child in children]
     return data
 
 
-def _doc_payload(doc_root: AnyNode) -> dict:
-    """Return the OME payload for the document `doc_root` owns.
+def _doc_payload(
+    root: BaseNode, document: MetadataDocument, relativize: bool
+) -> dict:
+    """Return the full OME payload for a document rooted at `root`.
 
-    A boundary node is rendered as its home (target) layer; a plain root as
-    itself.
+    The `version` is a document-envelope key, stamped at the payload top and kept
+    off the node itself so it never nests into embedded children.
 
     Args:
-        doc_root: The root node of a document (may be a boundary node).
+        root: The root node of the document.
+        document: The document being written (relativization base).
+        relativize: Whether to relativize co-located local stub paths.
 
     Returns:
-        A JSON-serializable dict representing the document's OME payload.
+        The OME payload dict (`version` + the dumped root node).
     """
-    if doc_root._origin is not None:
-        _, home = split(cast("Node", doc_root))
-        return _dump_node(home)
-    return _dump_node(doc_root)
+    return {"version": VERSION, **_dump_node(root, document, relativize)}
+
+
+def _node_from_payload(payload: dict) -> Node:
+    """Build the editable root node from a document's OME payload.
+
+    Args:
+        payload: The OME payload dict (may carry the envelope `version`).
+
+    Returns:
+        The editable root `Node`, with `version` stripped off.
+    """
+    return build_node({k: v for k, v in payload.items() if k != "version"})
 
 
 class Resolver:
@@ -136,7 +162,7 @@ class Resolver:
         self._cache: dict[str, MetadataDocument] = {}
 
     async def _open_document(self, url: str) -> MetadataDocument:
-        """Fetch and cache the document at `url`; return cached copy if already loaded."""
+        """Fetch and cache the document at `url`; return cached copy if loaded."""
         url = _clean_url(url)
         if url in self._cache:
             return self._cache[url]
@@ -147,7 +173,7 @@ class Resolver:
         return doc
 
     async def _resolve_node(self, url: str) -> Node:
-        """Parse one document into a node tree (stubs left in place).
+        """Parse one document into an editable node tree (stubs left in place).
 
         Args:
             url: Document URL to fetch and parse.
@@ -156,100 +182,122 @@ class Resolver:
             The root `Node` with `_document` stamped on every descendant.
         """
         doc = await self._open_document(url)
-        node = build_node(doc.deserialize_payload(doc.content))
+        node = _node_from_payload(doc.deserialize_payload(doc.content))
         _assign_document(node, doc)
         return node
 
-    async def inline(
-        self,
-        url: str,
-        depth: int | None = None,
-        on_error: Literal["skip", "raise"] = "skip",
-    ) -> Node:
-        """Resolve a tree across document boundaries, inlining RefNode stubs.
-
-        Builds a NEW tree bottom-up (the parsed source and cache are never
-        mutated): each resolvable RefNode is replaced by `merge(ref, target)`.
-        Cycles are always skipped.
-
-        Args:
-            url: Entry-point document URL.
-            depth: Maximum boundary hops to follow; `None` = unlimited,
-                `0` = root only (no inlining).
-            on_error: `"skip"` leaves unresolvable stubs (data leaf / open
-                failure) in place; `"raise"` propagates the exception.
-
-        Returns:
-            Fully inlined node tree with all resolvable stubs collapsed.
-
-        Raises:
-            ValueError: If duplicate node ids are found after inlining.
-        """
-        root = await self._resolve_node(url)
-        assert root._document is not None
-        root = await self._inline(
-            root, depth, on_error, frozenset({root._document.url})
-        )
-        # Eager: inlining merges several documents into one (ids unique only per
-        # source) — surface collisions here, not at save().
-        assert_unique_ids(root)
-        return root
-
-    async def _inline(
-        self,
-        node: Node,
-        depth: int | None,
-        on_error: Literal["skip", "raise"],
-        ancestors: frozenset[str],
-    ) -> Node:
-        children = node.nodes
-        if not children:
-            return node
-        new_children = await asyncio.gather(
-            *(self._inline_one(c, depth, on_error, ancestors) for c in children)
-        )
-        return node.model_copy(update={"nodes": tuple(new_children)})
-
-    async def _inline_one(
-        self,
-        child: AnyNode,
-        depth: int | None,
-        on_error: Literal["skip", "raise"],
-        ancestors: frozenset[str],
-    ) -> AnyNode:
-        if isinstance(child, RefNode):
-            if depth == 0:
-                return child  # hop budget exhausted -> leave the stub
-            target_url = _clean_url(child.resolve_path())
-            if target_url in ancestors:
-                return child  # cycle -> leave as stub
-            try:
-                target = await self._resolve_node(target_url)
-            except Exception:
-                if on_error == "raise":
-                    raise
-                return child  # data leaf / not-an-ome-doc -> leave as stub
-            merged = merge(child, target)
-            next_depth = None if depth is None else depth - 1
-            return await self._inline(
-                merged, next_depth, on_error, ancestors | {target_url}
-            )
-        return await self._inline(child, depth, on_error, ancestors)
-
     async def open(self, url: str) -> Node:
-        """Open the document at `url` as a node tree, RefNode stubs left in place.
+        """Open the document at `url` as an editable tree, stubs left in place.
 
         Reads exactly one document (no boundary inlining): every cross-document
-        reference stays a RefNode stub. Use :meth:`inline` to collapse boundaries
-        into one resolved tree.
+        reference stays a `RefNode` stub. The result is editable and writable
+        single-document via :meth:`save`.
 
         Args:
             url: Document URL to open.
 
         Returns:
-            Root node of the parsed document with stubs intact.
+            Root `Node` of the parsed document with stubs intact.
         """
         return await self._resolve_node(url)
+
+    async def open_inlined(
+        self,
+        url: str,
+        depth: int | None = None,
+        on_error: Literal["skip", "raise"] = "skip",
+    ) -> InlinedNode:
+        """Resolve a tree across document boundaries into a read-only tree.
+
+        Each resolvable `RefNode` is replaced by the node it locates — the
+        document at its path is loaded and the node whose `id` matches is found
+        inside it — with the stub's attributes overlaid (stub wins). Builds a NEW
+        `InlinedNode` tree bottom-up; the parsed source and cache are never
+        mutated. Cycles, depth-exhausted hops, and unreadable targets are left as
+        stubs.
+
+        Args:
+            url: Entry-point document URL.
+            depth: Maximum boundary hops to follow; `None` = unlimited,
+                `0` = root only (no inlining).
+            on_error: `"skip"` leaves unresolvable stubs in place; `"raise"`
+                propagates the failure.
+
+        Returns:
+            The read-only inlined node tree.
+
+        Raises:
+            ValueError: If duplicate node ids are found after inlining.
+        """
+        root = await self._resolve_node(_clean_url(url))
+        assert root._document is not None
+        inlined = await self._inline_tree(
+            root, depth, on_error, frozenset({root._document.url})
+        )
+        inlined = cast("InlinedNode", inlined)
+        # Inlining merges several documents into one (ids unique only per source)
+        # — surface collisions here.
+        assert_unique_ids(inlined)
+        return inlined
+
+    async def _inline_tree(
+        self,
+        node: BaseNode,
+        depth: int | None,
+        on_error: Literal["skip", "raise"],
+        ancestors: frozenset[str],
+    ) -> InlinedNode | RefNode:
+        """Convert an editable node into its inlined mirror, resolving stubs."""
+        if isinstance(node, RefNode):
+            return await self._resolve_ref(node, depth, on_error, ancestors)
+        children = getattr(node, "nodes", ()) or ()
+        new_children = tuple(
+            [
+                await self._inline_tree(child, depth, on_error, ancestors)
+                for child in children
+            ]
+        )
+        return build_inlined(node, new_children)
+
+    async def _resolve_ref(
+        self,
+        stub: RefNode,
+        depth: int | None,
+        on_error: Literal["skip", "raise"],
+        ancestors: frozenset[str],
+    ) -> InlinedNode | RefNode:
+        """Resolve a single `RefNode` stub by id within its target document."""
+        if depth == 0:
+            return stub  # hop budget exhausted -> leave the stub
+        try:
+            target_url = _clean_url(stub.resolve_path())
+        except Exception:
+            if on_error == "raise":
+                raise
+            return stub
+        if target_url in ancestors:
+            return stub  # cycle -> leave as stub
+        try:
+            target_root = await self._resolve_node(target_url)
+        except Exception:
+            if on_error == "raise":
+                raise
+            return stub  # data leaf / not-an-ome-doc -> leave as stub
+        target = target_root.find(id=stub.id)
+        if target is None:
+            if on_error == "raise":
+                raise KeyError(
+                    f"reference {stub.id!r} not found in document {target_url!r}"
+                )
+            return stub
+        next_depth = None if depth is None else depth - 1
+        inlined = await self._inline_tree(
+            target, next_depth, on_error, ancestors | {target_url}
+        )
+        if stub.attributes:  # overlay stub attributes on read (stub wins)
+            merged = {**inlined.attributes, **stub.attributes}
+            inlined = inlined.model_copy(update={"attributes": merged})
+        return inlined
 
     async def create(
         self,
@@ -257,26 +305,30 @@ class Resolver:
         root: Node,
         *,
         overwrite: bool = False,
-    ) -> Node:
+        relativize: bool = True,
+    ) -> RefNode:
         """Write a freshly built (DETACHED) tree to a NEW document at `url`.
 
-        Returns `root` stamped with its document (now DOCUMENT) so later edits +
-        `save` round-trip. The form (JSON / Zarr) is inferred from `url`; the
-        OME payload is stamped with `VERSION`.
+        Stamps `root` with its document (state changes to DOCUMENT) so later
+        edits + :meth:`save` round-trip. The form (JSON / Zarr) is inferred from
+        `url`; the OME payload is stamped with `VERSION`.
 
         Args:
             url: Destination document URL (JSON or Zarr inferred from suffix).
             root: A DETACHED node tree to persist.
             overwrite: If `False` (default), raise when a document already
                 exists at `url`.
+            relativize: If `True` (default), rewrite co-located local stub paths
+                relative to this document; `http` / cross-directory paths are
+                kept verbatim. Pass `False` to store every path as-is.
 
         Returns:
-            `root` stamped with the new document (state changes to DOCUMENT).
+            A typed `RefNode` stub locating `root` in the new document.
 
         Raises:
             NodeStateError: If `root` is already backed by a document (use
-                :meth:`save` instead), or if a document exists at `url` and
-                `overwrite` is `False`.
+                :meth:`save`), or a document exists at `url` and `overwrite` is
+                `False`.
         """
         if not root.is_detached:
             raise NodeStateError(
@@ -287,31 +339,32 @@ class Resolver:
         url = _clean_url(url)
         if not overwrite and await self._exists(url):
             raise NodeStateError(
-                f"a document already exists at {url!r}; inline it and use "
+                f"a document already exists at {url!r}; open it and use "
                 "Resolver.save(root), or pass overwrite=True"
             )
         assert_unique_ids(root)
         doc = _classify_url(url)(content={}, store=self.store, url=url)
         _assign_document(root, doc)
-        payload = {"version": VERSION, **_doc_payload(root)}
         self._cache[url] = doc
-        await self._save_document(url, doc.serialize_payload(payload, {}))
-        return root
+        payload = doc.serialize_payload(_doc_payload(root, doc, relativize), {})
+        await self._save_document(url, payload)
+        return stub_to(root, doc)
 
-    async def save(self, root: Node) -> list[str]:
-        """Write an opened/created tree back, document-granularly.
+    async def save(self, root: Node, *, relativize: bool = True) -> RefNode:
+        """Write an opened/created editable tree back to ITS document.
 
-        Inverse of :meth:`inline`. `root` and every boundary node (`_origin`
-        set) roots its own
-        document; each is rebuilt (boundary children re-emitted as path stubs,
-        attributes un-merged by origin, unknown keys carried through) and written
-        only if its serialized payload changed.
+        Single-document: only `root`'s own document is (re)written, and only if
+        its serialized payload changed. Cross-document `RefNode` stubs are left
+        as references.
 
         Args:
             root: The root node of a previously opened or created tree.
+            relativize: If `True` (default), rewrite co-located local stub paths
+                relative to this document; `http` / cross-directory paths are
+                kept verbatim. Pass `False` to store every path as-is.
 
         Returns:
-            List of URLs that were actually written (empty if nothing changed).
+            A typed `RefNode` stub locating `root` in its document.
 
         Raises:
             NodeStateError: If `root` has no backing document (use
@@ -322,39 +375,93 @@ class Resolver:
                 "tree has no backing document; use Resolver.create(url, root) to "
                 "write a new collection first"
             )
-        written: list[str] = []
-        for node in root.walk():
-            if node is root or node._origin is not None:
-                assert node._document is not None
-                doc = node._document
-                new_content = doc.serialize_payload(_doc_payload(node), doc.content)
-                if new_content != doc.content:
-                    await self._save_document(doc.url, new_content)
-                    written.append(doc.url)
-        return written
+        doc = root._document
+        assert doc is not None
+        assert_unique_ids(root)
+        new_content = doc.serialize_payload(_doc_payload(root, doc, relativize), doc.content)
+        if new_content != doc.content:
+            await self._save_document(doc.url, new_content)
+        return stub_to(root, doc)
 
-    async def delete_subtree(self, node: Node) -> list[str]:
-        """Delete the on-disk document of every boundary in `node`'s subtree.
+    async def save_inlined(
+        self,
+        view: InlinedNode,
+        url: str,
+        *,
+        overwrite: bool = False,
+        relativize: bool = True,
+    ) -> RefNode:
+        """Snapshot an inlined tree into ONE self-contained document at `url`.
 
-        `node` itself is included if it is a boundary. Call BEFORE removing the
-        node in memory, while provenance is intact. Idempotent.
+        Every resolved boundary is embedded inline; only stubs left un-inlined
+        (depth / cycle / open error) stay as path references. The inlined tree's
+        origins are untouched.
 
         Args:
-            node: Root of the subtree whose boundary documents should be deleted.
+            view: The read-only inlined tree to flatten.
+            url: Destination document URL (JSON or Zarr inferred from suffix).
+            overwrite: If `False` (default), raise when a document already
+                exists at `url`.
+            relativize: If `True` (default), rewrite co-located local stub paths
+                relative to this document; `http` / cross-directory paths are
+                kept verbatim. Pass `False` to store every path as-is.
 
         Returns:
-            List of URLs that were deleted.
+            A typed `RefNode` stub locating the snapshot's root in the new document.
+
+        Raises:
+            NodeStateError: If a document exists at `url` and `overwrite` is
+                `False`.
         """
+        self._writable_store()
+        url = _clean_url(url)
+        if not overwrite and await self._exists(url):
+            raise NodeStateError(
+                f"a document already exists at {url!r}; pass overwrite=True"
+            )
+        assert_unique_ids(view)
+        doc = _classify_url(url)(content={}, store=self.store, url=url)
+        self._cache[url] = doc
+        payload = doc.serialize_payload(_doc_payload(view, doc, relativize), {})
+        await self._save_document(url, payload)
+        return stub_to(view, doc)
+
+    async def delete(self, node: BaseNode) -> list[str]:
+        """Remove `node` from its on-disk document, unlinking the file if empty.
+
+        Re-reads the node's document, removes the node by id, and writes the
+        document back. If `node` is the document's root (so nothing remains), the
+        file is deleted instead. Idempotent.
+
+        Args:
+            node: A document-backed node to delete.
+
+        Returns:
+            The URL(s) affected (written or deleted); empty if nothing changed.
+
+        Raises:
+            NodeStateError: If `node` is detached (it has no document on disk).
+        """
+        if node.is_detached:
+            raise NodeStateError(
+                f"node {node.id!r} is detached; there is nothing on disk to delete"
+            )
         store = self._writable_store()
-        deleted: list[str] = []
-        for descendant in node.walk():
-            if descendant._origin is None or descendant._document is None:
-                continue
-            url = descendant._document.url
-            await store.delete(url)
-            self._cache.pop(url, None)
-            deleted.append(url)
-        return deleted
+        doc = node._document
+        assert doc is not None
+        root = _node_from_payload(doc.deserialize_payload(doc.content))
+        if root.id == node.id:
+            await store.delete(doc.url)
+            self._cache.pop(doc.url, None)
+            return [doc.url]
+        new_root, found = _remove(root, node.id)
+        if not found:
+            return []
+        new_content = doc.serialize_payload(
+            _doc_payload(new_root, doc, relativize=True), doc.content
+        )
+        await self._save_document(doc.url, new_content)
+        return [doc.url]
 
     async def _save_document(self, url: str, content: dict) -> None:
         """Write `content` at `url` and refresh the in-memory cache entry.
