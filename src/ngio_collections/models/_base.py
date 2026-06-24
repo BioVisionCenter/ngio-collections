@@ -34,9 +34,11 @@ from typing import (
     Annotated,
     Any,
     Callable,
+    ClassVar,
     Generator,
     Literal,
     Self,
+    TypeVar,
     cast,
 )
 from urllib.parse import urljoin
@@ -48,6 +50,7 @@ from pydantic import (
     JsonValue,
     PlainValidator,
     PrivateAttr,
+    RootModel,
     SerializeAsAny,
 )
 from pydantic.alias_generators import to_camel
@@ -233,6 +236,37 @@ def stub_to(node: BaseNode, document: MetadataDocument) -> RefNode:
     return ref_cls(id=node.id, type=node.type, path=path_cls(path=document.ref_url))
 
 
+# --- attributes ------------------------------------------------------------
+
+
+class _AttributeKey:
+    """Mixin declaring the `attributes` dict key an attribute model maps to."""
+
+    key: ClassVar[str]
+
+    @classmethod
+    def name_space(cls) -> str | None:
+        """Return the `key`'s namespace prefix (before `:`), or `None`."""
+        if ":" in cls.key:
+            return cls.key.split(":")[0]
+        return None
+
+
+class BaseAttribute(_AttributeKey, BaseObj):
+    """Attribute whose value is a JSON object (e.g. `plate`, `well`)."""
+
+
+ItemType = TypeVar("ItemType")
+
+
+class BaseListAttribute(_AttributeKey, RootModel[list[ItemType]]):
+    """Attribute whose value is a JSON array (e.g. `coordinateSystems`)."""
+
+
+AnyAttribute = BaseAttribute | BaseListAttribute
+AttributeType = TypeVar("AttributeType", bound=AnyAttribute)
+
+
 # --- nodes -----------------------------------------------------------------
 
 
@@ -292,6 +326,54 @@ class BaseNode(NodeObj):
             The matching node, or `None` if not found.
         """
         return next((n for n in self.walk() if n.id == id), None)
+
+    # --- typed attribute reads -------------------------------------------
+
+    def __contains__(self, attr_type: type[AnyAttribute]) -> bool:
+        """True iff this node carries the attribute `attr_type` maps to.
+
+        Args:
+            attr_type: An attribute model class (e.g. `PlateAttribute`).
+
+        Returns:
+            Whether `attr_type.key` is present in `attributes`.
+        """
+        return attr_type.key in self.attributes
+
+    def __getitem__(self, attr_type: type[AttributeType]) -> AttributeType:
+        """Validate and return this node's value for `attr_type`.
+
+        The raw `attributes` dict stays the source of truth; the requested
+        model validates a fresh view of the stored JSON on every read.
+
+        Args:
+            attr_type: An attribute model class (e.g. `PlateAttribute`).
+
+        Returns:
+            The validated attribute model.
+
+        Raises:
+            KeyError: If the node carries no such attribute.
+        """
+        if attr_type not in self:
+            raise KeyError(attr_type.key)
+        return attr_type.model_validate(self.attributes[attr_type.key])
+
+    def get_attr(
+        self,
+        attr_type: type[AttributeType],
+        default: AttributeType | None = None,
+    ) -> AttributeType | None:
+        """Return the validated `attr_type` value, or `default` if absent.
+
+        Args:
+            attr_type: An attribute model class (e.g. `PlateAttribute`).
+            default: Value to return when the attribute is missing.
+
+        Returns:
+            The validated attribute model, or `default`.
+        """
+        return self[attr_type] if attr_type in self else default
 
     @property
     def state(self) -> NodeState:
@@ -394,6 +476,64 @@ class BaseNode(NodeObj):
                 }
             ),
         )
+
+    def set_attr(
+        self,
+        *,
+        id: str,
+        value: AnyAttribute | JsonValue,
+        attr: type[AttributeType] | None = None,
+    ) -> Self:
+        """Write a typed attribute into node `id`, returning a new tree.
+
+        `value` may be a typed attribute instance (its type supplies the key)
+        or a raw JSON value (then `attr` must be given to validate it and locate
+        the `attributes` key). The value is validated and dumped spec-shaped
+        (`by_alias`, `exclude_none`); the raw dict stays the source of truth, so
+        unknown attributes round-trip untouched.
+
+        Args:
+            id: The id of the node whose attribute should be set.
+            value: A typed attribute instance or its raw JSON form.
+            attr: The attribute model class; required when `value` is raw,
+                optional (inferred from `value`) when it is a model instance.
+
+        Returns:
+            A new root with the node's attribute written.
+
+        Raises:
+            TypeError: If `value` is raw and `attr` is not supplied.
+        """
+        if attr is None:
+            if not isinstance(value, _AttributeKey):
+                raise TypeError(
+                    "set_attr requires `attr` when `value` is not an "
+                    "attribute model instance"
+                )
+            attr = cast("type[AttributeType]", type(value))
+        # ty can't match RootModel.model_dump's Self bound through the
+        # BaseAttribute | BaseListAttribute typevar bound.
+        payload = attr.model_validate(value).model_dump(  # ty: ignore[invalid-argument-type]
+            mode="json", by_alias=True, exclude_none=True
+        )
+        return self.update(
+            id=id,
+            fn=lambda n: n.model_copy(
+                update={"attributes": {**n.attributes, attr.key: payload}}
+            ),
+        )
+
+    def drop_attr(self, *, id: str, attr: type[AnyAttribute]) -> Self:
+        """Remove the attribute `attr` maps to from node `id`.
+
+        Args:
+            id: The id of the node whose attribute should be removed.
+            attr: The attribute model class whose `key` to drop.
+
+        Returns:
+            A new root with the attribute removed (a no-op if absent).
+        """
+        return self.drop_attrs(id=id, keys=(attr.key,))
 
     def rename(self, *, id: str, name: str | None) -> Self:
         """Set the `name` of node `id`.

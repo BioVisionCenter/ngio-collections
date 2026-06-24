@@ -5,10 +5,46 @@
       "type": "multiscale",
       "id": "labels",
       "name": "labels",
+      "attributes": {
+        "coordinateSystems": [
+          {
+            "id": "labels_space",
+            "axes": [
+              {
+                "name": "y",
+                "type": "space",
+                "unit": "micrometer"
+              },
+              {
+                "name": "x",
+                "type": "space",
+                "unit": "micrometer"
+              }
+            ]
+          }
+        ]
+      },
       "nodes": [
         {
           "type": "singlescale",
           "id": "labels_0",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "labels_0"
+                },
+                "output": {
+                  "id": "labels_space"
+                },
+                "type": "scale",
+                "scale": [
+                  1.0,
+                  1.0
+                ]
+              }
+            ]
+          },
           "path": {
             "type": "zarr",
             "path": "./0"
@@ -17,6 +53,23 @@
         {
           "type": "singlescale",
           "id": "labels_1",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "labels_1"
+                },
+                "output": {
+                  "id": "labels_space"
+                },
+                "type": "scale",
+                "scale": [
+                  2.0,
+                  2.0
+                ]
+              }
+            ]
+          },
           "path": {
             "type": "zarr",
             "path": "./1"
