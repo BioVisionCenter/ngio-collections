@@ -18,9 +18,10 @@ There are two parallel node hierarchies:
   read-only with respect to its origins (only `save_inlined` snapshots it), but
   still supports the same functional in-memory edits.
 
-A `ReferenceObj` is the portable `{id, path?}` pointer that ties the two
-together: `node.ref()`, `create`, and `save` return one, and `add_ref`
-turns one into an in-tree stub.
+A `ReferenceObj` is the portable `{id, path?}` pointer `node.ref()` returns;
+`add_ref` turns one into an in-tree stub. The write verbs (`create` / `save` /
+`save_inlined`) return the richer typed `RefNode` stub (via `stub_to`) so a
+reference can be decorated before it is attached.
 """
 
 from __future__ import annotations
@@ -186,6 +187,26 @@ def reference_to(id: str, document: MetadataDocument) -> ReferenceObj:
     """
     path_cls = ZarrPath if document.kind == "zarr" else JsonPath
     return ReferenceObj(id=id, path=path_cls(path=document.ref_url))
+
+
+def stub_to(node: BaseNode, document: MetadataDocument) -> RefNode:
+    """Build a typed `RefNode` stub locating `node` inside `document`.
+
+    The stub takes the node's id and type (so `add_ref` keeps the type) with an
+    absolute `PathObj` of the document's form and empty overlay attributes ready
+    to decorate. Mirrors :func:`reference_to` but returns the richer stub the
+    write verbs hand back.
+
+    Args:
+        node: The node that was written (provides id and type).
+        document: The document it now lives in (provides the path).
+
+    Returns:
+        A typed `RefNode` (e.g. `RefMultiscaleNode`) with an absolute path.
+    """
+    path_cls = ZarrPath if document.kind == "zarr" else JsonPath
+    ref_cls = _REF_TYPES.get(node.type or "", RefNode)
+    return ref_cls(id=node.id, path=path_cls(path=document.ref_url))
 
 
 # --- nodes -----------------------------------------------------------------
@@ -393,9 +414,10 @@ class BaseNode(BaseObj):
     def add_ref(self, *, parent_id: str, ref: "ReferenceObj | RefNode") -> Self:
         """Attach a reference to node `parent_id` as a `RefNode` stub.
 
-        `ref` may be a `ReferenceObj` (built into a generic stub; its absolute
-        path is relativized against the parent's document when co-located) or an
-        existing `RefNode` stub (inserted verbatim, keeping its type/attributes).
+        `ref` may be a `ReferenceObj` (built into a generic stub) or an existing
+        `RefNode` stub (kept verbatim with its type/attributes). The stored path
+        is relativized later, at write time, against the document being written
+        (so this works even while the parent is still detached).
 
         Args:
             parent_id: The id of the node that will receive the reference.
@@ -421,7 +443,7 @@ class BaseNode(BaseObj):
                     f"cannot add children to reference stub {n.id!r}; resolve it "
                     "with open_inlined first, or add to an embedded node"
                 )
-            stub = _stub_from_ref(ref, n._document)
+            stub = _stub_from_ref(ref)
             children = getattr(n, "nodes", ()) or ()
             return n.model_copy(update={"nodes": (*children, stub)})
 
@@ -622,18 +644,16 @@ def _relativize_path(path: PathObj, document: MetadataDocument | None) -> PathOb
     return path
 
 
-def _stub_from_ref(
-    ref: "ReferenceObj | RefNode", document: MetadataDocument | None
-) -> RefNode:
-    """Build the in-tree `RefNode` stub for `ref` under parent `document`.
+def _stub_from_ref(ref: "ReferenceObj | RefNode") -> RefNode:
+    """Build the in-tree `RefNode` stub for `ref`.
 
-    A `RefNode` is inserted verbatim. A `ReferenceObj` becomes a generic
-    (typeless) stub whose path is relativized against the parent document; its
-    type is discovered on the next `open_inlined`.
+    A `RefNode` is used verbatim (keeping its type / attributes). A
+    `ReferenceObj` becomes a generic (typeless) stub; its type is discovered on
+    the next `open_inlined`. The stored path is left as-is — relativization
+    happens later, at write time, against the document actually being written.
 
     Args:
         ref: The reference to materialise as a stub.
-        document: The parent document, used to relativize the path.
 
     Returns:
         A `RefNode` ready to embed in the parent's `nodes`.
@@ -647,7 +667,7 @@ def _stub_from_ref(
         raise NodeStateError(
             "a same-document reference (path=None) cannot be a collection child"
         )
-    return RefNode(id=ref.id, path=_relativize_path(ref.path, document))
+    return RefNode(id=ref.id, path=ref.path)
 
 
 # --- construction (graceful fallback to a generic node) --------------------
