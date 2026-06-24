@@ -23,26 +23,34 @@ from ngio_collections._sync import (
     save_inlined,
 )
 from ngio_collections.models import (
+    DEFAULT_REGISTRY,
     AnyInlinedNode,
     AnyNode,
     BaseNode,
     CollectionNode,
+    CollectionType,
     IdStr,
     InlinedCollectionNode,
     InlinedMultiscaleNode,
     InlinedNode,
     JsonPath,
     MultiscaleNode,
+    MultiscaleType,
     Node,
+    NodeObj,
+    NodeRegistry,
     NodeState,
     NodeStateError,
+    NodeTypes,
     PathObj,
     RefCollectionNode,
     RefMultiscaleNode,
     RefNode,
     RefSinglescaleNode,
     ReferenceObj,
+    SinglescaleType,
     ZarrPath,
+    register_family,
 )
 from ngio_collections.store import (
     FsspecStore,
@@ -53,6 +61,7 @@ from ngio_collections.store import (
 )
 
 __all__ = [
+    "DEFAULT_REGISTRY",
     "AnyInlinedNode",
     "AnyNode",
     "BaseNode",
@@ -66,8 +75,11 @@ __all__ = [
     "LocalStore",
     "MultiscaleNode",
     "Node",
+    "NodeObj",
+    "NodeRegistry",
     "NodeState",
     "NodeStateError",
+    "NodeTypes",
     "PathObj",
     "ReadableStore",
     "RefCollectionNode",
@@ -83,6 +95,7 @@ __all__ = [
     "delete",
     "open",
     "open_inlined",
+    "register_family",
     "save",
     "save_inlined",
 ]

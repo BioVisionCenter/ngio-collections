@@ -25,9 +25,9 @@ def _fixture(tmp_path: Path) -> str:
     """collection.json -> child.json; the stub overlays the target on read.
 
     The stub references the child by the id it carries inside its own document
-    (``child``). The stub and target share ``shared``; the child also carries an
-    unknown node-level field and a custom attribute, to assert graceful
-    round-tripping. Returns the collection.json path.
+    (``child``). The stub and target share ``shared``; the child also carries
+    custom attributes (including a deep custom-prefixed value), to assert
+    graceful round-tripping. Returns the collection.json path.
     """
     (tmp_path / "child.json").write_text(
         json.dumps(
@@ -37,10 +37,10 @@ def _fixture(tmp_path: Path) -> str:
                     "type": "collection",
                     "id": "child",
                     "name": "child",
-                    "customField": "keep-me",  # unknown node-level field
                     "attributes": {
                         "shared": "from-target",
                         "targetOnly": 1,
+                        "customField": "keep-me",  # custom attribute
                         "ngio:custom": {"deep": [1]},
                     },
                     "nodes": [],
@@ -87,8 +87,8 @@ async def test_open_inlined_resolves_by_id(resolver, tmp_path):
     assert isinstance(view, ngc.InlinedCollectionNode)
     child = view.find(id="child")
     assert isinstance(child, ngc.InlinedCollectionNode)
-    # The resolved node carries the unknown field from its own document.
-    assert getattr(child, "customField") == "keep-me"
+    # The resolved node carries the custom attribute from its own document.
+    assert child.attributes["customField"] == "keep-me"
 
 
 async def test_open_inlined_overlay_stub_wins(resolver, tmp_path):
@@ -189,7 +189,7 @@ async def test_save_inlined_flattens(resolver, tmp_path):
     child = payload["nodes"][0]
     assert "path" not in child  # resolved boundary is embedded, not a stub
     assert child["id"] == "child"
-    assert child["customField"] == "keep-me"
+    assert child["attributes"]["customField"] == "keep-me"
     assert child["attributes"]["shared"] == "from-stub"  # overlay baked in
 
     # The snapshot is self-contained: a plain open() needs no further IO.

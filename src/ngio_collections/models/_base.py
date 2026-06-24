@@ -18,7 +18,7 @@ There are two parallel node hierarchies:
   read-only with respect to its origins (only `save_inlined` snapshots it), but
   still supports the same functional in-memory edits.
 
-A `ReferenceObj` is the portable `{id, path?}` pointer `node.ref()` returns;
+A `ReferenceObj` is the portable `{id, type?, path?}` pointer `node.ref()` returns;
 `add_ref` turns one into an in-tree stub. The write verbs (`create` / `save` /
 `save_inlined`) return the richer typed `RefNode` stub (via `stub_to`) so a
 reference can be decorated before it is attached.
@@ -52,18 +52,41 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
+from ngio_collections.models._registry import NodeRegistry, NodeTypes
+
 if TYPE_CHECKING:
     from ngio_collections._document import MetadataDocument
 
 
 class BaseObj(BaseModel):
-    """Frozen, camelCase-aliased Pydantic base shared by all OME objects."""
+    """Frozen, camelCase-aliased base for non-node OME objects (paths, refs).
 
-    # frozen → immutable value; extra="allow" round-trips unknown / custom keys.
+    `extra="allow"` round-trips unknown / custom keys. Nodes do *not* use this
+    base — see `NodeObj`.
+    """
+
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
         extra="allow",
+        frozen=True,
+    )
+
+
+class NodeObj(BaseModel):
+    """Frozen, camelCase-aliased base for the node hierarchy and node mixins.
+
+    Identical to `BaseObj` except `extra="forbid"`: a node's structural fields
+    are a closed set, so unknown node-level keys are rejected rather than
+    silently kept. Arbitrary / custom metadata belongs in a node's `attributes`
+    dict (which stays open). Consumers declaring a custom node type build their
+    field mixin on this base so the derived variants stay strict.
+    """
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
         frozen=True,
     )
 
@@ -165,28 +188,35 @@ IdStr = Annotated[str, Field(pattern=ID_PATTERN)]
 class ReferenceObj(BaseObj):
     """A portable pointer to a node that exists on disk.
 
-    Resolved by loading the document at `path` and finding the node whose `id`
-    matches inside it. A `None` path means a reference within the *same*
-    document (resolve `id` locally). Carries no `type` and no attributes — the
-    node's kind and metadata are discovered on resolution.
+    Not a node itself: it carries no attributes. Resolved by loading the
+    document at `path` and finding the node whose `id` matches inside it. A
+    `None` path means a reference within the *same* document (resolve `id`
+    locally). `type` records the referenced node's kind — `ref()` fills it in
+    so `add_ref` can build a correctly-typed stub (every node carries a `type`);
+    a hand-built pointer may leave it `None`.
     """
 
     id: IdStr
+    type: str | None = None
     path: PathObj | None = None
 
 
-def reference_to(id: str, document: MetadataDocument) -> ReferenceObj:
+def reference_to(
+    id: str, document: MetadataDocument, node_type: str | None = None
+) -> ReferenceObj:
     """Build a `ReferenceObj` locating node `id` inside `document`.
 
     Args:
         id: The id of the node being referenced.
         document: The document that contains the node.
+        node_type: The referenced node's `type`, recorded so a later
+            `add_ref` can build a correctly-typed stub.
 
     Returns:
         A `ReferenceObj` with an absolute path of the document's form.
     """
     path_cls = ZarrPath if document.kind == "zarr" else JsonPath
-    return ReferenceObj(id=id, path=path_cls(path=document.ref_url))
+    return ReferenceObj(id=id, type=node_type, path=path_cls(path=document.ref_url))
 
 
 def stub_to(node: BaseNode, document: MetadataDocument) -> RefNode:
@@ -205,8 +235,8 @@ def stub_to(node: BaseNode, document: MetadataDocument) -> RefNode:
         A typed `RefNode` (e.g. `RefMultiscaleNode`) with an absolute path.
     """
     path_cls = ZarrPath if document.kind == "zarr" else JsonPath
-    ref_cls = _REF_TYPES.get(node.type or "", RefNode)
-    return ref_cls(id=node.id, path=path_cls(path=document.ref_url))
+    ref_cls = DEFAULT_REGISTRY.get_ref(node.type)
+    return ref_cls(id=node.id, type=node.type, path=path_cls(path=document.ref_url))
 
 
 # --- nodes -----------------------------------------------------------------
@@ -225,15 +255,18 @@ def _set_private(node: BaseNode, name: str, value: Any) -> None:
     private[name] = value
 
 
-class BaseNode(BaseObj):
+class BaseNode(NodeObj):
     """Common fields, navigation, and functional edits for every node.
 
-    Both the editable (`Node` / `RefNode`) and inlined (`InlinedNode`)
-    hierarchies derive from this. Every edit method returns a new tree built via
-    `model_copy` and never mutates `self`.
+    The node protocol every node carries: a required `type`, a required `id`, an
+    optional `name`, and an `attributes` dict. `nodes` / `path` are added by the
+    concrete hierarchies — embedded (`Node` / `InlinedNode`) carry `nodes`, a
+    reference (`RefNode`) carries `path`. Both the editable (`Node` / `RefNode`)
+    and inlined (`InlinedNode`) hierarchies derive from this. Every edit method
+    returns a new tree built via `model_copy` and never mutates `self`.
     """
 
-    type: str | None = None
+    type: str
     id: IdStr
     name: str | None = None
     attributes: dict[str, JsonValue] = Field(default_factory=dict)
@@ -291,7 +324,7 @@ class BaseNode(BaseObj):
         any document-backed node (a root or a descendant).
 
         Returns:
-            A portable `{id, path}` pointer to this node.
+            A portable `{id, type, path}` pointer to this node.
 
         Raises:
             NodeStateError: If the node is detached (has no document yet).
@@ -301,7 +334,7 @@ class BaseNode(BaseObj):
                 f"node {self.id!r} is detached; persist it with create()/save() "
                 "before taking a reference"
             )
-        return reference_to(self.id, self._document)
+        return reference_to(self.id, self._document, self.type)
 
     # --- functional edits (return a new root; self is untouched) ----------
 
@@ -495,34 +528,10 @@ class RefNode(BaseNode):
         return self.path.resolve(self._document)
 
 
-class CollectionNode(Node):
-    """An embedded OME collection node."""
-
-    type: Literal["collection"] = "collection"
-
-
-class MultiscaleNode(Node):
-    """An embedded OME multiscale node."""
-
-    type: Literal["multiscale"] = "multiscale"
-
-
-class RefCollectionNode(RefNode):
-    """A reference stub pointing to an OME collection document."""
-
-    type: Literal["collection"] = "collection"
-
-
-class RefMultiscaleNode(RefNode):
-    """A reference stub pointing to an OME multiscale document."""
-
-    type: Literal["multiscale"] = "multiscale"
-
-
-class RefSinglescaleNode(RefNode):
-    """A reference stub pointing to an OME singlescale document."""
-
-    type: Literal["singlescale"] = "singlescale"
+# Concrete built-in families (collection / multiscale / singlescale) live in
+# their own modules (`_collection`, `_multiscale`, `_singlescale`) and are wired
+# into `DEFAULT_REGISTRY` by `_builtins`. This module keeps only the generic
+# bases and the registry-driven factories below.
 
 
 # --- inlined (read-only) hierarchy -----------------------------------------
@@ -539,18 +548,6 @@ class InlinedNode(BaseNode):
     """
 
     nodes: tuple[AnyInlinedNode, ...] = ()
-
-
-class InlinedCollectionNode(InlinedNode):
-    """A resolved OME collection node."""
-
-    type: Literal["collection"] = "collection"
-
-
-class InlinedMultiscaleNode(InlinedNode):
-    """A resolved OME multiscale node."""
-
-    type: Literal["multiscale"] = "multiscale"
 
 
 # --- spine-rebuild helpers (functional) ------------------------------------
@@ -648,9 +645,9 @@ def _stub_from_ref(ref: "ReferenceObj | RefNode") -> RefNode:
     """Build the in-tree `RefNode` stub for `ref`.
 
     A `RefNode` is used verbatim (keeping its type / attributes). A
-    `ReferenceObj` becomes a generic (typeless) stub; its type is discovered on
-    the next `open_inlined`. The stored path is left as-is — relativization
-    happens later, at write time, against the document actually being written.
+    `ReferenceObj` becomes a typed stub via its recorded `type`. The stored path
+    is left as-is — relativization happens later, at write time, against the
+    document actually being written.
 
     Args:
         ref: The reference to materialise as a stub.
@@ -659,7 +656,8 @@ def _stub_from_ref(ref: "ReferenceObj | RefNode") -> RefNode:
         A `RefNode` ready to embed in the parent's `nodes`.
 
     Raises:
-        NodeStateError: If `ref` is a same-document pointer (`path is None`).
+        NodeStateError: If `ref` is a same-document pointer (`path is None`), or
+            a `ReferenceObj` with no `type` (every node must carry one).
     """
     if isinstance(ref, RefNode):
         return ref
@@ -667,7 +665,13 @@ def _stub_from_ref(ref: "ReferenceObj | RefNode") -> RefNode:
         raise NodeStateError(
             "a same-document reference (path=None) cannot be a collection child"
         )
-    return RefNode(id=ref.id, path=ref.path)
+    if ref.type is None:
+        raise NodeStateError(
+            f"reference {ref.id!r} has no type; take it via node.ref() or use the "
+            "typed stub a write verb returns"
+        )
+    ref_cls = DEFAULT_REGISTRY.get_ref(ref.type)
+    return ref_cls(id=ref.id, type=ref.type, path=ref.path)
 
 
 # --- construction (graceful fallback to a generic node) --------------------
@@ -695,19 +699,31 @@ def _find_type_path(value: Any) -> tuple[str | None, bool]:
     raise ValueError(f"Invalid node value {type(value)}")
 
 
-_NODE_TYPES: dict[str, type[Node]] = {
-    "collection": CollectionNode,
-    "multiscale": MultiscaleNode,
-}
-_REF_TYPES: dict[str, type[RefNode]] = {
-    "collection": RefCollectionNode,
-    "multiscale": RefMultiscaleNode,
-    "singlescale": RefSinglescaleNode,
-}
-_INLINED_TYPES: dict[str, type[InlinedNode]] = {
-    "collection": InlinedCollectionNode,
-    "multiscale": InlinedMultiscaleNode,
-}
+# The default registry starts empty; `_builtins.register_builtins` wires in the
+# collection / multiscale / singlescale families (called once from the package
+# `__init__`). Third-party types register through `register_family` below.
+DEFAULT_REGISTRY = NodeRegistry(Node, RefNode, InlinedNode)
+
+
+def register_family(
+    *variants: type[Node] | type[RefNode] | type[InlinedNode],
+    registry: NodeRegistry = DEFAULT_REGISTRY,
+    key: str | None = None,
+) -> NodeTypes:
+    """Register a node-type family on a registry (defaults to `DEFAULT_REGISTRY`).
+
+    Thin wrapper over `NodeRegistry.register_family`: pass the variant classes
+    (editable / ref / inlined) and the slot and `type` key are inferred.
+
+    Args:
+        *variants: One or more variant classes, all for the same type.
+        registry: Registry to register into; the module default if omitted.
+        key: Explicit type key; inferred from the variants when omitted.
+
+    Returns:
+        The registered `NodeTypes` family.
+    """
+    return registry.register_family(*variants, key=key)
 
 
 def build_node(value: Any) -> Node:
@@ -727,7 +743,7 @@ def build_node(value: Any) -> Node:
     if has_path:
         raise ValueError("An embedded node must not have a path")
     data = value if isinstance(value, dict) else value.model_dump()
-    return _NODE_TYPES.get(node_type or "", Node)(**data)
+    return DEFAULT_REGISTRY.get_node(node_type or "")(**data)
 
 
 def build_ref_node(value: Any) -> RefNode:
@@ -746,7 +762,7 @@ def build_ref_node(value: Any) -> RefNode:
     if not has_path:
         raise ValueError("A  must have a path")
     data = value if isinstance(value, dict) else value.model_dump()
-    return _REF_TYPES.get(node_type or "", RefNode)(**data)
+    return DEFAULT_REGISTRY.get_ref(node_type or "")(**data)
 
 
 def build_any_node(value: Any) -> Node | RefNode:
@@ -777,7 +793,7 @@ def _build_inlined_child(value: Any) -> InlinedNode | RefNode:
     if has_path:
         return build_ref_node(value)
     data = value if isinstance(value, dict) else value.model_dump()
-    return _INLINED_TYPES.get(node_type or "", InlinedNode)(**data)
+    return DEFAULT_REGISTRY.get_inlined(node_type or "")(**data)
 
 
 def build_inlined(
@@ -785,9 +801,9 @@ def build_inlined(
 ) -> InlinedNode:
     """Build the `InlinedNode` mirror of an editable `source` node.
 
-    Copies `source`'s identity, attributes, and unknown extra keys, attaches the
-    already-resolved `children`, and stamps the source's `_document` so `ref()`
-    works on the result.
+    Copies `source`'s identity and attributes, attaches the already-resolved
+    `children`, and stamps the source's `_document` so `ref()` works on the
+    result.
 
     Args:
         source: The editable `Node` being inlined.
@@ -797,7 +813,7 @@ def build_inlined(
         A typed `InlinedNode` mirroring `source`.
     """
     data = source.model_dump(exclude={"nodes", "path"})
-    cls = _INLINED_TYPES.get(source.type or "", InlinedNode)
+    cls = DEFAULT_REGISTRY.get_inlined(source.type or "")
     inlined = cls(**data, nodes=children)
     _set_private(inlined, "_document", source._document)
     return inlined

@@ -59,8 +59,11 @@ them through this banner.
   filesystem (writable), referenced from one collection tree.
 - Extensible by third-party packages: new node types can be registered
   without forking.
-- Graceful degradation: unknown node types, unknown attributes, and
-  custom-prefixed fields survive a read–modify–write cycle untouched.
+- Graceful degradation: unknown node types degrade to a generic node, and
+  unknown / custom-prefixed *attributes* survive a read–modify–write cycle
+  untouched. Unknown *node-level* keys are rejected (`extra="forbid"`): a
+  node's structural fields are a closed set, so arbitrary metadata must live
+  in the open `attributes` dict.
 
 ### Current scope (revised 2026-06-11: simplicity over completeness)
 
@@ -103,7 +106,10 @@ These were deliberate in the prototype and remain in force:
 6. **Registry fallback to a generic node.** An unregistered `type` parses as
    an opaque `BaseNode` rather than failing, per the RFC's
    graceful-degradation rules.
-7. **`extra="allow"` everywhere** so unknown/custom-prefixed fields round-trip.
+7. **`extra="allow"` for non-node OME objects** (`BaseObj`: paths, references)
+   so unknown/custom keys round-trip; **`extra="forbid"` for nodes** (`NodeObj`)
+   so node-level structural fields stay a closed set — arbitrary data goes in
+   `attributes`.
 
 ---
 
@@ -460,11 +466,16 @@ absolutely and local derived data relatively.
 
 ## 7. Models layer (mostly unchanged from the prototype)
 
-- `BaseObj`: camelCase aliasing, `populate_by_name`, `extra="allow"`.
-- `BaseNode`: `type`, `id` (pattern-validated, required), `name`
-  (`str | None`, optional), `path: ZarrPath | JsonPath | None`, raw `attributes` dict,
-  `attrs` typed view (§3.5). **No `version` field** — that lives on
-  `MetadataDocument`.
+- `BaseObj`: camelCase aliasing, `populate_by_name`, `extra="allow"` — for
+  non-node OME objects (paths, references).
+- `NodeObj`: same config but `extra="forbid"` — the base of the node hierarchy
+  (and of consumer field-mixins for custom node types), so node-level keys are
+  a closed set.
+- `BaseNode` (subclasses `NodeObj`): `type` (required `str` — every node carries
+  one), `id` (pattern-validated, required), `name` (`str | None`, optional), raw
+  `attributes` dict, `attrs` typed view (§3.5); `nodes` / `path` come from the
+  concrete hierarchies (embedded vs reference). **No `version` field** — that
+  lives on `MetadataDocument`.
 - Built-in node types with their structural validators:
   - `CollectionNode` — exactly one of `nodes`/`path`.
   - `MultiscaleNode` — exactly one of `nodes`/`path`; full (inlined) form
