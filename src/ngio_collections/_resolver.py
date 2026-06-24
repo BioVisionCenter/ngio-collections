@@ -10,7 +10,7 @@ the cache, and it cannot be written back through its origins.
 
 Writing is single-document. `create` writes a detached tree to a new file;
 `save` writes an opened tree back to its own document; `save_inlined` snapshots
-an inlined tree to one self-contained file. Each returns a `ReferenceObj` so the
+an inlined tree to one self-contained file. Each returns a `RefNode` so the
 written node can be composed into a parent in another document. `delete` removes
 a node from its on-disk document, unlinking the file only when it is left empty.
 """
@@ -18,7 +18,7 @@ a node from its on-disk document, unlinking the file only when it is left empty.
 from __future__ import annotations
 
 import json
-from typing import Literal, Type, cast
+from typing import Literal, Type, cast, overload
 
 from ngio_collections._document import (
     VERSION,
@@ -32,6 +32,8 @@ from ngio_collections.models._base import (
     Node,
     NodeStateError,
     RefNode,
+    ReferenceObj,
+    _rebuild,
     _relativize_path,
     _remove,
     _set_private,
@@ -56,6 +58,27 @@ def _clean_url(url: str) -> str:
         return url
     # Anything else is taken to be a Zarr group directory.
     return url.rstrip("/") + "/" + ZARR_METADATA_FILE
+
+
+def _ref_target(ref: ReferenceObj) -> tuple[str, str]:
+    """Return the `(document url, node id)` a `ReferenceObj` points at.
+
+    Args:
+        ref: A reference locator carrying an absolute path and the target id.
+
+    Returns:
+        The normalised document URL and the referenced node's id.
+
+    Raises:
+        NodeStateError: If `ref` is a same-document pointer (`path is None`) and
+            so has no document to open.
+    """
+    if ref.path is None:
+        raise NodeStateError(
+            f"reference {ref.id!r} is a same-document pointer (path=None); "
+            "it has no document to open"
+        )
+    return _clean_url(ref.path.resolve(None)), ref.id
 
 
 def _classify_url(url: str) -> Type[MetadataDocument]:
@@ -182,27 +205,59 @@ class Resolver:
         _assign_document(node, doc)
         return node
 
-    async def open(self, url: str) -> Node:
-        """Open the document at `url` as an editable tree, stubs left in place.
+    @overload
+    async def open(self, source: str) -> Node: ...
+    @overload
+    async def open(self, source: ReferenceObj) -> BaseNode: ...
+    async def open(self, source: str | ReferenceObj) -> Node | BaseNode:
+        """Open a document as an editable tree, stubs left in place.
 
         Reads exactly one document (no boundary inlining): every cross-document
         reference stays a `RefNode` stub. The result is editable and writable
         single-document via :meth:`save`.
 
         Args:
-            url: Document URL to open.
+            source: A document URL (returns its root `Node`), or a
+                `ReferenceObj` (opens the document it locates and returns the
+                node whose `id` matches).
 
         Returns:
-            Root `Node` of the parsed document with stubs intact.
-        """
-        return await self._resolve_node(url)
+            The root `Node` for a URL, or the referenced node for a
+            `ReferenceObj` (stubs intact in both cases).
 
+        Raises:
+            KeyError: If `source` is a `ReferenceObj` whose `id` is absent from
+                the document it locates.
+        """
+        if isinstance(source, ReferenceObj):
+            url, node_id = _ref_target(source)
+            root = await self._resolve_node(url)
+            node = root.find(id=node_id)
+            if node is None:
+                raise KeyError(f"reference {node_id!r} not found in document {url!r}")
+            return node
+        return await self._resolve_node(_clean_url(source))
+
+    @overload
     async def open_inlined(
         self,
-        url: str,
+        source: str,
+        depth: int | None = ...,
+        on_error: Literal["skip", "raise"] = ...,
+    ) -> InlinedNode: ...
+    @overload
+    async def open_inlined(
+        self,
+        source: ReferenceObj,
+        depth: int | None = ...,
+        on_error: Literal["skip", "raise"] = ...,
+    ) -> BaseNode: ...
+    async def open_inlined(
+        self,
+        source: str | ReferenceObj,
         depth: int | None = None,
         on_error: Literal["skip", "raise"] = "skip",
-    ) -> InlinedNode:
+    ) -> InlinedNode | BaseNode:
         """Resolve a tree across document boundaries into a read-only tree.
 
         Each resolvable `RefNode` is replaced by the node it locates — the
@@ -213,19 +268,28 @@ class Resolver:
         stubs.
 
         Args:
-            url: Entry-point document URL.
+            source: An entry-point document URL (returns the inlined root), or a
+                `ReferenceObj` (inlines the document it locates and returns the
+                inlined node whose `id` matches).
             depth: Maximum boundary hops to follow; `None` = unlimited,
                 `0` = root only (no inlining).
             on_error: `"skip"` leaves unresolvable stubs in place; `"raise"`
                 propagates the failure.
 
         Returns:
-            The read-only inlined node tree.
+            The read-only inlined root for a URL, or the referenced inlined node
+            for a `ReferenceObj`.
 
         Raises:
             ValueError: If duplicate node ids are found after inlining.
+            KeyError: If `source` is a `ReferenceObj` whose `id` is absent from
+                the inlined tree.
         """
-        root = await self._resolve_node(_clean_url(url))
+        if isinstance(source, ReferenceObj):
+            url, node_id = _ref_target(source)
+        else:
+            url, node_id = _clean_url(source), None
+        root = await self._resolve_node(url)
         assert root._document is not None
         inlined = await self._inline_tree(
             root, depth, on_error, frozenset({root._document.url})
@@ -234,6 +298,11 @@ class Resolver:
         # Inlining merges several documents into one (ids unique only per source)
         # — surface collisions here.
         assert_unique_ids(inlined)
+        if node_id is not None:
+            node = inlined.find(id=node_id)
+            if node is None:
+                raise KeyError(f"reference {node_id!r} not found in document {url!r}")
+            return node
         return inlined
 
     async def _inline_tree(
@@ -297,23 +366,24 @@ class Resolver:
 
     async def create(
         self,
-        url: str,
+        destination: str,
         root: Node,
         *,
         overwrite: bool = False,
         relativize: bool = True,
     ) -> RefNode:
-        """Write a freshly built (DETACHED) tree to a NEW document at `url`.
+        """Write a freshly built (DETACHED) tree to a NEW document at `destination`.
 
         Stamps `root` with its document (state changes to DOCUMENT) so later
         edits + :meth:`save` round-trip. The form (JSON / Zarr) is inferred from
-        `url`; the OME payload is stamped with `VERSION`.
+        `destination`; the OME payload is stamped with `VERSION`.
 
         Args:
-            url: Destination document URL (JSON or Zarr inferred from suffix).
+            destination: Destination document URL (JSON or Zarr inferred from
+                suffix).
             root: A DETACHED node tree to persist.
             overwrite: If `False` (default), raise when a document already
-                exists at `url`.
+                exists at `destination`.
             relativize: If `True` (default), rewrite co-located local stub paths
                 relative to this document; `http` / cross-directory paths are
                 kept verbatim. Pass `False` to store every path as-is.
@@ -323,73 +393,95 @@ class Resolver:
 
         Raises:
             NodeStateError: If `root` is already backed by a document (use
-                :meth:`save`), or a document exists at `url` and `overwrite` is
-                `False`.
+                :meth:`save`), or a document exists at `destination` and
+                `overwrite` is `False`.
         """
         if not root.is_detached:
             raise NodeStateError(
                 f"tree is already backed by {root.document_url!r}; use "
-                "Resolver.save(root) to persist edits, not create()"
+                "Resolver.save(node) to persist edits, not create()"
             )
         self._writable_store()  # fail fast before any work
-        url = _clean_url(url)
-        if not overwrite and await self._exists(url):
+        destination = _clean_url(destination)
+        if not overwrite and await self._exists(destination):
             raise NodeStateError(
-                f"a document already exists at {url!r}; open it and use "
-                "Resolver.save(root), or pass overwrite=True"
+                f"a document already exists at {destination!r}; open it and use "
+                "Resolver.save(node), or pass overwrite=True"
             )
         assert_unique_ids(root)
-        doc = _classify_url(url)(content={}, store=self.store, url=url)
+        doc = _classify_url(destination)(
+            content={}, store=self.store, url=destination
+        )
         _assign_document(root, doc)
-        self._cache[url] = doc
+        self._cache[destination] = doc
         payload = doc.serialize_payload(_doc_payload(root, doc, relativize), {})
-        await self._save_document(url, payload)
+        await self._save_document(destination, payload)
         return stub_to(root, doc)
 
-    async def save(self, root: Node, *, relativize: bool = True) -> RefNode:
-        """Write an opened/created editable tree back to ITS document.
+    async def save(self, node: BaseNode, *, relativize: bool = True) -> RefNode:
+        """Write an edited node back into ITS document.
 
-        Single-document: only `root`'s own document is (re)written, and only if
-        its serialized payload changed. Cross-document `RefNode` stubs are left
-        as references.
+        Single-document: only `node`'s own document is (re)written, and only if
+        its serialized payload changed. A document-root node rewrites the whole
+        document; a descendant (e.g. one returned by `open` from a `ReferenceObj`)
+        is spliced back into its document by id, leaving siblings and ancestors
+        untouched. Cross-document `RefNode` stubs are left as references.
 
         Args:
-            root: The root node of a previously opened or created tree.
+            node: A document-backed node (root or descendant) carrying edits.
             relativize: If `True` (default), rewrite co-located local stub paths
                 relative to this document; `http` / cross-directory paths are
                 kept verbatim. Pass `False` to store every path as-is.
 
         Returns:
-            A typed `RefNode` stub locating `root` in its document.
+            A typed `RefNode` stub locating `node` in its document.
 
         Raises:
-            NodeStateError: If `root` has no backing document (use
-                :meth:`create` for trees built from scratch).
+            NodeStateError: If `node` is inlined (use :meth:`save_inlined`), has
+                no backing document (use :meth:`create`), or no longer exists in
+                its document on disk.
         """
-        if root.is_detached:
+        if isinstance(node, InlinedNode):
             raise NodeStateError(
-                "tree has no backing document; use Resolver.create(url, root) to "
+                f"node {node.id!r} is inlined (read-only); use "
+                "Resolver.save_inlined(view, url) to snapshot it"
+            )
+        if node.is_detached:
+            raise NodeStateError(
+                "node has no backing document; use Resolver.create(url, root) to "
                 "write a new collection first"
             )
-        doc = root._document
+        doc = node._document
         assert doc is not None
-        assert_unique_ids(root)
+        # Splice the edited node into a fresh parse of its document so siblings
+        # and ancestors are preserved (mirrors delete()).
+        doc_root = _node_from_payload(doc.deserialize_payload(doc.content))
+        if doc_root.id == node.id:
+            new_root: BaseNode = node  # node IS the document root
+        else:
+            new_root, found = _rebuild(doc_root, node.id, lambda _n: node)
+            if not found:
+                raise NodeStateError(
+                    f"node {node.id!r} is not in document {doc.url!r}; it may have "
+                    "been removed or renamed on disk"
+                )
+        assert_unique_ids(new_root)
         new_content = doc.serialize_payload(
-            _doc_payload(root, doc, relativize), doc.content
+            _doc_payload(cast("Node", new_root), doc, relativize), doc.content
         )
         if new_content != doc.content:
             await self._save_document(doc.url, new_content)
-        return stub_to(root, doc)
+        return stub_to(node, doc)
 
     async def save_inlined(
         self,
         view: InlinedNode,
-        url: str,
+        destination: str,
         *,
         overwrite: bool = False,
         relativize: bool = True,
     ) -> RefNode:
-        """Snapshot an inlined tree into ONE self-contained document at `url`.
+        """Snapshot an inlined tree into ONE self-contained document at `destination`.
 
         Every resolved boundary is embedded inline; only stubs left un-inlined
         (depth / cycle / open error) stay as path references. The inlined tree's
@@ -397,9 +489,10 @@ class Resolver:
 
         Args:
             view: The read-only inlined tree to flatten.
-            url: Destination document URL (JSON or Zarr inferred from suffix).
+            destination: Destination document URL (JSON or Zarr inferred from
+                suffix).
             overwrite: If `False` (default), raise when a document already
-                exists at `url`.
+                exists at `destination`.
             relativize: If `True` (default), rewrite co-located local stub paths
                 relative to this document; `http` / cross-directory paths are
                 kept verbatim. Pass `False` to store every path as-is.
@@ -408,20 +501,22 @@ class Resolver:
             A typed `RefNode` stub locating the snapshot's root in the new document.
 
         Raises:
-            NodeStateError: If a document exists at `url` and `overwrite` is
-                `False`.
+            NodeStateError: If a document exists at `destination` and `overwrite`
+                is `False`.
         """
         self._writable_store()
-        url = _clean_url(url)
-        if not overwrite and await self._exists(url):
+        destination = _clean_url(destination)
+        if not overwrite and await self._exists(destination):
             raise NodeStateError(
-                f"a document already exists at {url!r}; pass overwrite=True"
+                f"a document already exists at {destination!r}; pass overwrite=True"
             )
         assert_unique_ids(view)
-        doc = _classify_url(url)(content={}, store=self.store, url=url)
-        self._cache[url] = doc
+        doc = _classify_url(destination)(
+            content={}, store=self.store, url=destination
+        )
+        self._cache[destination] = doc
         payload = doc.serialize_payload(_doc_payload(view, doc, relativize), {})
-        await self._save_document(url, payload)
+        await self._save_document(destination, payload)
         return stub_to(view, doc)
 
     async def delete(self, node: BaseNode) -> list[str]:

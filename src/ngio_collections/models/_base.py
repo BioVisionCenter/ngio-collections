@@ -723,7 +723,7 @@ def build_ref_node(value: Any) -> RefNode:
     """
     node_type, has_path = _find_type_path(value)
     if not has_path:
-        raise ValueError("A  must have a path")
+        raise ValueError("A reference node must have a path")
     data = value if isinstance(value, dict) else value.model_dump()
     return DEFAULT_REGISTRY.get_ref(node_type or "")(**data)
 

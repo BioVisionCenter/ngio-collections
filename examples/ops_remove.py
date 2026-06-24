@@ -3,12 +3,10 @@
 `remove()` takes a node id and returns a new tree with that node and all
 its descendants removed.
 
-Run with: pixi run python examples/remove.py
+Run with: pixi run python examples/ops_remove.py
 """
 
 from basic_creation import build_collection
-
-from ngio_collections import delete
 
 
 def main() -> None:

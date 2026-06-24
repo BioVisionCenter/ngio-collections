@@ -209,6 +209,45 @@ def test_ref_on_detached_raises():
         node.ref()
 
 
+# --- open from a ReferenceObj ------------------------------------------------
+
+
+async def test_open_from_reference(resolver, tmp_path):
+    url = str(tmp_path / "collection.json")
+    await resolver.create(
+        url, ngc.CollectionNode(id="root", nodes=(ngc.MultiscaleNode(id="img"),))
+    )
+    ref = (await resolver.open(url)).find(id="img").ref()
+    # Opening the locator returns the referenced node directly (no find step).
+    node = await resolver.open(ref)
+    assert isinstance(node, ngc.MultiscaleNode)
+    assert node.id == "img"
+
+
+async def test_open_inlined_from_reference(resolver, tmp_path):
+    url = str(tmp_path / "collection.json")
+    await resolver.create(
+        url, ngc.CollectionNode(id="root", nodes=(ngc.MultiscaleNode(id="img"),))
+    )
+    ref = (await resolver.open(url)).find(id="img").ref()
+    node = await resolver.open_inlined(ref)
+    assert isinstance(node, ngc.InlinedMultiscaleNode)
+    assert node.id == "img"
+
+
+async def test_open_reference_id_not_found_raises(resolver, tmp_path):
+    url = str(tmp_path / "collection.json")
+    await resolver.create(url, ngc.CollectionNode(id="root"))
+    ref = (await resolver.open(url)).ref().model_copy(update={"id": "ghost"})
+    with pytest.raises(KeyError, match="ghost"):
+        await resolver.open(ref)
+
+
+async def test_open_same_document_reference_raises(resolver):
+    with pytest.raises(ngc.NodeStateError, match="same-document"):
+        await resolver.open(ngc.ReferenceObj(id="x"))
+
+
 # --- delete -----------------------------------------------------------------
 
 
@@ -242,6 +281,71 @@ async def test_delete_root_removes_file(resolver, tmp_path):
 async def test_delete_detached_raises(resolver):
     with pytest.raises(ngc.NodeStateError, match="detached"):
         await resolver.delete(ngc.CollectionNode(id="root"))
+
+
+# --- node-scoped save (splice back into the document) -----------------------
+
+
+def _nested(tmp_path: Path) -> str:
+    return str(tmp_path / "collection.json")
+
+
+async def _create_nested(resolver, tmp_path) -> str:
+    """A `root -> (image, labels -> nuclei)` document; return its url."""
+    url = _nested(tmp_path)
+    await resolver.create(
+        url,
+        ngc.CollectionNode(
+            id="root",
+            nodes=(
+                ngc.MultiscaleNode(id="image", name="image"),
+                ngc.CollectionNode(
+                    id="labels", nodes=(ngc.MultiscaleNode(id="nuclei"),)
+                ),
+            ),
+        ),
+    )
+    return url
+
+
+async def test_save_descendant_splices_into_document(resolver, tmp_path):
+    url = await _create_nested(resolver, tmp_path)
+    # Open just the descendant via its reference, edit it, save it back.
+    ref = (await resolver.open(url)).find(id="nuclei").ref()
+    nuclei = await resolver.open(ref)
+    nuclei = nuclei.set_attrs(id="nuclei", values={"edited": True})
+    await resolver.save(nuclei)
+
+    reopened = await resolver.open(url)
+    # The edit landed...
+    assert reopened.find(id="nuclei").attributes == {"edited": True}
+    # ...and every sibling / ancestor survived (no whole-document clobber).
+    assert {n.id for n in reopened.walk()} == {"root", "image", "labels", "nuclei"}
+
+
+async def test_save_root_unchanged_behaviour(resolver, tmp_path):
+    url = await _create_nested(resolver, tmp_path)
+    root = await resolver.open(url)
+    root = root.set_attrs(id="root", values={"touched": 1})
+    await resolver.save(root)
+
+    reopened = await resolver.open(url)
+    assert reopened.attributes == {"touched": 1}
+    assert {n.id for n in reopened.walk()} == {"root", "image", "labels", "nuclei"}
+
+
+async def test_save_inlined_node_points_to_save_inlined(resolver, tmp_path):
+    view = await resolver.open_inlined(_stub_fixture(tmp_path))
+    with pytest.raises(ngc.NodeStateError, match="save_inlined"):
+        await resolver.save(view)
+
+
+async def test_save_node_missing_from_document_raises(resolver, tmp_path):
+    url = await _create_nested(resolver, tmp_path)
+    nuclei = await resolver.open((await resolver.open(url)).find(id="nuclei").ref())
+    await resolver.delete(nuclei)  # remove it from disk
+    with pytest.raises(ngc.NodeStateError, match="not in document"):
+        await resolver.save(nuclei.set_attrs(id="nuclei", values={"x": 1}))
 
 
 # --- guard errors point to the right API -----------------------------------

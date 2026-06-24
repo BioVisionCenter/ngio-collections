@@ -3,8 +3,10 @@
 Frozen node values; resolution and editing return new trees and never mutate the
 source. `open` reads one editable document (cross-document children stay
 `RefNode` stubs); `open_inlined` resolves references across boundaries into a
-read-only `InlinedNode` tree. Writing is single-document (`create` / `save`),
-with `save_inlined` to snapshot a resolved tree; each returns a `ReferenceObj`
+read-only `InlinedNode` tree. Both accept either a document URL or a
+`ReferenceObj` (then returning the node it locates). Writing is single-document
+(`create` / `save`),
+with `save_inlined` to snapshot a resolved tree; each returns a `RefNode`
 so documents compose bottom-up via `add_ref`.
 
 The public surface is deliberately small: the :class:`Resolver`, the store
