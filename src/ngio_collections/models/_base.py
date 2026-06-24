@@ -14,6 +14,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import StrEnum
+from collections.abc import Sequence
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -215,7 +216,7 @@ class BaseNode(BaseObj):
         for child in children:
             yield from child.walk()
 
-    def find(self, id: str) -> AnyNode | None:
+    def find(self, *, id: str) -> AnyNode | None:
         """Return the first node in `walk()` order whose `id` matches.
 
         Args:
@@ -258,7 +259,7 @@ class BaseNode(BaseObj):
 
     # --- functional edits (return a new root; self is untouched) ----------
 
-    def update(self, id: str, fn: Callable[[AnyNode], AnyNode]) -> Self:
+    def update(self, *, id: str, fn: Callable[[AnyNode], AnyNode]) -> Self:
         """Replace the node with `id` by `fn(node)`, returning a new tree.
 
         The only spine-rebuild engine: it rebuilds the path from the root to the
@@ -281,7 +282,7 @@ class BaseNode(BaseObj):
             raise KeyError(f"no node with id {id!r} in this tree")
         return cast("Self", new)
 
-    def set_attrs(self, id: str, values: dict[str, JsonValue]) -> Self:
+    def set_attrs(self, *, id: str, values: dict[str, JsonValue]) -> Self:
         """Merge `values` into the `attributes` of node `id`.
 
         Args:
@@ -292,23 +293,23 @@ class BaseNode(BaseObj):
             A new root with the node's attributes updated.
         """
         return self.update(
-            id,
-            lambda n: n.model_copy(update={"attributes": {**n.attributes, **values}}),
+            id=id,
+            fn=lambda n: n.model_copy(update={"attributes": {**n.attributes, **values}}),
         )
 
-    def drop_attrs(self, id: str, *keys: str) -> Self:
+    def drop_attrs(self, *, id: str, keys: Sequence[str]) -> Self:
         """Remove `keys` from the `attributes` of node `id`.
 
         Args:
             id: The id of the node whose attributes should be modified.
-            *keys: Attribute keys to remove (unknown keys are silently ignored).
+            keys: Attribute keys to remove (unknown keys are silently ignored).
 
         Returns:
             A new root with the specified attribute keys removed.
         """
         return self.update(
-            id,
-            lambda n: n.model_copy(
+            id=id,
+            fn=lambda n: n.model_copy(
                 update={
                     "attributes": {
                         k: v for k, v in n.attributes.items() if k not in keys
@@ -317,7 +318,7 @@ class BaseNode(BaseObj):
             ),
         )
 
-    def rename(self, id: str, name: str | None) -> Self:
+    def rename(self, *, id: str, name: str | None) -> Self:
         """Set the `name` of node `id`.
 
         Args:
@@ -327,9 +328,9 @@ class BaseNode(BaseObj):
         Returns:
             A new root with the node's name updated.
         """
-        return self.update(id, lambda n: n.model_copy(update={"name": name}))
+        return self.update(id=id, fn=lambda n: n.model_copy(update={"name": name}))
 
-    def add(self, parent_id: str, child: AnyNode) -> Self:
+    def add(self, *, parent_id: str, child: AnyNode) -> Self:
         """Append `child` to node `parent_id`'s children.
 
         A freshly built `child` (DETACHED) embeds into the parent's document on
@@ -348,7 +349,7 @@ class BaseNode(BaseObj):
             NodeStateError: If `child.id` already exists in the tree, or if
                 the parent is a `RefNode` stub (must be resolved first).
         """
-        if self.find(child.id) is not None:
+        if self.find(id=child.id) is not None:
             raise NodeStateError(
                 f"duplicate node id {child.id!r}; ids must be unique within a "
                 "collection"
@@ -362,9 +363,9 @@ class BaseNode(BaseObj):
                 )
             return n.model_copy(update={"nodes": (*n.nodes, child)})
 
-        return self.update(parent_id, _append)
+        return self.update(id=parent_id, fn=_append)
 
-    def remove(self, id: str) -> Self:
+    def remove(self, *, id: str) -> Self:
         """Remove the node with `id` from the tree (an in-memory unlink).
 
         Any external document the node rooted stays on disk; use

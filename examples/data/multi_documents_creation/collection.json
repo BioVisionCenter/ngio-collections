@@ -1,0 +1,32 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "root",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "image",
+        "path": {
+          "type": "zarr",
+          "path": "./image.zarr"
+        }
+      },
+      {
+        "type": "multiscale",
+        "id": "labels",
+        "path": {
+          "type": "zarr",
+          "path": "./labels.zarr"
+        },
+        "attributes": {
+          "ngio": {
+            "multiscale": {
+              "type": "2"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

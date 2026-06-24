@@ -1,0 +1,61 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "root",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "image",
+        "name": "image",
+        "nodes": [
+          {
+            "type": "singlescale",
+            "id": "image/0",
+            "path": {
+              "type": "zarr",
+              "path": "./0"
+            }
+          },
+          {
+            "type": "singlescale",
+            "id": "image/1",
+            "path": {
+              "type": "zarr",
+              "path": "./1"
+            }
+          }
+        ]
+      },
+      {
+        "type": "collection",
+        "id": "labels",
+        "nodes": [
+          {
+            "type": "multiscale",
+            "id": "nuclei",
+            "name": "nuclei",
+            "nodes": [
+              {
+                "type": "singlescale",
+                "id": "nuclei/0",
+                "path": {
+                  "type": "zarr",
+                  "path": "./0"
+                }
+              },
+              {
+                "type": "singlescale",
+                "id": "nuclei/1",
+                "path": {
+                  "type": "zarr",
+                  "path": "./1"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

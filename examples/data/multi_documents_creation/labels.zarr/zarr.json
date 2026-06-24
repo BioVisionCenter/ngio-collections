@@ -1,0 +1,30 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "id": "labels",
+      "name": "labels",
+      "nodes": [
+        {
+          "type": "singlescale",
+          "id": "labels/0",
+          "path": {
+            "type": "zarr",
+            "path": "./0"
+          }
+        },
+        {
+          "type": "singlescale",
+          "id": "labels/1",
+          "path": {
+            "type": "zarr",
+            "path": "./1"
+          }
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

@@ -64,17 +64,17 @@ async def test_inlined_states(resolver, tmp_path):
     root = await resolver.inline(_stub_fixture(tmp_path))
     assert root.state is ngc.NodeState.DOCUMENT
     assert not root.is_detached
-    child = root.find("child")
+    child = root.find(id="child")
     assert child.state is ngc.NodeState.BOUNDARY
     assert child.is_boundary
 
 
 async def test_added_child_is_detached(resolver, tmp_path):
     root = await resolver.inline(_stub_fixture(tmp_path))
-    root = root.add("child", ngc.CollectionNode(id="gc"))
-    assert root.find("gc").state is ngc.NodeState.DETACHED
+    root = root.add(parent_id="child", child=ngc.CollectionNode(id="gc"))
+    assert root.find(id="gc").state is ngc.NodeState.DETACHED
     # The boundary parent keeps its state across the rebuild.
-    assert root.find("child").state is ngc.NodeState.BOUNDARY
+    assert root.find(id="child").state is ngc.NodeState.BOUNDARY
 
 
 # --- create ----------------------------------------------------------------
@@ -107,7 +107,7 @@ async def test_create_reopens_equal(resolver, tmp_path):
     )
     reopened = await ngc.Resolver(ngc.LocalStore()).inline(url)
     assert reopened.id == "root"
-    assert reopened.find("img").attributes == {"b": 2}
+    assert reopened.find(id="img").attributes == {"b": 2}
 
 
 async def test_create_then_edit_save_roundtrips(resolver, tmp_path):
@@ -116,11 +116,11 @@ async def test_create_then_edit_save_roundtrips(resolver, tmp_path):
         url,
         ngc.CollectionNode(id="root", nodes=(ngc.MultiscaleNode(id="img"),)),
     )
-    root = root.set_attrs("img", {"x": 9})
+    root = root.set_attrs(id="img", values={"x": 9})
     assert await resolver.save(root) == [url]
 
     reopened = await ngc.Resolver(ngc.LocalStore()).inline(url)
-    assert reopened.find("img").attributes["x"] == 9
+    assert reopened.find(id="img").attributes["x"] == 9
 
 
 async def test_bottom_up_composition(resolver, tmp_path):
@@ -140,7 +140,7 @@ async def test_bottom_up_composition(resolver, tmp_path):
     reopened = await ngc.Resolver(ngc.LocalStore()).inline(
         str(tmp_path / "collection.json")
     )
-    img = reopened.find("img")
+    img = reopened.find(id="img")
     assert img.is_boundary
     assert img.attributes["k"] == 1
 
@@ -179,10 +179,10 @@ async def test_add_to_stub_points_to_inline(resolver, tmp_path):
     # depth=0 leaves the child as an unresolved reference stub.
     root = await resolver.inline(_stub_fixture(tmp_path), depth=0)
     with pytest.raises(ngc.NodeStateError, match="reference stub"):
-        root.add("child", ngc.CollectionNode(id="gc"))
+        root.add(parent_id="child", child=ngc.CollectionNode(id="gc"))
 
 
 async def test_add_duplicate_id_raises(resolver, tmp_path):
     root = await resolver.inline(_stub_fixture(tmp_path))
     with pytest.raises(ngc.NodeStateError, match="duplicate"):
-        root.add("child", ngc.CollectionNode(id="child"))
+        root.add(parent_id="child", child=ngc.CollectionNode(id="child"))

@@ -47,7 +47,23 @@ def build_collection() -> ngc.CollectionNode:
 def main() -> None:
     base_path = Path(__file__).parent / "data" / Path(__file__).stem
     url = str(base_path / "collection.json")
-    ngc.create(url, build_collection(), overwrite=True)
+
+    # Write each multiscale to its own zarr on disk.
+    multiscale_image = build_multiscale("image")
+    ngc.create(str(base_path / "image.zarr"), multiscale_image, overwrite=True)
+
+    multiscale_labels = build_multiscale("labels")
+    ngc.create(str(base_path / "labels.zarr"), multiscale_labels, overwrite=True)
+
+    # Build the root with reference stubs pointing at the on-disk zarrs.
+    root = ngc.CollectionNode(
+        id="root",
+        nodes=(
+            ngc.RefMultiscaleNode(id="image", path=ngc.ZarrPath(path="./image.zarr")),
+            ngc.RefMultiscaleNode(id="labels", path=ngc.ZarrPath(path="./labels.zarr")),
+        ),
+    )
+    ngc.create(url, root, overwrite=True)
 
     print(f"wrote {url}\n")
     print(Path(url).read_text())

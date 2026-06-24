@@ -102,19 +102,19 @@ async def test_noop_save_writes_nothing(resolver, tmp_path):
 
 async def test_edit_does_not_mutate_source(resolver, tmp_path):
     root = await resolver.inline(str(_fixture(tmp_path)))
-    edited = root.set_attrs("child", {"targetOnly": 99})
+    edited = root.set_attrs(id="child", values={"targetOnly": 99})
 
     # A new tree is returned; the original is value-identical to before.
     assert edited is not root
-    assert root.find("child").attributes["targetOnly"] == 1
-    assert edited.find("child").attributes["targetOnly"] == 99
+    assert root.find(id="child").attributes["targetOnly"] == 1
+    assert edited.find(id="child").attributes["targetOnly"] == 99
 
 
 async def test_edit_home_attribute_lands_in_target(resolver, tmp_path):
     root = await resolver.inline(str(_fixture(tmp_path)))
     before_collection = (tmp_path / "collection.json").read_bytes()
 
-    root = root.set_attrs("child", {"targetOnly": 99})
+    root = root.set_attrs(id="child", values={"targetOnly": 99})
     written = await resolver.save(root)
 
     # Only the home document changed.
@@ -130,7 +130,7 @@ async def test_edit_edge_attribute_lands_in_parent_target_unchanged(resolver, tm
     before_child = (tmp_path / "child.json").read_bytes()
 
     # 'shared' originated on the stub (edge); editing it stays on the edge.
-    root = root.set_attrs("child", {"shared": "edited"})
+    root = root.set_attrs(id="child", values={"shared": "edited"})
     written = await resolver.save(root)
 
     assert written == [str(tmp_path / "collection.json")]
@@ -142,7 +142,7 @@ async def test_edit_edge_attribute_lands_in_parent_target_unchanged(resolver, tm
 
 async def test_new_key_lands_in_home(resolver, tmp_path):
     root = await resolver.inline(str(_fixture(tmp_path)))
-    root = root.set_attrs("child", {"brandNew": "x"})
+    root = root.set_attrs(id="child", values={"brandNew": "x"})
     written = await resolver.save(root)
 
     assert written == [str(tmp_path / "child.json")]
@@ -153,7 +153,7 @@ async def test_new_key_lands_in_home(resolver, tmp_path):
 async def test_remove_attribute_drops_from_both_layers(resolver, tmp_path):
     root = await resolver.inline(str(_fixture(tmp_path)))
     # 'shared' is present on both edge and home; deleting it removes both.
-    root = root.drop_attrs("child", "shared")
+    root = root.drop_attrs(id="child", keys=("shared",))
     await resolver.save(root)
 
     assert "shared" not in _stub_attrs(tmp_path)
@@ -165,7 +165,7 @@ async def test_combined_edit_routes_each_key(resolver, tmp_path):
     the right document and reopens to the merged view."""
     root = await resolver.inline(str(_fixture(tmp_path)))
     root = root.set_attrs(
-        "child", {"shared": "edited", "targetOnly": 42, "brandNew": "z"}
+        id="child", values={"shared": "edited", "targetOnly": 42, "brandNew": "z"}
     )
     written = await resolver.save(root)
 
@@ -181,7 +181,7 @@ async def test_combined_edit_routes_each_key(resolver, tmp_path):
     reopened = await ngc.Resolver(ngc.LocalStore()).inline(
         str(tmp_path / "collection.json")
     )
-    merged = reopened.find("child").attributes
+    merged = reopened.find(id="child").attributes
     assert merged["shared"] == "edited"  # stub wins on read
     assert merged["targetOnly"] == 42
     assert merged["brandNew"] == "z"
@@ -192,7 +192,7 @@ async def test_rename_boundary_lands_on_stub(resolver, tmp_path):
     before_child = (tmp_path / "child.json").read_bytes()
 
     # A rename edits the reference (the stub); the target keeps its own name.
-    root = root.rename("child", "renamed")
+    root = root.rename(id="child", name="renamed")
     written = await resolver.save(root)
 
     assert written == [str(tmp_path / "collection.json")]
@@ -203,7 +203,7 @@ async def test_rename_boundary_lands_on_stub(resolver, tmp_path):
 
 async def test_unknown_fields_round_trip(resolver, tmp_path):
     root = await resolver.inline(str(_fixture(tmp_path)))
-    root = root.set_attrs("child", {"targetOnly": 2})  # force a rewrite of child.json
+    root = root.set_attrs(id="child", values={"targetOnly": 2})  # force a rewrite of child.json
     await resolver.save(root)
 
     child = _child(tmp_path)
@@ -213,7 +213,7 @@ async def test_unknown_fields_round_trip(resolver, tmp_path):
 
 async def test_add_node_embeds_in_parent_document(resolver, tmp_path):
     root = await resolver.inline(str(_fixture(tmp_path)))
-    root = root.add("child", ngc.CollectionNode(id="grandchild", name="gc"))
+    root = root.add(parent_id="child", child=ngc.CollectionNode(id="grandchild", name="gc"))
     written = await resolver.save(root)
 
     # The added node lands in its parent's home document — no new file.
@@ -227,12 +227,12 @@ async def test_add_node_embeds_in_parent_document(resolver, tmp_path):
     reopened = await ngc.Resolver(ngc.LocalStore()).inline(
         str(tmp_path / "collection.json")
     )
-    assert reopened.find("grandchild") is not None
+    assert reopened.find(id="grandchild") is not None
 
 
 async def test_remove_unlinks_but_keeps_file(resolver, tmp_path):
     root = await resolver.inline(str(_fixture(tmp_path)))
-    root = root.remove("child")  # in-memory unlink only
+    root = root.remove(id="child")  # in-memory unlink only
     written = await resolver.save(root)
 
     # The parent loses the reference, but the external file stays on disk.
@@ -243,12 +243,12 @@ async def test_remove_unlinks_but_keeps_file(resolver, tmp_path):
 
 async def test_delete_subtree_removes_file(resolver, tmp_path):
     root = await resolver.inline(str(_fixture(tmp_path)))
-    child = root.find("child")
+    child = root.find(id="child")
 
     # Delete the file(s) first (provenance intact), then unlink in memory.
     deleted = await resolver.delete_subtree(child)
     assert deleted == [str(tmp_path / "child.json")]
-    root = root.remove("child")
+    root = root.remove(id="child")
     await resolver.save(root)
 
     assert not (tmp_path / "child.json").exists()
@@ -384,7 +384,7 @@ async def test_zarr_boundary_noop_save_writes_nothing(resolver, tmp_path):
 
 async def test_zarr_boundary_edit_keeps_group_wrapper(resolver, tmp_path):
     root = await resolver.inline(str(_zarr_fixture(tmp_path)))
-    root = root.set_attrs("img", {"ngio:custom": {"deep": [2]}})
+    root = root.set_attrs(id="img", values={"ngio:custom": {"deep": [2]}})
     written = await resolver.save(root)
 
     assert written == [str(tmp_path / "image.zarr" / "zarr.json")]
