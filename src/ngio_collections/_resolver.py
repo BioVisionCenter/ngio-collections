@@ -77,9 +77,7 @@ def _assign_document(node: BaseNode, doc: MetadataDocument) -> None:
         _assign_document(child, doc)
 
 
-def _dump_node(
-    node: BaseNode, document: MetadataDocument, relativize: bool
-) -> dict:
+def _dump_node(node: BaseNode, document: MetadataDocument, relativize: bool) -> dict:
     """Serialize one node (and its subtree) to its OME-payload dict.
 
     Embedded children serialize inline; `RefNode` stubs serialize as path
@@ -112,9 +110,7 @@ def _dump_node(
     return data
 
 
-def _doc_payload(
-    root: BaseNode, document: MetadataDocument, relativize: bool
-) -> dict:
+def _doc_payload(root: BaseNode, document: MetadataDocument, relativize: bool) -> dict:
     """Return the full OME payload for a document rooted at `root`.
 
     The `version` is a document-envelope key, stamped at the payload top and kept
@@ -378,7 +374,9 @@ class Resolver:
         doc = root._document
         assert doc is not None
         assert_unique_ids(root)
-        new_content = doc.serialize_payload(_doc_payload(root, doc, relativize), doc.content)
+        new_content = doc.serialize_payload(
+            _doc_payload(root, doc, relativize), doc.content
+        )
         if new_content != doc.content:
             await self._save_document(doc.url, new_content)
         return stub_to(root, doc)

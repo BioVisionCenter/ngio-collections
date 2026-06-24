@@ -188,35 +188,29 @@ IdStr = Annotated[str, Field(pattern=ID_PATTERN)]
 class ReferenceObj(BaseObj):
     """A portable pointer to a node that exists on disk.
 
-    Not a node itself: it carries no attributes. Resolved by loading the
-    document at `path` and finding the node whose `id` matches inside it. A
+    Not a node itself: it carries no attributes and no type — locating the node
+    is its whole job. Resolved by loading the document at `path` and finding the
+    node whose `id` matches inside it (the resolved node carries the type). A
     `None` path means a reference within the *same* document (resolve `id`
-    locally). `type` records the referenced node's kind — `ref()` fills it in
-    so `add_ref` can build a correctly-typed stub (every node carries a `type`);
-    a hand-built pointer may leave it `None`.
+    locally).
     """
 
     id: IdStr
-    type: str | None = None
     path: PathObj | None = None
 
 
-def reference_to(
-    id: str, document: MetadataDocument, node_type: str | None = None
-) -> ReferenceObj:
+def reference_to(id: str, document: MetadataDocument) -> ReferenceObj:
     """Build a `ReferenceObj` locating node `id` inside `document`.
 
     Args:
         id: The id of the node being referenced.
         document: The document that contains the node.
-        node_type: The referenced node's `type`, recorded so a later
-            `add_ref` can build a correctly-typed stub.
 
     Returns:
         A `ReferenceObj` with an absolute path of the document's form.
     """
     path_cls = ZarrPath if document.kind == "zarr" else JsonPath
-    return ReferenceObj(id=id, type=node_type, path=path_cls(path=document.ref_url))
+    return ReferenceObj(id=id, path=path_cls(path=document.ref_url))
 
 
 def stub_to(node: BaseNode, document: MetadataDocument) -> RefNode:
@@ -321,10 +315,12 @@ class BaseNode(NodeObj):
         """Return a `ReferenceObj` locating this node on disk.
 
         The `id` disambiguates the node within its document, so this works for
-        any document-backed node (a root or a descendant).
+        any document-backed node (a root or a descendant). The result is a
+        portable locator, not an embeddable stub — to attach a reference with
+        `add_ref`, use the typed `RefNode` a write verb hands back.
 
         Returns:
-            A portable `{id, type, path}` pointer to this node.
+            A portable `{id, path}` pointer to this node.
 
         Raises:
             NodeStateError: If the node is detached (has no document yet).
@@ -334,7 +330,7 @@ class BaseNode(NodeObj):
                 f"node {self.id!r} is detached; persist it with create()/save() "
                 "before taking a reference"
             )
-        return reference_to(self.id, self._document, self.type)
+        return reference_to(self.id, self._document)
 
     # --- functional edits (return a new root; self is untouched) ----------
 
@@ -373,7 +369,9 @@ class BaseNode(NodeObj):
         """
         return self.update(
             id=id,
-            fn=lambda n: n.model_copy(update={"attributes": {**n.attributes, **values}}),
+            fn=lambda n: n.model_copy(
+                update={"attributes": {**n.attributes, **values}}
+            ),
         )
 
     def drop_attrs(self, *, id: str, keys: Sequence[str]) -> Self:
@@ -444,30 +442,29 @@ class BaseNode(NodeObj):
 
         return self.update(id=parent_id, fn=_append)
 
-    def add_ref(self, *, parent_id: str, ref: "ReferenceObj | RefNode") -> Self:
-        """Attach a reference to node `parent_id` as a `RefNode` stub.
+    def add_ref(self, *, parent_id: str, ref: "RefNode") -> Self:
+        """Attach a `RefNode` stub to node `parent_id`.
 
-        `ref` may be a `ReferenceObj` (built into a generic stub) or an existing
-        `RefNode` stub (kept verbatim with its type/attributes). The stored path
-        is relativized later, at write time, against the document being written
-        (so this works even while the parent is still detached).
+        `ref` is a typed `RefNode` stub (kept verbatim with its type/attributes),
+        as handed back by the write verbs (`create` / `save` / `save_inlined`).
+        The stored path is relativized later, at write time, against the document
+        being written (so this works even while the parent is still detached).
 
         Args:
             parent_id: The id of the node that will receive the reference.
-            ref: The reference to attach.
+            ref: The `RefNode` stub to attach.
 
         Returns:
             A new root with the reference stub appended to the parent's `nodes`.
 
         Raises:
-            NodeStateError: If the ref's id already exists, the parent is itself
-                a `RefNode` stub, or the ref is a same-document pointer.
+            NodeStateError: If the ref's id already exists, or the parent is
+                itself a `RefNode` stub.
         """
         ref_id = ref.id
         if self.find(id=ref_id) is not None:
             raise NodeStateError(
-                f"duplicate node id {ref_id!r}; ids must be unique within a "
-                "collection"
+                f"duplicate node id {ref_id!r}; ids must be unique within a collection"
             )
 
         def _attach(n: BaseNode) -> BaseNode:
@@ -476,9 +473,8 @@ class BaseNode(NodeObj):
                     f"cannot add children to reference stub {n.id!r}; resolve it "
                     "with open_inlined first, or add to an embedded node"
                 )
-            stub = _stub_from_ref(ref)
             children = getattr(n, "nodes", ()) or ()
-            return n.model_copy(update={"nodes": (*children, stub)})
+            return n.model_copy(update={"nodes": (*children, ref)})
 
         return self.update(id=parent_id, fn=_attach)
 
@@ -639,39 +635,6 @@ def _relativize_path(path: PathObj, document: MetadataDocument | None) -> PathOb
         rel = "./" + posixpath.basename(path.path)
         return path.model_copy(update={"path": rel})
     return path
-
-
-def _stub_from_ref(ref: "ReferenceObj | RefNode") -> RefNode:
-    """Build the in-tree `RefNode` stub for `ref`.
-
-    A `RefNode` is used verbatim (keeping its type / attributes). A
-    `ReferenceObj` becomes a typed stub via its recorded `type`. The stored path
-    is left as-is — relativization happens later, at write time, against the
-    document actually being written.
-
-    Args:
-        ref: The reference to materialise as a stub.
-
-    Returns:
-        A `RefNode` ready to embed in the parent's `nodes`.
-
-    Raises:
-        NodeStateError: If `ref` is a same-document pointer (`path is None`), or
-            a `ReferenceObj` with no `type` (every node must carry one).
-    """
-    if isinstance(ref, RefNode):
-        return ref
-    if ref.path is None:
-        raise NodeStateError(
-            "a same-document reference (path=None) cannot be a collection child"
-        )
-    if ref.type is None:
-        raise NodeStateError(
-            f"reference {ref.id!r} has no type; take it via node.ref() or use the "
-            "typed stub a write verb returns"
-        )
-    ref_cls = DEFAULT_REGISTRY.get_ref(ref.type)
-    return ref_cls(id=ref.id, type=ref.type, path=ref.path)
 
 
 # --- construction (graceful fallback to a generic node) --------------------

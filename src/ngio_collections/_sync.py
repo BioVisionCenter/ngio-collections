@@ -130,7 +130,9 @@ def create(
     )
 
 
-def save(root: Node, resolver: Resolver | None = None, *, relativize: bool = True) -> RefNode:
+def save(
+    root: Node, resolver: Resolver | None = None, *, relativize: bool = True
+) -> RefNode:
     """Synchronous :meth:`Resolver.save`: write an opened tree back to its document.
 
     Args:

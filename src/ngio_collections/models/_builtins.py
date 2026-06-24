@@ -30,10 +30,6 @@ def register_builtins(registry: NodeRegistry = DEFAULT_REGISTRY) -> None:
     Args:
         registry: Registry to populate; the module default if omitted.
     """
-    registry.register_family(
-        CollectionNode, RefCollectionNode, InlinedCollectionNode
-    )
-    registry.register_family(
-        MultiscaleNode, RefMultiscaleNode, InlinedMultiscaleNode
-    )
+    registry.register_family(CollectionNode, RefCollectionNode, InlinedCollectionNode)
+    registry.register_family(MultiscaleNode, RefMultiscaleNode, InlinedMultiscaleNode)
     registry.register_family(RefSinglescaleNode)  # ref-only; key inferred

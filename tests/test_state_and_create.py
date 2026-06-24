@@ -1,6 +1,6 @@
-"""Node state (DETACHED / DOCUMENT), the create/save/delete API returning
-`ReferenceObj`, bottom-up composition via `ref` / `add_ref`, and the guard
-errors that point each misuse at the right call."""
+"""Node state (DETACHED / DOCUMENT), the create/save/delete API returning a
+typed `RefNode`, bottom-up composition via `add_ref`, and the guard errors that
+point each misuse at the right call."""
 
 import json
 from pathlib import Path
@@ -276,9 +276,3 @@ async def test_add_duplicate_id_raises(resolver, tmp_path):
     root = await resolver.open(_stub_fixture(tmp_path))
     with pytest.raises(ngc.NodeStateError, match="duplicate"):
         root.add(parent_id="root", child=ngc.CollectionNode(id="child"))
-
-
-def test_same_document_ref_cannot_be_child():
-    root = ngc.CollectionNode(id="root")
-    with pytest.raises(ngc.NodeStateError, match="same-document"):
-        root.add_ref(parent_id="root", ref=ngc.ReferenceObj(id="x"))

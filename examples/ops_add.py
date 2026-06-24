@@ -19,7 +19,9 @@ def main() -> None:
     print("after add:  ", [n.id for n in edited.walk()])
 
     # add() can be called on any node already in the tree.
-    edited = edited.add(parent_id="analysis", child=ngc.MultiscaleNode(id="result", name="result"))
+    edited = edited.add(
+        parent_id="analysis", child=ngc.MultiscaleNode(id="result", name="result")
+    )
     print("after nest: ", [n.id for n in edited.walk()])
 
 

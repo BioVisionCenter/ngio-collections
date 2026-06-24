@@ -21,7 +21,9 @@ def main() -> None:
 
     # Write a child image document; create() hands back a typed RefNode stub.
     image = ngc.MultiscaleNode(id="image", name="image", attributes={"role": "raw"})
-    rf_image = ngc.create(str(base_path / "image.zarr"), image, resolver, overwrite=True)
+    rf_image = ngc.create(
+        str(base_path / "image.zarr"), image, resolver, overwrite=True
+    )
 
     # Decorate the stub with an overlay the parent layers onto the child on read,
     # then attach it to a detached parent. Paths are relativized when written.
