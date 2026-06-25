@@ -6,7 +6,6 @@
     "nodes": [
       {
         "type": "multiscale",
-        "id": "image",
         "name": "image",
         "attributes": {
           "coordinateSystems": [
@@ -27,10 +26,10 @@
             }
           ]
         },
+        "id": "image",
         "nodes": [
           {
             "type": "singlescale",
-            "id": "image_0",
             "attributes": {
               "coordinateTransformations": [
                 {
@@ -48,6 +47,7 @@
                 }
               ]
             },
+            "id": "image_0",
             "path": {
               "type": "zarr",
               "path": "./0"
@@ -55,7 +55,6 @@
           },
           {
             "type": "singlescale",
-            "id": "image_1",
             "attributes": {
               "coordinateTransformations": [
                 {
@@ -73,6 +72,7 @@
                 }
               ]
             },
+            "id": "image_1",
             "path": {
               "type": "zarr",
               "path": "./1"
@@ -86,7 +86,6 @@
         "nodes": [
           {
             "type": "multiscale",
-            "id": "nuclei",
             "name": "nuclei",
             "attributes": {
               "coordinateSystems": [
@@ -125,10 +124,10 @@
                 ]
               }
             },
+            "id": "nuclei",
             "nodes": [
               {
                 "type": "singlescale",
-                "id": "nuclei_0",
                 "attributes": {
                   "coordinateTransformations": [
                     {
@@ -146,6 +145,7 @@
                     }
                   ]
                 },
+                "id": "nuclei_0",
                 "path": {
                   "type": "zarr",
                   "path": "./0"
@@ -153,7 +153,6 @@
               },
               {
                 "type": "singlescale",
-                "id": "nuclei_1",
                 "attributes": {
                   "coordinateTransformations": [
                     {
@@ -171,6 +170,7 @@
                     }
                   ]
                 },
+                "id": "nuclei_1",
                 "path": {
                   "type": "zarr",
                   "path": "./1"

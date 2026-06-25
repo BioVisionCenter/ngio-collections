@@ -6,9 +6,14 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
+from ngio_collections.models._paths import split_scheme
+
 
 def _to_path(url: str) -> Path:
     """Return the filesystem `Path` for a plain path or `file://` URL.
+
+    Scheme detection is shared with the path layer (`_paths.split_scheme`) so
+    there is one notion of "local vs `file://`" across the package.
 
     Args:
         url: A plain filesystem path string or a `file://` URL.
@@ -16,7 +21,7 @@ def _to_path(url: str) -> Path:
     Returns:
         Corresponding `pathlib.Path` object.
     """
-    if url.startswith("file://"):
+    if split_scheme(url)[0] == "file":
         return Path(url2pathname(urlparse(url).path))
     return Path(url)
 

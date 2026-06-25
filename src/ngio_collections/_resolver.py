@@ -35,7 +35,7 @@ from ngio_collections.models._base import (
     RefNode,
     ReferenceObj,
     _rebuild,
-    _relativize_path,
+    _relativize_attr_refs,
     _remove,
     _set_private,
     assert_unique_ids,
@@ -44,6 +44,7 @@ from ngio_collections.models._base import (
     namespace_ids,
     stub_to,
 )
+from ngio_collections.models._paths import meta_url as _clean_url
 from ngio_collections.store import (
     LocalStore,
     ReadableStore,
@@ -54,16 +55,12 @@ from ngio_collections.store import (
 ZARR_METADATA_FILE = "zarr.json"
 
 
-def _clean_url(url: str) -> str:
-    """Normalise `url` to always end with a metadata filename."""
-    if url.endswith(ZARR_METADATA_FILE) or url.endswith(".json"):
-        return url
-    # Anything else is taken to be a Zarr group directory.
-    return url.rstrip("/") + "/" + ZARR_METADATA_FILE
-
-
 def _ref_target(ref: ReferenceObj) -> tuple[str, str]:
     """Return the `(document url, node id)` a `ReferenceObj` points at.
+
+    A portable `ReferenceObj` must carry an absolute locator (as minted by
+    `node.ref()`): it is resolved with no base, so a relative path has nothing to
+    resolve against.
 
     Args:
         ref: A reference locator carrying an absolute path and the target id.
@@ -74,6 +71,7 @@ def _ref_target(ref: ReferenceObj) -> tuple[str, str]:
     Raises:
         NodeStateError: If `ref` is a same-document pointer (`path is None`) and
             so has no document to open.
+        ValueError: If `ref.path` is relative (no base to resolve against).
     """
     if ref.path is None:
         raise NodeStateError(
@@ -106,9 +104,11 @@ def _dump_node(node: BaseNode, document: MetadataDocument, relativize: bool) -> 
     """Serialize one node (and its subtree) to its OME-payload dict.
 
     Embedded children serialize inline; `RefNode` stubs serialize as path
-    references. When `relativize` is `True`, a stub's path is rewritten relative
-    to `document` if it is a co-located local path (best-effort: http,
-    different-directory, and already-relative paths are kept verbatim). None
+    references. When `relativize` is `True`, a stub's path AND any reference path
+    embedded in `attributes` are rewritten relative to the document's `url` if
+    they are co-located local paths (best-effort: remote, cross-root, and
+    already-relative paths are kept verbatim). The base is `dirname(document.url)`
+    — the same base resolution uses — so a relativized path round-trips. None
     fields and an empty `attributes` dict are dropped so an unedited document
     re-serializes identically.
 
@@ -120,13 +120,16 @@ def _dump_node(node: BaseNode, document: MetadataDocument, relativize: bool) -> 
     Returns:
         A JSON-serializable dict representing `node` in the OME wire format.
     """
+    base_url = document.url
     data = node.model_dump(
         mode="json", by_alias=True, exclude_none=True, exclude={"nodes"}
     )
+    if relativize and "attributes" in data:
+        data["attributes"] = _relativize_attr_refs(data["attributes"], base_url)
     if data.get("attributes") == {}:
         data.pop("attributes")
     if isinstance(node, RefNode):
-        path = _relativize_path(node.path, document) if relativize else node.path
+        path = node.path.relativize(base_url) if relativize else node.path
         data["path"] = path.model_dump(mode="json", by_alias=True)
     children: tuple[BaseNode, ...] | None = getattr(node, "nodes", None)
     if children is None:  # a RefNode leaf: no embedded children

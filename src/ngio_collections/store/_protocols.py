@@ -3,6 +3,11 @@
 Stores are URL-addressed, not rooted: `get(url)` takes a full URL. This makes
 mixed-store routing pure composition and keeps the resolver's document cache
 globally coherent.
+
+The `url` here is the document's *bytes address* (the metadata file, e.g.
+`.../group.zarr/zarr.json`) — distinct from the `ref_url` a reference stores to
+locate that document (the group directory). The resolver derives one from the
+other via `models/_paths.meta_url`.
 """
 
 from __future__ import annotations

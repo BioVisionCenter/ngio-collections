@@ -30,10 +30,15 @@ class MetadataDocument(Protocol):
 
     @property
     def ref_url(self) -> str:
-        """The URL a `ReferenceObj` stores for this document.
+        """The absolute locator a `ReferenceObj` stores to *point at* this document.
 
         For JSON this is the document URL; for Zarr it is the group directory
         (the URL without the trailing `zarr.json`).
+
+        Invariant: `ref_url` is only for minting a target's absolute locator
+        (see `reference_to` / `stub_to`). Relativizing and resolving reference
+        paths both key off `url` instead — specifically `dirname(url)` — so the
+        two operations are exact inverses (see `models/_paths.py`).
         """
         ...
 

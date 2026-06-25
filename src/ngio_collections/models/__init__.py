@@ -25,6 +25,7 @@ from ngio_collections.models._base import (
     ZarrPath,
     register_family,
 )
+from ngio_collections.models._paths import DocPath
 from ngio_collections.models._builtins import register_builtins
 from ngio_collections.models.attributes import (
     AcquisitionAttribute,
@@ -106,6 +107,7 @@ __all__ = [
     "CoordinatesTransformation",
     "CustomTransformation",
     "DisplacementsTransformation",
+    "DocPath",
     "IdStr",
     "IdentityTransformation",
     "InlinedCollectionNode",

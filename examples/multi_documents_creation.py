@@ -24,11 +24,12 @@ def main() -> None:
     url = str(base_path / "collection.json")
 
     # Write each multiscale to its own zarr; keep the returned stubs.
-    rf_image = ngc.create(
-        str(base_path / "image.zarr"), build_multiscale("image"), overwrite=True
-    )
+    multiscale = build_multiscale("image")
+    rf_image = ngc.create(str(base_path / "image.zarr"), multiscale, overwrite=True)
+    label_atts = ngc.LabelsAttribute(source=[multiscale.ref()])
+    label_multiscale = build_multiscale("labels", extra_attr=label_atts)
     rf_labels = ngc.create(
-        str(base_path / "labels.zarr"), build_multiscale("labels"), overwrite=True
+        str(base_path / "labels.zarr"), label_multiscale, overwrite=True
     )
     print("image  stub:", rf_image.model_dump())
     print("labels stub:", rf_labels.model_dump())

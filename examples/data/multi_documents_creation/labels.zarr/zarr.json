@@ -21,7 +21,19 @@
               }
             ]
           }
-        ]
+        ],
+        "labels": {
+          "labelAttributes": [],
+          "source": [
+            {
+              "id": "image",
+              "path": {
+                "type": "zarr",
+                "path": "../image.zarr"
+              }
+            }
+          ]
+        }
       },
       "id": "labels",
       "nodes": [

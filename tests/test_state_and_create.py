@@ -181,7 +181,7 @@ async def test_relativize_false_keeps_absolute(resolver, tmp_path):
     assert _stub(tmp_path)["path"]["path"] == str(tmp_path / "child.zarr")
 
 
-async def test_cross_directory_ref_kept_absolute(resolver, tmp_path):
+async def test_descendant_node_ref_is_relativized(resolver, tmp_path):
     sub = tmp_path / "sub"
     sub.mkdir()
     rf_child = await resolver.create(
@@ -189,8 +189,72 @@ async def test_cross_directory_ref_kept_absolute(resolver, tmp_path):
     )
     root = ngc.CollectionNode(id="root").add_ref(parent_id="root", ref=rf_child)
     await resolver.create(str(tmp_path / "collection.json"), root)
-    # Different directory cannot be relativized -> kept absolute (best-effort).
-    assert _stub(tmp_path)["path"]["path"] == str(sub / "child.zarr")
+    # A descendant of the document's directory relativizes to ./sub/... .
+    assert _stub(tmp_path)["path"]["path"] == "./sub/child.zarr"
+
+
+def _zarr_attrs(path: Path) -> dict:
+    """The OME attributes of a written Zarr group document."""
+    return json.loads((path / "zarr.json").read_text())["attributes"]["ome"][
+        "attributes"
+    ]
+
+
+async def test_attribute_ref_is_relativized(resolver, tmp_path):
+    """A ReferenceObj embedded in attributes is relativized like a node path."""
+    image = ngc.MultiscaleNode(id="image")
+    await resolver.create(str(tmp_path / "image.zarr"), image)
+    # Build a co-located labels group that references the image via an attribute.
+    labels = ngc.MultiscaleNode(id="labels").set_attr(
+        id="labels", value=ngc.LabelsAttribute(source=[image.ref()])
+    )
+    await resolver.create(str(tmp_path / "labels.zarr"), labels)
+
+    # The labels group's directory is the group dir, so a sibling group is one
+    # level up: ../image.zarr (this round-trips through the resolver).
+    source = _zarr_attrs(tmp_path / "labels.zarr")["labels"]["source"]
+    assert source[0]["path"] == {"type": "zarr", "path": "../image.zarr"}
+
+
+async def test_nested_attribute_ref_is_relativized(resolver, tmp_path):
+    """Relativization reaches a path object nested at any depth in attributes."""
+    image = ngc.MultiscaleNode(id="image")
+    await resolver.create(str(tmp_path / "image.zarr"), image)
+    abs_path = image.ref().path.model_dump(mode="json", by_alias=True)
+    # A deeply buried path object inside an arbitrary custom attribute.
+    parent = ngc.MultiscaleNode(id="labels").set_attrs(
+        id="labels", values={"custom": {"a": [{"ref": {"path": abs_path}}]}}
+    )
+    await resolver.create(str(tmp_path / "labels.zarr"), parent)
+
+    nested = _zarr_attrs(tmp_path / "labels.zarr")["custom"]["a"][0]["ref"]["path"]
+    assert nested == {"type": "zarr", "path": "../image.zarr"}
+
+
+async def test_attribute_ref_relativize_false_keeps_absolute(resolver, tmp_path):
+    image = ngc.MultiscaleNode(id="image")
+    await resolver.create(str(tmp_path / "image.zarr"), image)
+    labels = ngc.MultiscaleNode(id="labels").set_attr(
+        id="labels", value=ngc.LabelsAttribute(source=[image.ref()])
+    )
+    await resolver.create(str(tmp_path / "labels.zarr"), labels, relativize=False)
+
+    source = _zarr_attrs(tmp_path / "labels.zarr")["labels"]["source"]
+    assert source[0]["path"]["path"] == str(tmp_path / "image.zarr")
+
+
+async def test_cross_directory_attribute_ref_is_relativized(resolver, tmp_path):
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    image = ngc.MultiscaleNode(id="image")
+    await resolver.create(str(sub / "image.zarr"), image)
+    labels = ngc.MultiscaleNode(id="labels").set_attr(
+        id="labels", value=ngc.LabelsAttribute(source=[image.ref()])
+    )
+    await resolver.create(str(tmp_path / "labels.zarr"), labels)
+    # Up out of the group dir and back down into sub/: ../sub/image.zarr.
+    source = _zarr_attrs(tmp_path / "labels.zarr")["labels"]["source"]
+    assert source[0]["path"]["path"] == "../sub/image.zarr"
 
 
 async def test_node_ref_for_descendant(resolver, tmp_path):

@@ -27,7 +27,6 @@ reference can be decorated before it is attached.
 from __future__ import annotations
 
 import hashlib
-import posixpath
 from enum import StrEnum
 from collections.abc import Sequence
 from typing import (
@@ -42,7 +41,6 @@ from typing import (
     TypeVar,
     cast,
 )
-from urllib.parse import urljoin
 
 from pydantic import (
     BaseModel,
@@ -56,6 +54,12 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
+from ngio_collections.models._paths import (
+    JsonPath,
+    PathObj,
+    ZarrPath,
+    relativize as _relativize_path_str,
+)
 from ngio_collections.models._registry import NodeRegistry, NodeTypes
 
 if TYPE_CHECKING:
@@ -112,74 +116,8 @@ class NodeState(StrEnum):
 
 # --- paths -----------------------------------------------------------------
 
-
-def _path_resolve(path: str, document: MetadataDocument | None) -> str:
-    """Resolve a stored `path` to an absolute URL for IO.
-
-    The stored value is never rewritten — relative stays relative, absolute stays
-    absolute — so a tree can be re-rooted later without rewriting references.
-
-    Args:
-        path: The raw path string as stored in the node (relative or absolute).
-        document: The owning document, required to resolve relative paths.
-
-    Returns:
-        An absolute URL suitable for use with a store.
-
-    Raises:
-        ValueError: If `path` is relative but `document` is `None`, or if
-            the path format is not recognised.
-    """
-    if path.startswith("/"):
-        return path
-    if path.startswith("./"):
-        if document is None:
-            raise ValueError("Relative paths require a document URL.")
-        # urljoin treats the document's last segment as a file and replaces it,
-        # so "./A/well.json" resolves against the document's directory.
-        return urljoin(document.url, path)
-    if path.startswith("http"):
-        return path
-    raise ValueError(f"Unsupported path: {path}")
-
-
-class ZarrPath(BaseObj):
-    """A `zarr`-typed path reference to an external document."""
-
-    type: Literal["zarr"] = "zarr"
-    path: str
-
-    def resolve(self, document: MetadataDocument | None) -> str:
-        """Return the absolute URL for this path.
-
-        Args:
-            document: Owning document, required for relative paths.
-
-        Returns:
-            Absolute URL string.
-        """
-        return _path_resolve(self.path, document)
-
-
-class JsonPath(BaseObj):
-    """A `json`-typed path reference to an external document."""
-
-    type: Literal["json"] = "json"
-    path: str
-
-    def resolve(self, document: MetadataDocument | None) -> str:
-        """Return the absolute URL for this path.
-
-        Args:
-            document: Owning document, required for relative paths.
-
-        Returns:
-            Absolute URL string.
-        """
-        return _path_resolve(self.path, document)
-
-
-PathObj = Annotated[ZarrPath | JsonPath, Field(discriminator="type")]
+# Path mechanics (resolve / relativize / the DocPath value type) live in the
+# pure `_paths` module; re-exported here so the public names stay put.
 
 
 # --- references ------------------------------------------------------------
@@ -680,7 +618,8 @@ class RefNode(BaseNode):
         Returns:
             Absolute URL string resolved against the owning document.
         """
-        return self.path.resolve(self._document)
+        base_url = self._document.url if self._document is not None else None
+        return self.path.resolve(base_url)
 
 
 # Concrete built-in families (collection / multiscale / singlescale) live in
@@ -774,27 +713,36 @@ def _remove(node: BaseNode, id: str) -> tuple[BaseNode, bool]:
 # --- references -> stubs ---------------------------------------------------
 
 
-def _relativize_path(path: PathObj, document: MetadataDocument | None) -> PathObj:
-    """Rewrite an absolute `path` relative to `document`'s directory when local.
+def _relativize_attr_refs(value: JsonValue, base_url: str | None) -> JsonValue:
+    """Relativize every embedded path object in an attribute value.
 
-    Same directory → `./name`; otherwise (different dir, remote, already
-    relative, or no parent document) the path is kept verbatim. The path's form
-    (zarr/json) is preserved.
+    Walks the JSON structure; any dict carrying the `DocPath` shape
+    (`{"type": "zarr"|"json", "path": <str>}`) has its `path` relativized against
+    `base_url` (best-effort, via `_paths.relativize`). This rewrites references
+    nested at any depth — e.g. `LabelsAttribute.source[*].path`,
+    `WellAttribute.column.path`, `AcquisitionAttribute.path` — while leaving
+    plain `path` strings (e.g. `ScaleTransformation.path`) untouched, since the
+    match is on the path-object *shape*, not the key name.
 
     Args:
-        path: The reference path to rewrite.
-        document: The parent document the stub will live in, if known.
+        value: A JSON value drawn from a node's `attributes`.
+        base_url: The owning document's `url` (the relativization base).
 
     Returns:
-        A possibly-relativized `PathObj` of the same form.
+        The value with matching path objects relativized (a new structure).
     """
-    if document is None or path.path.startswith(("http", "./")):
-        return path
-    base = posixpath.dirname(document.url)
-    if posixpath.dirname(path.path) == base:
-        rel = "./" + posixpath.basename(path.path)
-        return path.model_copy(update={"path": rel})
-    return path
+    if isinstance(value, dict):
+        if value.get("type") in ("zarr", "json") and isinstance(
+            value.get("path"), str
+        ):
+            return {
+                **value,
+                "path": _relativize_path_str(cast("str", value["path"]), base_url),
+            }
+        return {k: _relativize_attr_refs(v, base_url) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_relativize_attr_refs(v, base_url) for v in value]
+    return value
 
 
 # --- construction (graceful fallback to a generic node) --------------------

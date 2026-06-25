@@ -560,3 +560,29 @@ async def test_inlining_is_deterministic(resolver, tmp_path):
     a = await resolver.open_inlined(url)
     b = await ngc.Resolver(ngc.LocalStore()).open_inlined(url)
     assert [n.id for n in a.walk()] == [n.id for n in b.walk()]
+
+
+async def test_grandparent_ref_resolves_and_inlines(resolver, tmp_path):
+    """A `../../` relativized stub round-trips: written relative, resolved back.
+
+    The target group sits two directories above the referencing document, so its
+    stub is stored as `../../top.zarr` and must resolve and inline to that root.
+    """
+    deep = tmp_path / "a" / "b"
+    deep.mkdir(parents=True)
+    rf = await resolver.create(str(tmp_path / "top.zarr"), ngc.MultiscaleNode(id="top"))
+    root = ngc.CollectionNode(id="root").add_ref(parent_id="root", ref=rf)
+    url = str(deep / "collection.json")
+    await resolver.create(url, root)
+
+    # Stored relative against the document's directory (two levels up).
+    stub = json.loads(Path(url).read_text())["ome"]["nodes"][0]
+    assert stub["path"] == {"type": "zarr", "path": "../../top.zarr"}
+
+    # The stub resolves to the absolute target locator (the group dir) and
+    # inlines to its root.
+    reopened = await ngc.Resolver(ngc.LocalStore()).open(url)
+    assert reopened.nodes[0].resolve_path() == str(tmp_path / "top.zarr")
+    view = await ngc.Resolver(ngc.LocalStore()).open_inlined(url)
+    assert view.nodes[0]._origin_id == "top"
+    assert isinstance(view.nodes[0], ngc.InlinedMultiscaleNode)

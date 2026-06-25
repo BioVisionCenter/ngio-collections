@@ -29,7 +29,9 @@ def single_scales(prefix: str) -> tuple[ngc.RefSinglescaleNode, ...]:
     )
 
 
-def build_multiscale(prefix: str) -> ngc.MultiscaleNode:
+def build_multiscale(
+    prefix: str, extra_attr: ngc.AnyAttribute | None = None
+) -> ngc.MultiscaleNode:
     # The multiscale defines the coordinate system its single scales map into.
     coordinate_systems = ngc.CoordinateSystemsAttribute(
         [
@@ -45,6 +47,11 @@ def build_multiscale(prefix: str) -> ngc.MultiscaleNode:
     node = ngc.MultiscaleNode(
         id=prefix, name=prefix, nodes=single_scales(prefix)
     ).set_attr(id=prefix, value=coordinate_systems)
+
+    # Attributes are not node fields (nodes are strict); attach any extra typed
+    # attribute through `set_attr`, keyed by the multiscale id.
+    if extra_attr is not None:
+        node = node.set_attr(id=prefix, value=extra_attr)
 
     # Each single scale maps its array onto the shared coordinate system with a
     # scale transform (level 1 is downsampled 2x).
