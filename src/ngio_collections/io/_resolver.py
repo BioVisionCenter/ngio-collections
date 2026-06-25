@@ -22,7 +22,7 @@ from typing import Literal, cast, overload
 
 from ngio_collections.treeops import (
     assert_unique_ids,
-    build_inlined,
+    build_inlined_payload,
     namespace_ids,
 )
 from ngio_collections.io import _json
@@ -33,6 +33,7 @@ from ngio_collections.io._serialize import (
     _doc_payload,
     _node_from_payload,
     _ref_target,
+    _root_dict,
 )
 from ngio_collections.io.store import (
     LocalStore,
@@ -47,8 +48,10 @@ from ngio_collections.models._nodes import (
     Node,
     RefNode,
     ReferenceObj,
+    build_ref_node,
     rebuild,
     remove,
+    set_private,
     stub_to,
 )
 from ngio_collections.models._paths import meta_url as _clean_url
@@ -183,11 +186,9 @@ class Resolver:
             url, node_id = _ref_target(source)
         else:
             url, node_id = _clean_url(source), None
-        root = await self._resolve_node(url)
-        assert root._document is not None
-        inlined = await self._inline_tree(
-            root, depth, on_error, frozenset({root._document.url})
-        )
+        # Single pass: build the inlined tree straight from each document's JSON
+        # payload (no intermediate editable tree), resolving stubs as we go.
+        inlined = await self._inline_document(url, depth, on_error, frozenset())
         # Inlining merges several documents into one (ids unique only per
         # source); namespace ids to make them globally unique by ancestor path.
         inlined = cast("InlinedNode", namespace_ids(inlined))
@@ -210,24 +211,56 @@ class Resolver:
             return node
         return inlined
 
-    async def _inline_tree(
+    async def _inline_document(
         self,
-        node: BaseNode,
+        url: str,
         depth: int | None,
         on_error: Literal["skip", "raise"],
         ancestors: frozenset[str],
     ) -> InlinedNode | RefNode:
-        """Convert an editable node into its inlined mirror, resolving stubs."""
-        if isinstance(node, RefNode):
-            return await self._resolve_ref(node, depth, on_error, ancestors)
-        children = getattr(node, "nodes", ()) or ()
-        new_children = tuple(
+        """Open the document at `url` and build its inlined root from the payload.
+
+        Args:
+            url: Document URL to open.
+            depth: Remaining boundary-hop budget (`None` = unlimited).
+            on_error: `"skip"` leaves unresolvable stubs in place; `"raise"`
+                propagates.
+            ancestors: Document URLs already on the resolution stack (cycle guard).
+
+        Returns:
+            The inlined root node of the document.
+        """
+        doc = await self._open_document(url)
+        root_dict = _root_dict(doc)
+        return await self._inline_node(
+            root_dict, doc, depth, on_error, ancestors | {url}
+        )
+
+    async def _inline_node(
+        self,
+        node_dict: dict,
+        document: MetadataDocument,
+        depth: int | None,
+        on_error: Literal["skip", "raise"],
+        ancestors: frozenset[str],
+    ) -> InlinedNode | RefNode:
+        """Build the inlined node for one payload dict, resolving stubs.
+
+        A dict with a non-`None` `path` is a cross-document stub (resolved via
+        :meth:`_resolve_ref`); otherwise it is a materialized node built directly
+        from the payload with its children inlined in place.
+        """
+        if node_dict.get("path") is not None:
+            stub = build_ref_node(node_dict)
+            set_private(stub, "_document", document)
+            return await self._resolve_ref(stub, depth, on_error, ancestors)
+        children = tuple(
             [
-                await self._inline_tree(child, depth, on_error, ancestors)
-                for child in children
+                await self._inline_node(child, document, depth, on_error, ancestors)
+                for child in node_dict.get("nodes") or ()
             ]
         )
-        return build_inlined(node, new_children)
+        return build_inlined_payload(node_dict, document, children)
 
     async def _resolve_ref(
         self,
@@ -255,21 +288,22 @@ class Resolver:
         if target_url in ancestors:
             return stub  # cycle -> leave as stub
         try:
-            target_root = await self._resolve_node(target_url)
+            doc = await self._open_document(target_url)
         except Exception:
             if on_error == "raise":
                 raise
             return stub  # data leaf / not-an-ome-doc -> leave as stub
-        if stub.type != target_root.type:
+        root_dict = _root_dict(doc)
+        if stub.type != root_dict.get("type"):
             if on_error == "raise":
                 raise TypeError(
                     f"stub type {stub.type!r} does not match the type "
-                    f"{target_root.type!r} of the root node at {target_url!r}"
+                    f"{root_dict.get('type')!r} of the root node at {target_url!r}"
                 )
             return stub
         next_depth = None if depth is None else depth - 1
-        inlined = await self._inline_tree(
-            target_root, next_depth, on_error, ancestors | {target_url}
+        inlined = await self._inline_node(
+            root_dict, doc, next_depth, on_error, ancestors | {target_url}
         )
         # Merge the stub into the resolved child: name child-wins (fall back to
         # the stub), attributes stub-wins (the parent decorates the child).

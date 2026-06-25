@@ -6,12 +6,10 @@ read the module-level `DEFAULT_REGISTRY`, so registering a type makes it parse
 everywhere — including nested children — with no further wiring.
 """
 
-from typing import Literal
-
 import pytest
-from pydantic import ValidationError
 
 import ngio_collections as ngc
+from ngio_collections import NodeValidationError
 
 
 @pytest.fixture
@@ -23,24 +21,25 @@ def restore_registry():
     ngc.DEFAULT_REGISTRY._types.update(saved)
 
 
-# --- the mixin pattern: type + fields declared once, variants by inheritance ---
+# --- the mixin pattern: type declared once, variants by inheritance ---
 
 
 class TableType(ngc.NodeObj):
-    # A custom type adds only the `type` literal; data lives in `attributes`.
-    type: Literal["fractal:table"] = "fractal:table"
+    # A custom type names its `type` key once; data lives in `attributes`.
+    __slots__ = ()
+    node_type = "fractal:table"
 
 
 class TableNode(TableType, ngc.Node):
-    pass
+    __slots__ = ()
 
 
 class RefTableNode(TableType, ngc.RefNode):
-    pass
+    __slots__ = ()
 
 
 class InlinedTableNode(TableType, ngc.InlinedNode):
-    pass
+    __slots__ = ()
 
 
 def _fresh() -> ngc.NodeRegistry:
@@ -101,9 +100,9 @@ def test_register_family_explicit_key_override():
 
 def test_nodes_forbid_node_level_extras():
     # A node's structural fields are a closed set: unknown top-level keys raise.
-    with pytest.raises(ValidationError):
+    with pytest.raises(NodeValidationError):
         ngc.Node(id="x", type="custom", surprise="nope")
-    with pytest.raises(ValidationError):
+    with pytest.raises(NodeValidationError):
         TableNode(id="x", surprise="nope")
     # Arbitrary / custom metadata still rides along in the open `attributes` dict.
     node = ngc.Node(id="x", type="custom", attributes={"x-demo:source": "fixture"})

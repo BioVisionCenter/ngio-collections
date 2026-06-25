@@ -9,15 +9,15 @@ a process that never registered the type (a generic `Node` keeps the attributes
 untouched), whereas a custom *field* would be an unknown node-level key there and
 be rejected (nodes are `extra="forbid"`).
 
-The `type` literal is declared once on a `NodeObj` mixin and shared by the three
-variants (editable / ref / inlined) through inheritance; `register_family` binds
-them under the inferred key, and `isinstance(x, TableType)` holds for all three.
+The `type` key is named once on a `NodeObj` marker mixin (via `node_type`) and
+shared by the three variants (editable / ref / inlined) through inheritance;
+`register_family` binds them under the inferred key, and `isinstance(x, TableType)`
+holds for all three.
 
 Run with: pixi run python examples/custom_node_types.py
 """
 
 from pathlib import Path
-from typing import Literal
 
 import ngio_collections as ngc
 
@@ -25,19 +25,26 @@ import ngio_collections as ngc
 class TableType(ngc.NodeObj):
     """Marks the `fractal:table` type; data goes in `attributes`, not fields."""
 
-    type: Literal["fractal:table"] = "fractal:table"
+    __slots__ = ()
+    node_type = "fractal:table"
 
 
 class TableNode(TableType, ngc.Node):
     """Editable table node (table-specific methods / validation would live here)."""
 
+    __slots__ = ()
+
 
 class RefTableNode(TableType, ngc.RefNode):
     """Reference stub pointing at a table document."""
 
+    __slots__ = ()
+
 
 class InlinedTableNode(TableType, ngc.InlinedNode):
     """Resolved (read-only) table node."""
+
+    __slots__ = ()
 
 
 def main() -> None:

@@ -7,7 +7,7 @@ attribute references — kept out of the cohesive `models._nodes` core. These ar
 the pure operations the `Resolver` leans on, lifted out of the IO layer.
 """
 
-from ngio_collections.treeops._inline import build_inlined
+from ngio_collections.treeops._inline import build_inlined_payload
 from ngio_collections.treeops._jsonrefs import (
     relativize_attr_refs,
     rewrite_attr_refs,
@@ -19,7 +19,7 @@ from ngio_collections.treeops._namespace import (
 
 __all__ = [
     "assert_unique_ids",
-    "build_inlined",
+    "build_inlined_payload",
     "namespace_ids",
     "relativize_attr_refs",
     "rewrite_attr_refs",

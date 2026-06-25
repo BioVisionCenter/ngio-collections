@@ -1,9 +1,12 @@
-"""Shared Pydantic config bases and node-state types.
+"""Shared bases and node-state types.
 
-Pure data layer: no IO and no dependency on the node models. `BaseObj` and
-`NodeObj` are the two frozen, camelCase-aliased model bases the rest of the
-package builds on — they differ only in their `extra` policy. `NodeState` /
-`NodeStateError` describe how a node relates to on-disk storage.
+Pure data layer: no IO and no dependency on the node models. `BaseObj` is the
+frozen, camelCase-aliased *Pydantic* base for non-node OME value objects (paths,
+references, attributes). `NodeObj` is a plain (non-Pydantic) marker base for the
+node hierarchy — the node spine is hand-rolled for performance (see `_nodes`), so
+`NodeObj` carries no fields or validation, only the shared identity that lets
+`isinstance(node, NodeObj)` hold and custom families declare their type marker.
+`NodeState` / `NodeStateError` describe how a node relates to on-disk storage.
 """
 
 from __future__ import annotations
@@ -29,22 +32,25 @@ class BaseObj(BaseModel):
     )
 
 
-class NodeObj(BaseModel):
-    """Frozen, camelCase-aliased base for the node hierarchy and node mixins.
+class NodeObj:
+    """Plain marker base for the node hierarchy and node type-markers.
 
-    Identical to `BaseObj` except `extra="forbid"`: a node's structural fields
-    are a closed set, so unknown node-level keys are rejected rather than
-    silently kept. Arbitrary / custom metadata belongs in a node's `attributes`
-    dict (which stays open). Consumers declaring a custom node type build their
-    field mixin on this base so the derived variants stay strict.
+    The node spine (`BaseNode` and subtypes in `_nodes`) is a hand-rolled frozen
+    `__slots__` hierarchy rather than Pydantic — node fields are a closed, trivial
+    schema and per-node Pydantic construction dominated read cost (see
+    `benchmarks/README.md`). `NodeObj` stays as the shared marker so every node is
+    an `isinstance(_, NodeObj)`, and a custom family declares its type once::
+
+        class TableType(NodeObj):
+            __slots__ = ()
+            node_type = "fractal:table"
+
+    `extra="forbid"` (rejecting unknown node-level keys) is enforced by the node
+    constructors in `_nodes`, not here. Arbitrary metadata still rides in a node's
+    open `attributes` dict.
     """
 
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        extra="forbid",
-        frozen=True,
-    )
+    __slots__ = ()
 
 
 class NodeStateError(ValueError):

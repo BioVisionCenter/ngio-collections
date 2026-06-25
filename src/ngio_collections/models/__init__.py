@@ -16,6 +16,7 @@ from ngio_collections.models._nodes import (
     BaseNode,
     InlinedNode,
     Node,
+    NodeValidationError,
     RefNode,
     register_family,
 )
@@ -117,6 +118,7 @@ __all__ = [
     "NodeState",
     "NodeStateError",
     "NodeTypes",
+    "NodeValidationError",
     "PathObj",
     "PlateAttribute",
     "RefCollectionNode",

@@ -130,6 +130,19 @@ def _doc_payload(root: BaseNode, document: MetadataDocument, relativize: bool) -
     return {"version": VERSION, **_dump_node(root, document, relativize)}
 
 
+def _root_dict(document: MetadataDocument) -> dict:
+    """Return a document's root node dict (OME payload minus the `version` envelope).
+
+    Args:
+        document: The document to read the parsed root node dict from.
+
+    Returns:
+        The root node payload dict, ready for node construction.
+    """
+    payload = document.deserialize_payload(document.content)
+    return {k: v for k, v in payload.items() if k != "version"}
+
+
 def _node_from_payload(payload: dict) -> Node:
     """Build the editable root node from a document's OME payload.
 

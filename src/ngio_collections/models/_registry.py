@@ -132,7 +132,7 @@ class NodeRegistry:
                     f"two {slot} variants given: {slots[slot]!r} and {cls!r}"
                 )
             slots[slot] = cls
-            default = cls.model_fields["type"].default
+            default = getattr(cls, "node_type", None)
             if isinstance(default, str) and default:
                 keys.add(default)
         if key is None:

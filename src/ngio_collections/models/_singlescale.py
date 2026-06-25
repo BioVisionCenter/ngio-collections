@@ -9,8 +9,6 @@ the type grows.
 
 from __future__ import annotations
 
-from typing import Literal
-
 from ngio_collections.models._config import NodeObj
 from ngio_collections.models._nodes import RefNode
 
@@ -18,8 +16,11 @@ from ngio_collections.models._nodes import RefNode
 class SinglescaleType(NodeObj):
     """Marks the `singlescale` type; one `isinstance` target for all variants."""
 
-    type: Literal["singlescale"] = "singlescale"
+    __slots__ = ()
+    node_type = "singlescale"
 
 
 class RefSinglescaleNode(SinglescaleType, RefNode):
     """A reference stub pointing to an OME singlescale document."""
+
+    __slots__ = ()

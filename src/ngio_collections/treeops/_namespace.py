@@ -11,14 +11,12 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING, cast
 
-from pydantic import JsonValue
-
 from ngio_collections.treeops._jsonrefs import rewrite_attr_refs
 from ngio_collections.models._nodes import (
     BaseNode,
     InlinedNode,
     RefNode,
-    construct_node,
+    set_private,
 )
 
 if TYPE_CHECKING:
@@ -119,25 +117,41 @@ def namespace_ids(root: InlinedNode | RefNode) -> InlinedNode | RefNode:
 
     assign(root, (), None, 0, "")
 
-    def rebuild(node: BaseNode) -> BaseNode:
-        if getattr(node, "id", None) is None:
-            return node  # id-less pointer, left untouched
-        rename = region_maps[node_region[id(node)]]
-        new_attrs = cast(
-            "dict[str, JsonValue]", rewrite_attr_refs(node.attributes, rename)
-        )
-        # perf: `node` is an already-validated inlined node; rebuild it by
-        # copying its field dict and overriding only what namespacing changes
-        # (`id`, ref-rewritten `attributes`, and recursively its `nodes`),
-        # bypassing `model_copy`'s deep-copy + re-validation machinery. See
-        # `construct_node`.
-        fields = dict(node.__dict__)
-        fields["id"] = renames[id(node)]
-        fields["attributes"] = new_attrs
-        if fields.get("nodes") is not None:  # not a leaf stub
-            fields["nodes"] = tuple(rebuild(c) for c in fields["nodes"])
-        private = dict(node.__pydantic_private__ or {})
-        private["_origin_id"] = origins[id(node)]
-        return construct_node(type(node), fields, private)
+    def rebuild(node: BaseNode) -> tuple[BaseNode, bool]:
+        """Rebuild `node` with namespaced ids/attrs; return `(node, changed)`.
 
-    return cast("InlinedNode | RefNode", rebuild(root))
+        perf: nodes in the entry document keep bare ids and usually have no
+        intra-document attribute refs, so most of the tree is structurally
+        unchanged by namespacing. Such a node is reused as-is (no `model_copy`) —
+        only its `_origin_id` is stamped in place, which is safe because the
+        inlined tree is freshly built and owned solely by this call. This
+        collapses the pass to a plain walk on a single-document read. `changed`
+        tells the parent whether a *new* child object was created (so the parent
+        must copy its `nodes` tuple).
+        """
+        node_id = getattr(node, "id", None)
+        if node_id is None:
+            return node, False  # id-less pointer, left untouched
+        update: dict[str, object] = {"_origin_id": origins[id(node)]}
+        new_id = renames[id(node)]
+        if new_id != node_id:
+            update["id"] = new_id
+        rename = region_maps[node_region[id(node)]]
+        new_attrs = rewrite_attr_refs(node.attributes, rename)
+        if new_attrs != node.attributes:
+            update["attributes"] = new_attrs
+        children = getattr(node, "nodes", None)
+        if children is not None:  # not a leaf stub
+            rebuilt = [rebuild(c) for c in children]
+            if any(child_changed for _, child_changed in rebuilt):
+                update["nodes"] = tuple(child for child, _ in rebuilt)
+        # Every materialized node carries `_origin_id`; if that is the only change
+        # (and no child was rebuilt), stamp it in place and reuse the node.
+        if set(update) == {"_origin_id"}:
+            set_private(node, "_origin_id", origins[id(node)])
+            return node, False
+        # `model_copy` carries `_document` and applies the overrides without
+        # re-validation (the lite node's copy is the read-path fast path).
+        return node.model_copy(update=update), True
+
+    return cast("InlinedNode | RefNode", rebuild(root)[0])

@@ -1,0 +1,16 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "name": "image",
+      "attributes": {
+        "role": "raw"
+      },
+      "id": "image",
+      "nodes": []
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

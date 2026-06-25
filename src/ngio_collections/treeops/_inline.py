@@ -1,47 +1,54 @@
-"""Build the read-only `InlinedNode` mirror of an editable node.
+"""Build read-only `InlinedNode`s directly from parsed document payloads.
 
-Part of the inlining algorithm driven by `Resolver.open_inlined`: given a source
-node and its already-resolved children, mirror it into an `InlinedNode`,
-carrying over the source's `_document` so `ref()` still works.
+Part of the inlining algorithm driven by `Resolver.open_inlined`: it builds the
+inlined tree in a single pass straight from each document's JSON payload (no
+intermediate editable tree), so this is the read-path hot constructor.
 """
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, Any
 
 from ngio_collections.models._nodes import (
     DEFAULT_REGISTRY,
-    BaseNode,
     InlinedNode,
     RefNode,
-    construct_node,
 )
 
+if TYPE_CHECKING:
+    from ngio_collections.io._document import MetadataDocument
 
-def build_inlined(
-    source: BaseNode, children: tuple[InlinedNode | RefNode, ...]
+
+def build_inlined_payload(
+    node_dict: dict[str, Any],
+    document: MetadataDocument,
+    children: tuple[InlinedNode | RefNode, ...],
 ) -> InlinedNode:
-    """Build the `InlinedNode` mirror of an editable `source` node.
+    """Construct a lite `InlinedNode` straight from a parsed payload dict.
 
-    Copies `source`'s identity and attributes, attaches the already-resolved
-    `children`, and carries the source's `_document` so `ref()` works on the
-    result.
+    perf: this is the single-pass read constructor — `Resolver.open_inlined`
+    builds the inlined tree directly from each document's JSON payload, skipping
+    the intermediate editable `Node` tree entirely (that tree was built only to be
+    mirrored and discarded). Values come from a document Pydantic-free, so no
+    per-node validation runs on the read path; `document` is stamped so `ref()`
+    works (`_origin_id` is filled later by `namespace_ids`).
 
     Args:
-        source: The editable `Node` being inlined.
-        children: The resolved children (inlined nodes and/or leftover stubs).
+        node_dict: A materialized node's payload dict (no `path`).
+        document: The owning document of this node.
+        children: The already-resolved children (inlined nodes / leftover stubs).
 
     Returns:
-        A typed `InlinedNode` mirroring `source`.
+        A typed `InlinedNode` carrying `node_dict`'s identity and `children`.
     """
-    cls = DEFAULT_REGISTRY.get_inlined(source.type or "")
-    # perf: `source` is an already-validated `Node`; copy its field values
-    # straight across instead of `model_dump()` + re-validating into `cls`. The
-    # only shape change is dropping `path` (inlined nodes have none) and swapping
-    # in the resolved `children`. `_document` (and `_origin_id`) ride along via
-    # the private-attr copy. See `construct_node`.
-    fields = {k: v for k, v in source.__dict__.items() if k != "path"}
-    fields["nodes"] = children
-    return cast(
-        "InlinedNode", construct_node(cls, fields, source.__pydantic_private__ or {})
-    )
+    cls = DEFAULT_REGISTRY.get_inlined(node_dict.get("type") or "")
+    obj = cls.__new__(cls)
+    sa = object.__setattr__
+    sa(obj, "type", node_dict.get("type"))
+    sa(obj, "name", node_dict.get("name"))
+    sa(obj, "attributes", node_dict.get("attributes") or {})
+    sa(obj, "id", node_dict.get("id"))
+    sa(obj, "nodes", children)
+    sa(obj, "_document", document)
+    sa(obj, "_origin_id", None)
+    return obj

@@ -75,19 +75,26 @@ _BOUNDARY_DEPTH: dict[ShardLevel, int] = {
 class _TableType(ngc.NodeObj):
     """Marks the ``bench:table`` node type; data lives in ``attributes``."""
 
-    type: Literal["bench:table"] = "bench:table"
+    __slots__ = ()
+    node_type = "bench:table"
 
 
 class TableNode(_TableType, ngc.Node):
     """Editable table node."""
 
+    __slots__ = ()
+
 
 class RefTableNode(_TableType, ngc.RefNode):
     """Reference stub for a table document."""
 
+    __slots__ = ()
+
 
 class InlinedTableNode(_TableType, ngc.InlinedNode):
     """Resolved (read-only) table node."""
+
+    __slots__ = ()
 
 
 def register_tables() -> None:

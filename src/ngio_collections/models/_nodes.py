@@ -1,12 +1,20 @@
 """Frozen node models, references, and the functional edit engine.
 
-Pure Pydantic layer: no IO. Nodes are **frozen** (immutable) with `tuple`
-children, so a parsed tree is a value that resolution and editing never mutate
-— they return new trees. The one piece of provenance that survives is
-`_document` (a `PrivateAttr` pointing at the node's on-disk document, if any);
-it never serializes and rides along through `model_copy`. The single invariant
-every rebuild honors: **edit through `model_copy`, never `model_validate`**, so
-`_document` survives untouched.
+No IO. Nodes are hand-rolled **frozen** (immutable) `__slots__` classes with
+`tuple` children, so a parsed tree is a value that resolution and editing never
+mutate — they return new trees. The node spine is deliberately *not* Pydantic:
+its fields are a closed, trivial schema (`type/name/id/path/nodes/attributes`)
+and per-node Pydantic construction dominated read cost; a `__slots__` node is
+~5-15x cheaper to build (see `benchmarks/README.md`). The genuinely complex,
+validation-heavy models stay Pydantic — a node's `attributes` are a raw
+`dict[str, JsonValue]` validated lazily on access (`__getitem__`/`get_attr`), and
+paths/references are Pydantic value types (`models/_paths`, `models/_references`).
+
+The two private fields that survive a copy are `_document` (the node's on-disk
+document, if any) and `_origin_id` (an inlined node's pre-namespacing id). The
+single invariant every rebuild honors: **edit through `model_copy`, never reparse**,
+so `_document` survives untouched. For API compatibility the lite nodes keep
+`model_copy(update=...)` / `model_dump(...)` / `model_validate(...)` method shims.
 
 There are two parallel node hierarchies:
 
@@ -18,44 +26,36 @@ There are two parallel node hierarchies:
   read-only with respect to its origins (only `save_inlined` snapshots it), but
   still supports the same functional in-memory edits.
 
-A `ReferenceObj` is the portable `{id, type?, path?}` pointer `node.ref()` returns;
+A `ReferenceObj` is the portable `{id, path?}` pointer `node.ref()` returns;
 `add_ref` turns one into an in-tree stub. The write verbs (`create` / `save` /
 `save_inlined`) return the richer typed `RefNode` stub (via `stub_to`) so a
 reference can be decorated before it is attached.
 
 This module is the cohesive node core: the classes carry their immutable edit
 API, the spine-rebuild helpers they call, and the registry-driven construction
-factories. The factories and the recursive `AnyNode` validator are welded to the
-classes by Pydantic's `model_rebuild` cycle, so they stay co-located. The
-higher-order tree algorithms (inlining, namespacing, attribute-ref rewriting)
-live in the `treeops` layer.
+factories. The higher-order tree algorithms (inlining, namespacing,
+attribute-ref rewriting) live in the `treeops` layer.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from typing import (
     TYPE_CHECKING,
-    Annotated,
     Any,
     Callable,
     Generator,
-    Literal,
     Self,
+    Union,
     cast,
 )
 
-from pydantic import (
-    Field,
-    JsonValue,
-    PlainValidator,
-    PrivateAttr,
-    SerializeAsAny,
-)
+from pydantic import JsonValue
 
 from ngio_collections.models._config import NodeObj, NodeState, NodeStateError
-from ngio_collections.models._paths import JsonPath, PathObj, ZarrPath
-from ngio_collections.models._references import IdStr, ReferenceObj
+from ngio_collections.models._paths import DocPath, JsonPath, PathObj, ZarrPath
+from ngio_collections.models._references import ID_PATTERN, ReferenceObj
 from ngio_collections.models._registry import NodeRegistry, NodeTypes
 from ngio_collections.models.attributes._base import (
     AnyAttribute,
@@ -65,6 +65,16 @@ from ngio_collections.models.attributes._base import (
 
 if TYPE_CHECKING:
     from ngio_collections.io._document import MetadataDocument
+
+_ID_RE = re.compile(ID_PATTERN)
+
+
+class NodeValidationError(ValueError):
+    """A node's structural fields are invalid (bad id, unknown key, bad path).
+
+    Subclasses `ValueError` so callers can keep catching `ValueError`; replaces
+    Pydantic's `ValidationError` for the hand-rolled node spine.
+    """
 
 
 # --- references ------------------------------------------------------------
@@ -119,49 +129,26 @@ def set_private(node: BaseNode, name: str, value: Any) -> None:
 
     Args:
         node: The frozen node whose private attribute should be mutated.
-        name: The `PrivateAttr` field name (e.g. `"_document"`).
+        name: The private slot name (e.g. `"_document"`).
         value: The value to assign.
     """
-    private = node.__pydantic_private__
-    assert private is not None
-    private[name] = value
+    object.__setattr__(node, name, value)
 
 
-def construct_node(
-    cls: type[BaseNode], fields: dict[str, Any], private: dict[str, Any]
-) -> BaseNode:
-    """Instantiate a frozen node from already-validated values, skipping validation.
+def _valid_id(id: Any) -> str:
+    """Validate a node id against `ID_PATTERN`, returning it unchanged."""
+    if not (isinstance(id, str) and _ID_RE.match(id)):
+        raise NodeValidationError(f"invalid node id {id!r}; must match {ID_PATTERN}")
+    return id
 
-    perf: the read path (`open_inlined`) rebuilds every node twice — once to
-    mirror an editable `Node` into an `InlinedNode`, once to namespace ids — and
-    both inputs are values Pydantic has *already* validated. Re-validating them
-    (`cls(**data)`, ~2.9 us/node) or `model_construct` (slower still, it fills
-    defaults) is pure overhead; copying the field dict straight into a fresh
-    instance is ~5x faster and saved ~0.7 s/run on the read benchmark (see
-    `benchmarks/README.md`).
 
-    This reaches into Pydantic v2 model internals (`__dict__`,
-    `__pydantic_fields_set__`, `__pydantic_extra__`, `__pydantic_private__`),
-    which is why the dependency is pinned `<3.0`. **Only** use it with trusted,
-    already-validated field values produced by another node — never for parsing
-    external input (that path must go through `build_node` / validation).
-
-    Args:
-        cls: The concrete node class to instantiate.
-        fields: The complete set of model field values for the new node (every
-            field `cls` declares; values are stored verbatim, not validated).
-        private: The `PrivateAttr` values to carry (e.g. `_document`,
-            `_origin_id`); copied, so the caller's mapping is not aliased.
-
-    Returns:
-        A new frozen instance of `cls` populated from `fields` / `private`.
-    """
-    obj = cls.__new__(cls)
-    object.__setattr__(obj, "__dict__", dict(fields))
-    object.__setattr__(obj, "__pydantic_fields_set__", set(fields))
-    object.__setattr__(obj, "__pydantic_extra__", None)
-    object.__setattr__(obj, "__pydantic_private__", dict(private))
-    return obj
+def _coerce_path(path: Any) -> PathObj:
+    """Coerce a `DocPath` instance or `{type, path}` dict to a validated `PathObj`."""
+    if isinstance(path, DocPath):
+        return path
+    if isinstance(path, dict):
+        return DocPath.model_validate(path)
+    raise NodeValidationError(f"invalid reference path {path!r}")
 
 
 class BaseNode(NodeObj):
@@ -176,17 +163,125 @@ class BaseNode(NodeObj):
     tree built via `model_copy` and never mutates `self`.
     """
 
-    type: str
-    name: str | None = None
-    attributes: dict[str, JsonValue] = Field(default_factory=dict)
+    __slots__ = ("type", "name", "attributes", "_document", "_origin_id")
 
-    # Closest owning document (set after parse / create). None on a detached
-    # node, which inherits its parent's document on write-back.
-    _document: "MetadataDocument | None" = PrivateAttr(default=None)
-    # Pre-namespacing id of an inlined node (its real id within its origin
-    # document). None on editable / reference nodes. `ref()` uses it so an
-    # inlined, namespaced node still yields its true on-disk locator.
-    _origin_id: str | None = PrivateAttr(default=None)
+    # The complete, ordered set of public (serializable) fields a concrete node
+    # declares; drives `model_copy` / `model_dump`. Overridden per hierarchy.
+    _DATA_FIELDS: tuple[str, ...] = ("type", "name", "attributes")
+    # Type key for a family marker (e.g. "collection"); None on the generic base.
+    node_type: str | None = None
+
+    type: str
+    name: str | None
+    attributes: dict[str, JsonValue]
+    _document: MetadataDocument | None
+    _origin_id: str | None
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Block mutation: nodes are frozen (provenance uses `set_private`)."""
+        raise AttributeError(f"{type(self).__name__} is frozen; use model_copy()")
+
+    def _init_base(
+        self, type: str | None, name: str | None, attributes: Any
+    ) -> None:
+        """Set the shared fields (`type`/`name`/`attributes` + private defaults)."""
+        sa = object.__setattr__
+        resolved = type if type is not None else self.node_type
+        if resolved is None:
+            raise NodeValidationError(f"{type!r} node requires a 'type'")
+        sa(self, "type", resolved)
+        sa(self, "name", name)
+        sa(self, "attributes", dict(attributes) if attributes else {})
+        sa(self, "_document", None)
+        sa(self, "_origin_id", None)
+
+    # --- compatibility shims (lite stand-ins for the Pydantic API) --------
+
+    def model_copy(
+        self, *, update: dict[str, Any] | None = None, deep: bool = False
+    ) -> Self:
+        """Return a copy with `update` overrides applied (shallow, like Pydantic).
+
+        Carries `_document` / `_origin_id` across, and never validates — the
+        spine-rebuild engine relies on this. `deep` is accepted for signature
+        compatibility but ignored (children tuples / attribute dicts are shared,
+        matching Pydantic's shallow default).
+
+        Args:
+            update: Field values to override on the copy.
+            deep: Ignored (accepted for API parity).
+
+        Returns:
+            A new node of the same class.
+        """
+        upd = update or {}
+        cls = type(self)
+        obj = cls.__new__(cls)
+        sa = object.__setattr__
+        for field in cls._DATA_FIELDS:
+            sa(obj, field, upd[field] if field in upd else getattr(self, field))
+        sa(obj, "_document", upd.get("_document", self._document))
+        sa(obj, "_origin_id", upd.get("_origin_id", self._origin_id))
+        return obj
+
+    def model_dump(
+        self,
+        *,
+        mode: str = "python",
+        by_alias: bool = False,
+        exclude_none: bool = False,
+        exclude: set[str] | frozenset[str] | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        """Serialize the node's fields to a dict (lite `BaseModel.model_dump`).
+
+        Node fields are single-word, so `by_alias` is a no-op for the spine; it is
+        forwarded only to the nested `path` value type. `nodes` recurses unless
+        excluded. Matches the flag subset the codebase uses.
+
+        Args:
+            mode: `"python"` or `"json"` (forwarded to the `path` value type).
+            by_alias: Forwarded to the `path` value type.
+            exclude_none: Drop fields whose value is `None`.
+            exclude: Field names to omit (e.g. `{"nodes"}`).
+
+        Returns:
+            A JSON-serializable dict of the node's fields.
+        """
+        skip = exclude or frozenset()
+        out: dict[str, Any] = {}
+        for field in type(self)._DATA_FIELDS:
+            if field in skip:
+                continue
+            value = getattr(self, field)
+            if exclude_none and value is None:
+                continue
+            if field == "path" and value is not None:
+                value = value.model_dump(mode=mode, by_alias=by_alias)
+            elif field == "nodes" and value is not None:
+                value = [
+                    child.model_dump(
+                        mode=mode, by_alias=by_alias, exclude_none=exclude_none
+                    )
+                    for child in value
+                ]
+            out[field] = value
+        return out
+
+    @classmethod
+    def model_validate(cls, obj: Any) -> BaseNode:
+        """Build a node tree from a dict / node (lite `BaseModel.model_validate`).
+
+        Dispatches by `type` / `path` through the registry, like a parse; the
+        returned class may be a more specific registered subtype than `cls`.
+
+        Args:
+            obj: A payload dict or an existing node instance.
+
+        Returns:
+            The constructed node tree.
+        """
+        return build_any_node(obj)
 
     # --- navigation ------------------------------------------------------
 
@@ -532,9 +627,34 @@ class BaseNode(NodeObj):
 class Node(BaseNode):
     """An embedded (inline) editable node: children in `nodes`; no path."""
 
-    id: IdStr
-    path: Literal[None] = None
-    nodes: tuple[AnyNode, ...] = ()
+    __slots__ = ("id", "path", "nodes")
+    _DATA_FIELDS = ("type", "name", "attributes", "id", "path", "nodes")
+
+    id: str
+    path: None
+    nodes: tuple[AnyNode, ...]
+
+    def __init__(
+        self,
+        *,
+        id: str,
+        type: str | None = None,
+        name: str | None = None,
+        attributes: dict[str, JsonValue] | None = None,
+        path: None = None,
+        nodes: Sequence[Any] = (),
+        **extra: Any,
+    ) -> None:
+        """Build an embedded editable node (children coerced from dicts if needed)."""
+        if extra:
+            raise NodeValidationError(f"unexpected node field(s): {sorted(extra)}")
+        if path is not None:
+            raise NodeValidationError("an embedded node must not have a 'path'")
+        self._init_base(type, name, attributes)
+        sa = object.__setattr__
+        sa(self, "id", _valid_id(id))
+        sa(self, "path", None)
+        sa(self, "nodes", tuple(_coerce_editable(c) for c in nodes))
 
 
 class RefNode(BaseNode):
@@ -547,9 +667,34 @@ class RefNode(BaseNode):
     document.
     """
 
-    id: IdStr | None = None
+    __slots__ = ("id", "path", "nodes")
+    _DATA_FIELDS = ("type", "name", "attributes", "id", "path", "nodes")
+
+    id: str | None
     path: PathObj
-    nodes: Literal[None] = None
+    nodes: None
+
+    def __init__(
+        self,
+        *,
+        path: Any,
+        type: str | None = None,
+        id: str | None = None,
+        name: str | None = None,
+        attributes: dict[str, JsonValue] | None = None,
+        nodes: None = None,
+        **extra: Any,
+    ) -> None:
+        """Build a path-based reference stub (no children)."""
+        if extra:
+            raise NodeValidationError(f"unexpected node field(s): {sorted(extra)}")
+        if nodes is not None:
+            raise NodeValidationError("a reference node has no 'nodes'")
+        self._init_base(type, name, attributes)
+        sa = object.__setattr__
+        sa(self, "id", _valid_id(id) if id is not None else None)
+        sa(self, "path", _coerce_path(path))
+        sa(self, "nodes", None)
 
     def resolve_path(self) -> str:
         """Return the absolute URL this stub references.
@@ -580,8 +725,29 @@ class InlinedNode(BaseNode):
     `save_inlined` to snapshot the whole tree to one document.
     """
 
-    id: IdStr
-    nodes: tuple[AnyInlinedNode, ...] = ()
+    __slots__ = ("id", "nodes")
+    _DATA_FIELDS = ("type", "name", "attributes", "id", "nodes")
+
+    id: str
+    nodes: tuple[AnyInlinedNode, ...]
+
+    def __init__(
+        self,
+        *,
+        id: str,
+        type: str | None = None,
+        name: str | None = None,
+        attributes: dict[str, JsonValue] | None = None,
+        nodes: Sequence[Any] = (),
+        **extra: Any,
+    ) -> None:
+        """Build a resolved inlined node (children coerced from dicts if needed)."""
+        if extra:
+            raise NodeValidationError(f"unexpected node field(s): {sorted(extra)}")
+        self._init_base(type, name, attributes)
+        sa = object.__setattr__
+        sa(self, "id", _valid_id(id))
+        sa(self, "nodes", tuple(_coerce_inlined(c) for c in nodes))
 
 
 # --- spine-rebuild helpers (functional) ------------------------------------
@@ -674,6 +840,20 @@ def _find_type_path(value: Any) -> tuple[str | None, bool]:
     raise ValueError(f"Invalid node value {type(value)}")
 
 
+def _coerce_editable(value: Any) -> Node | RefNode:
+    """Coerce a child of an editable node: pass nodes through, build from dicts."""
+    if isinstance(value, BaseNode):
+        return cast("Node | RefNode", value)
+    return build_any_node(value)
+
+
+def _coerce_inlined(value: Any) -> InlinedNode | RefNode:
+    """Coerce a child of an inlined node: pass nodes through, build from dicts."""
+    if isinstance(value, BaseNode):
+        return cast("InlinedNode | RefNode", value)
+    return _build_inlined_child(value)
+
+
 # The default registry starts empty; `_builtins.register_builtins` wires in the
 # collection / multiscale / singlescale families (called once from the package
 # composition root). Third-party types register through `register_family`.
@@ -701,6 +881,11 @@ def register_family(
     return registry.register_family(*variants, key=key)
 
 
+def _payload_kwargs(value: Any) -> dict[str, Any]:
+    """Return the field kwargs for a constructor from a dict or node instance."""
+    return dict(value) if isinstance(value, dict) else value.model_dump()
+
+
 def build_node(value: Any) -> Node:
     """Build a concrete editable `Node` subtype from a dict or node instance.
 
@@ -717,8 +902,7 @@ def build_node(value: Any) -> Node:
     node_type, has_path = _find_type_path(value)
     if has_path:
         raise ValueError("An embedded node must not have a path")
-    data = value if isinstance(value, dict) else value.model_dump()
-    return DEFAULT_REGISTRY.get_node(node_type or "")(**data)
+    return DEFAULT_REGISTRY.get_node(node_type or "")(**_payload_kwargs(value))
 
 
 def build_ref_node(value: Any) -> RefNode:
@@ -736,8 +920,7 @@ def build_ref_node(value: Any) -> RefNode:
     node_type, has_path = _find_type_path(value)
     if not has_path:
         raise ValueError("A reference node must have a path")
-    data = value if isinstance(value, dict) else value.model_dump()
-    return DEFAULT_REGISTRY.get_ref(node_type or "")(**data)
+    return DEFAULT_REGISTRY.get_ref(node_type or "")(**_payload_kwargs(value))
 
 
 def build_any_node(value: Any) -> Node | RefNode:
@@ -754,7 +937,7 @@ def build_any_node(value: Any) -> Node | RefNode:
 
 
 def _build_inlined_child(value: Any) -> InlinedNode | RefNode:
-    """Validator: pass inlined/ref instances through, build inlined from dicts.
+    """Build an inlined-tree child: pass nodes through, build inlined from dicts.
 
     Args:
         value: An `InlinedNode`/`RefNode` instance or a dict payload.
@@ -767,14 +950,10 @@ def _build_inlined_child(value: Any) -> InlinedNode | RefNode:
     node_type, has_path = _find_type_path(value)
     if has_path:
         return build_ref_node(value)
-    data = value if isinstance(value, dict) else value.model_dump()
-    return DEFAULT_REGISTRY.get_inlined(node_type or "")(**data)
+    return DEFAULT_REGISTRY.get_inlined(node_type or "")(**_payload_kwargs(value))
 
 
-AnyNode = Annotated[SerializeAsAny[Node | RefNode], PlainValidator(build_any_node)]
-AnyInlinedNode = Annotated[
-    SerializeAsAny[InlinedNode | RefNode], PlainValidator(_build_inlined_child)
-]
-
-Node.model_rebuild()
-InlinedNode.model_rebuild()
+# Back-compat aliases (were Pydantic `Annotated` field types; now plain unions,
+# since the node spine is hand-rolled). Exported for typing / downstream use.
+AnyNode = Union[Node, RefNode]
+AnyInlinedNode = Union[InlinedNode, RefNode]

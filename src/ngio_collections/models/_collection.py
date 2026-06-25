@@ -8,8 +8,6 @@ validation belong on these classes as the type grows.
 
 from __future__ import annotations
 
-from typing import Literal
-
 from ngio_collections.models._config import NodeObj
 from ngio_collections.models._nodes import InlinedNode, Node, RefNode
 
@@ -17,16 +15,23 @@ from ngio_collections.models._nodes import InlinedNode, Node, RefNode
 class CollectionType(NodeObj):
     """Marks the `collection` type; one `isinstance` target for all variants."""
 
-    type: Literal["collection"] = "collection"
+    __slots__ = ()
+    node_type = "collection"
 
 
 class CollectionNode(CollectionType, Node):
     """An embedded OME collection node."""
 
+    __slots__ = ()
+
 
 class RefCollectionNode(CollectionType, RefNode):
     """A reference stub pointing to an OME collection document."""
 
+    __slots__ = ()
+
 
 class InlinedCollectionNode(CollectionType, InlinedNode):
     """A resolved OME collection node."""
+
+    __slots__ = ()
