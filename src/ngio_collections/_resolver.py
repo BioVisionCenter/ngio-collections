@@ -1,12 +1,13 @@
 """Lazy, async, non-mutating resolver over a URL-addressed store.
 
 `open` reads exactly one metadata document into an editable tree (cross-document
-references stay `RefNode` stubs). `open_inlined` resolves those stubs across
-document boundaries — loading each target document and locating the referenced
-node *by id* inside it — into a read-only `InlinedNode` tree; a stub's
-attributes overlay the resolved target on read (stub wins). Inlining is a
-read-only operation: it builds a new tree and never mutates the parsed source or
-the cache, and it cannot be written back through its origins.
+references stay `RefNode` stubs). `open_inlined` resolves those path-based stubs
+across document boundaries — loading each target document and merging its *root*
+into the stub's position — into a read-only `InlinedNode` tree; a stub's
+attributes overlay the resolved target on read (stub wins) and ids are
+namespaced by ancestor path. Inlining is a read-only operation: it builds a new
+tree and never mutates the parsed source or the cache, and it cannot be written
+back through its origins.
 
 Writing is single-document. `create` writes a detached tree to a new file;
 `save` writes an opened tree back to its own document; `save_inlined` snapshots
@@ -40,6 +41,7 @@ from ngio_collections.models._base import (
     assert_unique_ids,
     build_inlined,
     build_node,
+    namespace_ids,
     stub_to,
 )
 from ngio_collections.store import (
@@ -260,17 +262,19 @@ class Resolver:
     ) -> InlinedNode | BaseNode:
         """Resolve a tree across document boundaries into a read-only tree.
 
-        Each resolvable `RefNode` is replaced by the node it locates — the
-        document at its path is loaded and the node whose `id` matches is found
-        inside it — with the stub's attributes overlaid (stub wins). Builds a NEW
-        `InlinedNode` tree bottom-up; the parsed source and cache are never
-        mutated. Cycles, depth-exhausted hops, and unreadable targets are left as
-        stubs.
+        Each resolvable path-based `RefNode` is replaced by the root of the
+        document at its path (the stub and that root must share a `type`), with
+        the stub's attributes overlaid (stub wins) and the child's name winning.
+        Node ids are then namespaced by ancestor path (e.g. `root.child`) for
+        global uniqueness, each node keeping its origin id for `ref()`. Builds a
+        NEW `InlinedNode` tree bottom-up; the parsed source and cache are never
+        mutated. Cycles, depth-exhausted hops, type mismatches, and unreadable
+        targets are left as stubs.
 
         Args:
             source: An entry-point document URL (returns the inlined root), or a
                 `ReferenceObj` (inlines the document it locates and returns the
-                inlined node whose `id` matches).
+                inlined node matching its origin id).
             depth: Maximum boundary hops to follow; `None` = unlimited,
                 `0` = root only (no inlining).
             on_error: `"skip"` leaves unresolvable stubs in place; `"raise"`
@@ -281,7 +285,7 @@ class Resolver:
             for a `ReferenceObj`.
 
         Raises:
-            ValueError: If duplicate node ids are found after inlining.
+            ValueError: If duplicate node ids remain after inlining.
             KeyError: If `source` is a `ReferenceObj` whose `id` is absent from
                 the inlined tree.
         """
@@ -294,12 +298,23 @@ class Resolver:
         inlined = await self._inline_tree(
             root, depth, on_error, frozenset({root._document.url})
         )
-        inlined = cast("InlinedNode", inlined)
-        # Inlining merges several documents into one (ids unique only per source)
-        # — surface collisions here.
-        assert_unique_ids(inlined)
+        # Inlining merges several documents into one (ids unique only per
+        # source); namespace ids to make them globally unique by ancestor path.
+        inlined = cast("InlinedNode", namespace_ids(inlined))
+        assert_unique_ids(inlined)  # safety net (namespacing guarantees this)
         if node_id is not None:
-            node = inlined.find(id=node_id)
+            # ids are now namespaced; match the referenced node by its origin
+            # (its real id within `url`).
+            node = next(
+                (
+                    n
+                    for n in inlined.walk()
+                    if n._origin_id == node_id
+                    and n._document is not None
+                    and n._document.url == url
+                ),
+                None,
+            )
             if node is None:
                 raise KeyError(f"reference {node_id!r} not found in document {url!r}")
             return node
@@ -331,7 +346,14 @@ class Resolver:
         on_error: Literal["skip", "raise"],
         ancestors: frozenset[str],
     ) -> InlinedNode | RefNode:
-        """Resolve a single `RefNode` stub by id within its target document."""
+        """Resolve a path-based `RefNode` stub to the root of its target document.
+
+        RFC-8 stubs are path-based: the document at the stub's path is opened and
+        its *root* node is merged into the stub's position. The merged node keeps
+        the child's id / type / nodes; its name is the child's (falling back to
+        the stub's), and the stub's attributes overlay the child's (stub wins).
+        The stub and the child root must share the same `type`.
+        """
         if depth == 0:
             return stub  # hop budget exhausted -> leave the stub
         try:
@@ -348,20 +370,26 @@ class Resolver:
             if on_error == "raise":
                 raise
             return stub  # data leaf / not-an-ome-doc -> leave as stub
-        target = target_root.find(id=stub.id)
-        if target is None:
+        if stub.type != target_root.type:
             if on_error == "raise":
-                raise KeyError(
-                    f"reference {stub.id!r} not found in document {target_url!r}"
+                raise TypeError(
+                    f"stub type {stub.type!r} does not match the type "
+                    f"{target_root.type!r} of the root node at {target_url!r}"
                 )
             return stub
         next_depth = None if depth is None else depth - 1
         inlined = await self._inline_tree(
-            target, next_depth, on_error, ancestors | {target_url}
+            target_root, next_depth, on_error, ancestors | {target_url}
         )
-        if stub.attributes:  # overlay stub attributes on read (stub wins)
-            merged = {**inlined.attributes, **stub.attributes}
-            inlined = inlined.model_copy(update={"attributes": merged})
+        # Merge the stub into the resolved child: name child-wins (fall back to
+        # the stub), attributes stub-wins (the parent decorates the child).
+        updates: dict[str, object] = {}
+        if inlined.name is None and stub.name is not None:
+            updates["name"] = stub.name
+        if stub.attributes:
+            updates["attributes"] = {**inlined.attributes, **stub.attributes}
+        if updates:
+            inlined = inlined.model_copy(update=updates)
         return inlined
 
     async def create(
@@ -456,13 +484,16 @@ class Resolver:
         # Splice the edited node into a fresh parse of its document so siblings
         # and ancestors are preserved (mirrors delete()).
         doc_root = _node_from_payload(doc.deserialize_payload(doc.content))
-        if doc_root.id == node.id:
+        node_id = getattr(node, "id", None)
+        if node_id is None:
+            raise NodeStateError("cannot save a path-based stub; it has no id")
+        if doc_root.id == node_id:
             new_root: BaseNode = node  # node IS the document root
         else:
-            new_root, found = _rebuild(doc_root, node.id, lambda _n: node)
+            new_root, found = _rebuild(doc_root, node_id, lambda _n: node)
             if not found:
                 raise NodeStateError(
-                    f"node {node.id!r} is not in document {doc.url!r}; it may have "
+                    f"node {node_id!r} is not in document {doc.url!r}; it may have "
                     "been removed or renamed on disk"
                 )
         assert_unique_ids(new_root)
@@ -535,19 +566,22 @@ class Resolver:
         Raises:
             NodeStateError: If `node` is detached (it has no document on disk).
         """
+        node_id = getattr(node, "id", None)
         if node.is_detached:
             raise NodeStateError(
-                f"node {node.id!r} is detached; there is nothing on disk to delete"
+                f"node {node_id!r} is detached; there is nothing on disk to delete"
             )
+        if node_id is None:
+            raise NodeStateError("cannot delete a path-based stub; it has no id")
         store = self._writable_store()
         doc = node._document
         assert doc is not None
         root = _node_from_payload(doc.deserialize_payload(doc.content))
-        if root.id == node.id:
+        if root.id == node_id:
             await store.delete(doc.url)
             self._cache.pop(doc.url, None)
             return [doc.url]
-        new_root, found = _remove(root, node.id)
+        new_root, found = _remove(root, node_id)
         if not found:
             return []
         new_content = doc.serialize_payload(

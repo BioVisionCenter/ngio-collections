@@ -175,6 +175,7 @@ def test_create_open_and_inline_roundtrip_custom_type(tmp_path, restore_registry
     assert type(table) is TableNode
     assert table.attributes["region"] == "FOV_1"
 
+    # t1 is embedded in the entry document, so its id stays bare.
     inlined = ngc.open_inlined(url, resolver).find(id="t1")
     assert type(inlined) is InlinedTableNode
     assert isinstance(inlined, TableType)

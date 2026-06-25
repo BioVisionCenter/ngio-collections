@@ -39,7 +39,7 @@ def _stub_fixture(tmp_path: Path) -> str:
                     "nodes": [
                         {
                             "type": "collection",
-                            "id": "child",
+                            "name": "child",
                             "path": {"type": "json", "path": "./child.json"},
                         }
                     ],
@@ -60,10 +60,10 @@ def test_built_node_is_detached():
     assert node.nodes[0].state is ngc.NodeState.DETACHED
 
 
-async def test_inlined_states_are_document(resolver, tmp_path):
+async def test_inlined_states_are_document(resolver, tmp_path, by_origin):
     view = await resolver.open_inlined(_stub_fixture(tmp_path))
     assert view.state is ngc.NodeState.DOCUMENT
-    child = view.find(id="child")
+    child = by_origin(view, "child")
     assert child.state is ngc.NodeState.DOCUMENT
     # The resolved child is owned by its own document.
     assert child.document_url == str(tmp_path / "child.json")
@@ -87,9 +87,9 @@ async def test_create_returns_ref_and_stamps_document(resolver, tmp_path):
     )
     ref = await resolver.create(url, root)
 
-    # The write verbs hand back a typed RefNode stub (decorate-then-add_ref).
+    # The write verbs hand back a typed, path-based RefNode stub (no id).
     assert isinstance(ref, ngc.RefCollectionNode)
-    assert ref.id == "root"
+    assert ref.id is None
     assert ref.path.path == url
     assert root.state is ngc.NodeState.DOCUMENT  # the passed tree is stamped
     data = json.loads((tmp_path / "collection.json").read_text())["ome"]
@@ -120,7 +120,7 @@ async def test_create_then_edit_save_roundtrips(resolver, tmp_path):
     root = await resolver.open(url)
     root = root.set_attrs(id="img", values={"x": 9})
     ref = await resolver.save(root)
-    assert ref.id == "root" and ref.path.path == url
+    assert ref.id is None and ref.path.path == url
 
     reopened = await ngc.Resolver(ngc.LocalStore()).open(url)
     assert reopened.find(id="img").attributes["x"] == 9
@@ -141,7 +141,7 @@ def _stub(tmp_path: Path) -> dict:
     return json.loads((tmp_path / "collection.json").read_text())["ome"]["nodes"][0]
 
 
-async def test_compose_via_ref_and_add_ref(resolver, tmp_path):
+async def test_compose_via_ref_and_add_ref(resolver, tmp_path, by_origin):
     """The natural bottom-up flow: parent built detached, written last."""
     # Write the child document first; decorate its returned stub (typed).
     rf_child = await resolver.create(
@@ -149,7 +149,9 @@ async def test_compose_via_ref_and_add_ref(resolver, tmp_path):
         ngc.MultiscaleNode(id="img", attributes={"k": 1}),
     )
     assert isinstance(rf_child, ngc.RefMultiscaleNode)
-    rf_child = rf_child.set_attrs(id="img", values={"role": "raw"})  # overlay
+    assert rf_child.id is None  # path-based stub
+    # Decorate the standalone stub with overlay attributes before attaching it.
+    rf_child = rf_child.model_copy(update={"attributes": {"role": "raw"}})
 
     # Parent is still detached when add_ref runs; relativization is deferred.
     root = ngc.CollectionNode(id="plate")
@@ -160,11 +162,11 @@ async def test_compose_via_ref_and_add_ref(resolver, tmp_path):
     assert _stub(tmp_path)["path"] == {"type": "zarr", "path": "./child.zarr"}
     assert _stub(tmp_path)["attributes"] == {"role": "raw"}
 
-    # The reference resolves on inline; overlay wins on read.
+    # The reference resolves to the child root on inline; overlay wins on read.
     view = await ngc.Resolver(ngc.LocalStore()).open_inlined(
         str(tmp_path / "collection.json")
     )
-    img = view.find(id="img")
+    img = by_origin(view, "img")
     assert isinstance(img, ngc.InlinedMultiscaleNode)
     assert img.attributes == {"k": 1, "role": "raw"}
 
@@ -232,7 +234,9 @@ async def test_open_inlined_from_reference(resolver, tmp_path):
     ref = (await resolver.open(url)).find(id="img").ref()
     node = await resolver.open_inlined(ref)
     assert isinstance(node, ngc.InlinedMultiscaleNode)
+    # img is embedded in the entry document, so its id stays bare.
     assert node.id == "img"
+    assert node._origin_id == "img"
 
 
 async def test_open_reference_id_not_found_raises(resolver, tmp_path):
@@ -369,14 +373,21 @@ async def test_create_over_existing_raises(resolver, tmp_path):
         await resolver.create(url, ngc.CollectionNode(id="b"))
 
 
-async def test_add_to_stub_raises(resolver, tmp_path):
-    # depth=0 leaves the child as an unresolved reference stub.
-    view = await resolver.open_inlined(_stub_fixture(tmp_path), depth=0)
+def test_add_to_stub_raises():
+    # An id-bearing leaf stub cannot receive children: resolve it first.
+    root = ngc.CollectionNode(
+        id="root",
+        nodes=(
+            ngc.RefMultiscaleNode(id="s", path=ngc.JsonPath(path="./x.json")),
+        ),
+    )
     with pytest.raises(ngc.NodeStateError, match="reference stub"):
-        view.add(parent_id="child", child=ngc.CollectionNode(id="gc"))
+        root.add(parent_id="s", child=ngc.CollectionNode(id="gc"))
 
 
-async def test_add_duplicate_id_raises(resolver, tmp_path):
-    root = await resolver.open(_stub_fixture(tmp_path))
+def test_add_duplicate_id_raises():
+    root = ngc.CollectionNode(
+        id="root", nodes=(ngc.CollectionNode(id="child"),)
+    )
     with pytest.raises(ngc.NodeStateError, match="duplicate"):
         root.add(parent_id="root", child=ngc.CollectionNode(id="child"))

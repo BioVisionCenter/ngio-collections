@@ -26,6 +26,7 @@ reference can be decorated before it is attached.
 
 from __future__ import annotations
 
+import hashlib
 import posixpath
 from enum import StrEnum
 from collections.abc import Sequence
@@ -219,13 +220,14 @@ def reference_to(id: str, document: MetadataDocument) -> ReferenceObj:
 def stub_to(node: BaseNode, document: MetadataDocument) -> RefNode:
     """Build a typed `RefNode` stub locating `node` inside `document`.
 
-    The stub takes the node's id and type (so `add_ref` keeps the type) with an
-    absolute `PathObj` of the document's form and empty overlay attributes ready
-    to decorate. Mirrors :func:`reference_to` but returns the richer stub the
-    write verbs hand back.
+    Per RFC-8 the stub is path-based: it carries the node's type (so `add_ref`
+    keeps the type) and name, an absolute `PathObj` of the document's form, and
+    empty overlay attributes ready to decorate — but no `id`, since it resolves
+    to the root of the document at its path. Mirrors :func:`reference_to` but
+    returns the richer stub the write verbs hand back.
 
     Args:
-        node: The node that was written (provides id and type).
+        node: The node that was written (provides type and name).
         document: The document it now lives in (provides the path).
 
     Returns:
@@ -233,7 +235,9 @@ def stub_to(node: BaseNode, document: MetadataDocument) -> RefNode:
     """
     path_cls = ZarrPath if document.kind == "zarr" else JsonPath
     ref_cls = DEFAULT_REGISTRY.get_ref(node.type)
-    return ref_cls(id=node.id, type=node.type, path=path_cls(path=document.ref_url))
+    return ref_cls(
+        type=node.type, name=node.name, path=path_cls(path=document.ref_url)
+    )
 
 
 # --- attributes ------------------------------------------------------------
@@ -286,22 +290,26 @@ def _set_private(node: BaseNode, name: str, value: Any) -> None:
 class BaseNode(NodeObj):
     """Common fields, navigation, and functional edits for every node.
 
-    The node protocol every node carries: a required `type`, a required `id`, an
-    optional `name`, and an `attributes` dict. `nodes` / `path` are added by the
-    concrete hierarchies — embedded (`Node` / `InlinedNode`) carry `nodes`, a
-    reference (`RefNode`) carries `path`. Both the editable (`Node` / `RefNode`)
-    and inlined (`InlinedNode`) hierarchies derive from this. Every edit method
-    returns a new tree built via `model_copy` and never mutates `self`.
+    The node protocol every node carries: a required `type`, an optional `name`,
+    and an `attributes` dict. `id` / `nodes` / `path` are added by the concrete
+    hierarchies — materialized nodes (`Node` / `InlinedNode`) carry `id` and
+    `nodes`, a path-based reference (`RefNode`) carries `path` and (per RFC-8)
+    has no `id`. Both the editable (`Node` / `RefNode`) and inlined
+    (`InlinedNode`) hierarchies derive from this. Every edit method returns a new
+    tree built via `model_copy` and never mutates `self`.
     """
 
     type: str
-    id: IdStr
     name: str | None = None
     attributes: dict[str, JsonValue] = Field(default_factory=dict)
 
     # Closest owning document (set after parse / create). None on a detached
     # node, which inherits its parent's document on write-back.
     _document: "MetadataDocument | None" = PrivateAttr(default=None)
+    # Pre-namespacing id of an inlined node (its real id within its origin
+    # document). None on editable / reference nodes. `ref()` uses it so an
+    # inlined, namespaced node still yields its true on-disk locator.
+    _origin_id: str | None = PrivateAttr(default=None)
 
     # --- navigation ------------------------------------------------------
 
@@ -325,7 +333,9 @@ class BaseNode(NodeObj):
         Returns:
             The matching node, or `None` if not found.
         """
-        return next((n for n in self.walk() if n.id == id), None)
+        return next(
+            (n for n in self.walk() if getattr(n, "id", None) == id), None
+        )
 
     # --- typed attribute reads -------------------------------------------
 
@@ -405,14 +415,22 @@ class BaseNode(NodeObj):
             A portable `{id, path}` pointer to this node.
 
         Raises:
-            NodeStateError: If the node is detached (has no document yet).
+            NodeStateError: If the node is detached (has no document yet), or is
+                a path-based stub (which carries no id).
         """
+        # An inlined node's id may have been namespaced; `_origin_id` holds its
+        # real id within the origin document, so `ref()` stays correct.
+        target_id = self._origin_id or getattr(self, "id", None)
+        if target_id is None:
+            raise NodeStateError(
+                "reference stub carries no id; it is itself a pointer"
+            )
         if self._document is None:
             raise NodeStateError(
-                f"node {self.id!r} is detached; persist it with create()/save() "
-                "before taking a reference"
+                f"node {target_id!r} is detached; persist it with create()/"
+                "save() before taking a reference"
             )
-        return reference_to(self.id, self._document)
+        return reference_to(target_id, self._document)
 
     # --- functional edits (return a new root; self is untouched) ----------
 
@@ -558,17 +576,19 @@ class BaseNode(NodeObj):
             NodeStateError: If `child.id` already exists, or the parent is a
                 `RefNode` stub (resolve it first).
         """
-        if self.find(id=child.id) is not None:
+        child_id = getattr(child, "id", None)
+        if child_id is not None and self.find(id=child_id) is not None:
             raise NodeStateError(
-                f"duplicate node id {child.id!r}; ids must be unique within a "
+                f"duplicate node id {child_id!r}; ids must be unique within a "
                 "collection"
             )
 
         def _append(n: BaseNode) -> BaseNode:
             if isinstance(n, RefNode):
                 raise NodeStateError(
-                    f"cannot add children to reference stub {n.id!r}; resolve it "
-                    "with open_inlined first, or add to an embedded node"
+                    f"cannot add children to reference stub {parent_id!r}; "
+                    "resolve it with open_inlined first, or add to an embedded "
+                    "node"
                 )
             children = getattr(n, "nodes", ()) or ()
             return n.model_copy(update={"nodes": (*children, child)})
@@ -578,10 +598,12 @@ class BaseNode(NodeObj):
     def add_ref(self, *, parent_id: str, ref: "RefNode") -> Self:
         """Attach a `RefNode` stub to node `parent_id`.
 
-        `ref` is a typed `RefNode` stub (kept verbatim with its type/attributes),
-        as handed back by the write verbs (`create` / `save` / `save_inlined`).
-        The stored path is relativized later, at write time, against the document
-        being written (so this works even while the parent is still detached).
+        `ref` is a typed `RefNode` stub (kept verbatim with its type/name/
+        attributes), as handed back by the write verbs (`create` / `save` /
+        `save_inlined`). Per RFC-8 a stub is path-based and carries no `id` — it
+        resolves to the root of the document at its path. The stored path is
+        relativized later, at write time, against the document being written (so
+        this works even while the parent is still detached).
 
         Args:
             parent_id: The id of the node that will receive the reference.
@@ -591,20 +613,15 @@ class BaseNode(NodeObj):
             A new root with the reference stub appended to the parent's `nodes`.
 
         Raises:
-            NodeStateError: If the ref's id already exists, or the parent is
-                itself a `RefNode` stub.
+            NodeStateError: If the parent is itself a `RefNode` stub.
         """
-        ref_id = ref.id
-        if self.find(id=ref_id) is not None:
-            raise NodeStateError(
-                f"duplicate node id {ref_id!r}; ids must be unique within a collection"
-            )
 
         def _attach(n: BaseNode) -> BaseNode:
             if isinstance(n, RefNode):
                 raise NodeStateError(
-                    f"cannot add children to reference stub {n.id!r}; resolve it "
-                    "with open_inlined first, or add to an embedded node"
+                    f"cannot add children to reference stub {parent_id!r}; "
+                    "resolve it with open_inlined first, or add to an embedded "
+                    "node"
                 )
             children = getattr(n, "nodes", ()) or ()
             return n.model_copy(update={"nodes": (*children, ref)})
@@ -638,13 +655,22 @@ class BaseNode(NodeObj):
 class Node(BaseNode):
     """An embedded (inline) editable node: children in `nodes`; no path."""
 
+    id: IdStr
     path: Literal[None] = None
     nodes: tuple[AnyNode, ...] = ()
 
 
 class RefNode(BaseNode):
-    """A reference stub: `path` points to an external document; `nodes` is None."""
+    """A reference stub: `path` points elsewhere; `nodes` is None.
 
+    Per RFC-8 the `id` is optional. A stub that references another OME *document*
+    omits it and resolves to that document's root (see `Resolver._resolve_ref`);
+    a stub that references a data array (e.g. a singlescale `./0`) may carry an
+    `id` and inline `attributes`, and stays a leaf when its target is not an OME
+    document.
+    """
+
+    id: IdStr | None = None
     path: PathObj
     nodes: Literal[None] = None
 
@@ -676,6 +702,7 @@ class InlinedNode(BaseNode):
     `save_inlined` to snapshot the whole tree to one document.
     """
 
+    id: IdStr
     nodes: tuple[AnyInlinedNode, ...] = ()
 
 
@@ -695,7 +722,7 @@ def _rebuild(
     Returns:
         A `(new_root, found)` pair; `found` is `False` if `id` is absent.
     """
-    if node.id == id:
+    if getattr(node, "id", None) == id:
         return fn(node), True
     children: tuple[BaseNode, ...] | None = getattr(node, "nodes", None)
     if children is None:
@@ -727,8 +754,8 @@ def _remove(node: BaseNode, id: str) -> tuple[BaseNode, bool]:
     children: tuple[BaseNode, ...] | None = getattr(node, "nodes", None)
     if children is None:
         return node, False
-    if any(c.id == id for c in children):
-        kept = tuple(c for c in children if c.id != id)
+    if any(getattr(c, "id", None) == id for c in children):
+        kept = tuple(c for c in children if getattr(c, "id", None) != id)
         return node.model_copy(update={"nodes": kept}), True
     new_children: list[BaseNode] = []
     found = False
@@ -932,11 +959,128 @@ def assert_unique_ids(root: BaseNode) -> None:
     """
     seen: set[str] = set()
     for node in root.walk():
-        if isinstance(node, RefNode):
+        node_id = getattr(node, "id", None)
+        if node_id is None:  # path-based stubs are pointers, not nodes
             continue
-        if node.id in seen:
-            raise ValueError(f"duplicate node id {node.id!r} in document")
-        seen.add(node.id)
+        if node_id in seen:
+            raise ValueError(f"duplicate node id {node_id!r} in document")
+        seen.add(node_id)
+
+
+def _rewrite_attr_refs(value: JsonValue, rename: dict[str, str]) -> JsonValue:
+    """Rewrite intra-document `{"id": <old>}` references in an attribute value.
+
+    Walks the JSON structure; any object carrying an `id` whose value was
+    renamed during inlining (i.e. it points at a node in `rename`) is updated to
+    the new id. Ids that are not node ids (e.g. coordinate-system definitions)
+    are absent from `rename` and left untouched.
+
+    Args:
+        value: A JSON value drawn from a node's `attributes`.
+        rename: Map of original node id -> namespaced id for the same document.
+
+    Returns:
+        The value with matching id references rewritten (a new structure).
+    """
+    if isinstance(value, dict):
+        new = {k: _rewrite_attr_refs(v, rename) for k, v in value.items()}
+        ref_id = new.get("id")
+        if isinstance(ref_id, str) and ref_id in rename:
+            new["id"] = rename[ref_id]
+        return new
+    if isinstance(value, list):
+        return [_rewrite_attr_refs(v, rename) for v in value]
+    return value
+
+
+def _occurrence_token(index_path: tuple[int, ...]) -> str:
+    """Return a deterministic 8-hex token for a document occurrence.
+
+    Seeded with the occurrence's child-index path from the root, so re-inlining
+    the same source yields the same token (reproducible), while the same document
+    inlined at two positions gets two distinct tokens.
+
+    Args:
+        index_path: The chain of child indices from the root to the boundary node
+            where this document occurrence begins.
+
+    Returns:
+        An 8-character hex token (32 bits).
+    """
+    seed = ".".join(str(i) for i in index_path)
+    return hashlib.blake2b(seed.encode(), digest_size=4).hexdigest()
+
+
+def namespace_ids(root: InlinedNode | RefNode) -> InlinedNode | RefNode:
+    """Make node ids globally unique as `<origin_id>-<occurrence_token>`.
+
+    Inlining merges several documents whose ids are only unique per source. Each
+    inlined document occurrence gets a short deterministic token from its
+    position in the tree (see `_occurrence_token`); a node's id becomes
+    `<origin_id>-<token>` (e.g. `image_inner-a1f3`, `image_0-a1f3`). The entry
+    document keeps **bare** ids (e.g. `root`). Each node keeps its real id in
+    `_origin_id` so `ref()` still yields a correct on-disk locator, and
+    intra-document attribute references (`{"id": ...}`) are rewritten to the new
+    ids per occurrence (so a doc inlined twice stays distinct). Path-based
+    `RefNode` stubs carry no id and are passed through untouched.
+
+    Args:
+        root: The inlined tree to namespace.
+
+    Returns:
+        A new inlined tree with namespaced ids and rewritten attribute refs.
+    """
+    renames: dict[int, str] = {}
+    origins: dict[int, str] = {}
+    node_region: dict[int, int] = {}
+    region_maps: dict[int, dict[str, str]] = {}
+
+    def assign(
+        node: BaseNode,
+        index_path: tuple[int, ...],
+        parent_doc: "MetadataDocument | None",
+        region: int,
+        token: str,
+    ) -> None:
+        orig = getattr(node, "id", None)
+        if orig is None:
+            return  # id-less pointer (unresolved document stub)
+        # A node whose document differs from its parent's begins a new document
+        # occurrence: its own id namespace for attribute refs, and one shared
+        # token. The entry document (no parent) keeps bare ids.
+        if node._document is not parent_doc or region not in region_maps:
+            region = id(node)
+            region_maps.setdefault(region, {})
+            token = "" if parent_doc is None else _occurrence_token(index_path)
+        new_id = orig if not token else f"{orig}-{token}"
+        renames[id(node)] = new_id
+        origins[id(node)] = orig
+        node_region[id(node)] = region
+        region_maps[region][orig] = new_id
+        for i, child in enumerate(getattr(node, "nodes", ()) or ()):
+            assign(child, (*index_path, i), node._document, region, token)
+
+    assign(root, (), None, 0, "")
+
+    def rebuild(node: BaseNode) -> BaseNode:
+        if getattr(node, "id", None) is None:
+            return node  # id-less pointer, left untouched
+        rename = region_maps[node_region[id(node)]]
+        new_attrs = cast(
+            "dict[str, JsonValue]", _rewrite_attr_refs(node.attributes, rename)
+        )
+        update: dict[str, Any] = {
+            "id": renames[id(node)],
+            "attributes": new_attrs,
+        }
+        children = getattr(node, "nodes", None)
+        if children is not None:  # not a leaf stub
+            update["nodes"] = tuple(rebuild(c) for c in children)
+        new = node.model_copy(update=update)
+        _set_private(new, "_origin_id", origins[id(node)])
+        return new
+
+    return cast("InlinedNode | RefNode", rebuild(root))
 
 
 AnyNode = Annotated[SerializeAsAny[Node | RefNode], PlainValidator(build_any_node)]

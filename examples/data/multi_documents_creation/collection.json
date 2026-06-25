@@ -6,7 +6,7 @@
     "nodes": [
       {
         "type": "multiscale",
-        "id": "image",
+        "name": "image",
         "path": {
           "type": "zarr",
           "path": "./image.zarr"
@@ -14,7 +14,7 @@
       },
       {
         "type": "multiscale",
-        "id": "labels",
+        "name": "labels",
         "path": {
           "type": "zarr",
           "path": "./labels.zarr"

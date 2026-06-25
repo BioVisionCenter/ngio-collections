@@ -3,7 +3,6 @@
     "ome": {
       "version": "0.x",
       "type": "multiscale",
-      "id": "labels",
       "name": "labels",
       "attributes": {
         "coordinateSystems": [
@@ -24,10 +23,10 @@
           }
         ]
       },
+      "id": "labels",
       "nodes": [
         {
           "type": "singlescale",
-          "id": "labels_0",
           "attributes": {
             "coordinateTransformations": [
               {
@@ -45,6 +44,7 @@
               }
             ]
           },
+          "id": "labels_0",
           "path": {
             "type": "zarr",
             "path": "./0"
@@ -52,7 +52,6 @@
         },
         {
           "type": "singlescale",
-          "id": "labels_1",
           "attributes": {
             "coordinateTransformations": [
               {
@@ -70,6 +69,7 @@
               }
             ]
           },
+          "id": "labels_1",
           "path": {
             "type": "zarr",
             "path": "./1"
