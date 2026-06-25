@@ -9,7 +9,7 @@ attribute references to match.
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from pydantic import JsonValue
 
@@ -18,7 +18,7 @@ from ngio_collections.models._nodes import (
     BaseNode,
     InlinedNode,
     RefNode,
-    set_private,
+    construct_node,
 )
 
 if TYPE_CHECKING:
@@ -126,15 +126,18 @@ def namespace_ids(root: InlinedNode | RefNode) -> InlinedNode | RefNode:
         new_attrs = cast(
             "dict[str, JsonValue]", rewrite_attr_refs(node.attributes, rename)
         )
-        update: dict[str, Any] = {
-            "id": renames[id(node)],
-            "attributes": new_attrs,
-        }
-        children = getattr(node, "nodes", None)
-        if children is not None:  # not a leaf stub
-            update["nodes"] = tuple(rebuild(c) for c in children)
-        new = node.model_copy(update=update)
-        set_private(new, "_origin_id", origins[id(node)])
-        return new
+        # perf: `node` is an already-validated inlined node; rebuild it by
+        # copying its field dict and overriding only what namespacing changes
+        # (`id`, ref-rewritten `attributes`, and recursively its `nodes`),
+        # bypassing `model_copy`'s deep-copy + re-validation machinery. See
+        # `construct_node`.
+        fields = dict(node.__dict__)
+        fields["id"] = renames[id(node)]
+        fields["attributes"] = new_attrs
+        if fields.get("nodes") is not None:  # not a leaf stub
+            fields["nodes"] = tuple(rebuild(c) for c in fields["nodes"])
+        private = dict(node.__pydantic_private__ or {})
+        private["_origin_id"] = origins[id(node)]
+        return construct_node(type(node), fields, private)
 
     return cast("InlinedNode | RefNode", rebuild(root))

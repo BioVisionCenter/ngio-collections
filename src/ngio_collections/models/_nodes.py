@@ -127,6 +127,43 @@ def set_private(node: BaseNode, name: str, value: Any) -> None:
     private[name] = value
 
 
+def construct_node(
+    cls: type[BaseNode], fields: dict[str, Any], private: dict[str, Any]
+) -> BaseNode:
+    """Instantiate a frozen node from already-validated values, skipping validation.
+
+    perf: the read path (`open_inlined`) rebuilds every node twice — once to
+    mirror an editable `Node` into an `InlinedNode`, once to namespace ids — and
+    both inputs are values Pydantic has *already* validated. Re-validating them
+    (`cls(**data)`, ~2.9 us/node) or `model_construct` (slower still, it fills
+    defaults) is pure overhead; copying the field dict straight into a fresh
+    instance is ~5x faster and saved ~0.7 s/run on the read benchmark (see
+    `benchmarks/README.md`).
+
+    This reaches into Pydantic v2 model internals (`__dict__`,
+    `__pydantic_fields_set__`, `__pydantic_extra__`, `__pydantic_private__`),
+    which is why the dependency is pinned `<3.0`. **Only** use it with trusted,
+    already-validated field values produced by another node — never for parsing
+    external input (that path must go through `build_node` / validation).
+
+    Args:
+        cls: The concrete node class to instantiate.
+        fields: The complete set of model field values for the new node (every
+            field `cls` declares; values are stored verbatim, not validated).
+        private: The `PrivateAttr` values to carry (e.g. `_document`,
+            `_origin_id`); copied, so the caller's mapping is not aliased.
+
+    Returns:
+        A new frozen instance of `cls` populated from `fields` / `private`.
+    """
+    obj = cls.__new__(cls)
+    object.__setattr__(obj, "__dict__", dict(fields))
+    object.__setattr__(obj, "__pydantic_fields_set__", set(fields))
+    object.__setattr__(obj, "__pydantic_extra__", None)
+    object.__setattr__(obj, "__pydantic_private__", dict(private))
+    return obj
+
+
 class BaseNode(NodeObj):
     """Common fields, navigation, and functional edits for every node.
 

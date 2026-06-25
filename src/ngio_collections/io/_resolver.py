@@ -18,7 +18,6 @@ a node from its on-disk document, unlinking the file only when it is left empty.
 
 from __future__ import annotations
 
-import json
 from typing import Literal, cast, overload
 
 from ngio_collections.treeops import (
@@ -26,6 +25,7 @@ from ngio_collections.treeops import (
     build_inlined,
     namespace_ids,
 )
+from ngio_collections.io import _json
 from ngio_collections.io._document import MetadataDocument
 from ngio_collections.io._serialize import (
     _assign_document,
@@ -79,7 +79,7 @@ class Resolver:
             return self._cache[url]
         doc_class = _classify_url(url)
         payload = await self.store.get(url=url)
-        doc = doc_class(content=json.loads(payload), store=self.store, url=url)
+        doc = doc_class(content=_json.loads(payload), store=self.store, url=url)
         self._cache[url] = doc
         return doc
 
@@ -488,7 +488,7 @@ class Resolver:
             content: Full document dict to serialise as JSON.
         """
         store = self._writable_store()
-        await store.put(url, json.dumps(content, indent=2).encode())
+        await store.put(url, _json.dumps(content))
         cached = self._cache.get(url)
         if cached is not None:
             cached.content = content
