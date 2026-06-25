@@ -40,8 +40,8 @@ def main() -> None:
     print("with other:", list(root.find(id="image").attributes))
     print("dropped:   ", list(edited.find(id="image").attributes))
 
-    # Typed delete: drop_attr() removes the key the model maps to.
-    no_plate = root.drop_attr(id="image", attr=ngc.PlateAttribute)
+    # Typed delete: drop_attrs() keys accept attribute classes or raw strings.
+    no_plate = root.drop_attrs(id="image", keys=(ngc.PlateAttribute,))
     print("plate present:", ngc.PlateAttribute in no_plate.find(id="image"))
 
 

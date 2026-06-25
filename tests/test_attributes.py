@@ -1,5 +1,5 @@
 """Typed attribute access on nodes: subscript reads, membership, and the
-functional `set_attr` / `drop_attr` writes that return a new tree.
+functional `set_attr` / `drop_attrs` writes that return a new tree.
 
 The raw `attributes` dict stays the source of truth; typed models are a
 validating view layered on top, and every write is immutable (returns a new
@@ -63,12 +63,21 @@ def test_membership_and_getitem_missing():
         _ = img[ngc.PlateAttribute]
 
 
-def test_drop_attr_removes_key():
+def test_drop_attrs_by_attribute_type():
     root = _tree().set_attr(id="img", value=_plate())
-    dropped = root.drop_attr(id="img", attr=ngc.PlateAttribute)
+    dropped = root.drop_attrs(id="img", keys=(ngc.PlateAttribute,))
 
     assert ngc.PlateAttribute in root.find(id="img")  # original kept
     assert ngc.PlateAttribute not in dropped.find(id="img")
+
+
+def test_drop_attrs_mixes_strings_and_attribute_types():
+    root = _tree().set_attr(id="img", value=_plate())
+    root = root.set_attrs(id="img", values={"other": {"tag": "x"}})
+
+    dropped = root.drop_attrs(id="img", keys=("other", ngc.PlateAttribute))
+
+    assert dropped.find(id="img").attributes == {}
 
 
 def test_set_attr_stores_spec_shaped_raw_dict():

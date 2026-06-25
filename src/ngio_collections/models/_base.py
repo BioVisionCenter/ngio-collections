@@ -456,22 +456,27 @@ class BaseNode(NodeObj):
             ),
         )
 
-    def drop_attrs(self, *, id: str, keys: Sequence[str]) -> Self:
+    def drop_attrs(
+        self, *, id: str, keys: Sequence[str | type[AnyAttribute]]
+    ) -> Self:
         """Remove `keys` from the `attributes` of node `id`.
 
         Args:
             id: The id of the node whose attributes should be modified.
-            keys: Attribute keys to remove (unknown keys are silently ignored).
+            keys: Attribute keys to remove, each either a raw string key or an
+                attribute model class (whose `key` supplies the string). Unknown
+                keys are silently ignored.
 
         Returns:
             A new root with the specified attribute keys removed.
         """
+        names = {k if isinstance(k, str) else k.key for k in keys}
         return self.update(
             id=id,
             fn=lambda n: n.model_copy(
                 update={
                     "attributes": {
-                        k: v for k, v in n.attributes.items() if k not in keys
+                        k: v for k, v in n.attributes.items() if k not in names
                     }
                 }
             ),
@@ -522,18 +527,6 @@ class BaseNode(NodeObj):
                 update={"attributes": {**n.attributes, attr.key: payload}}
             ),
         )
-
-    def drop_attr(self, *, id: str, attr: type[AnyAttribute]) -> Self:
-        """Remove the attribute `attr` maps to from node `id`.
-
-        Args:
-            id: The id of the node whose attribute should be removed.
-            attr: The attribute model class whose `key` to drop.
-
-        Returns:
-            A new root with the attribute removed (a no-op if absent).
-        """
-        return self.drop_attrs(id=id, keys=(attr.key,))
 
     def rename(self, *, id: str, name: str | None) -> Self:
         """Set the `name` of node `id`.
