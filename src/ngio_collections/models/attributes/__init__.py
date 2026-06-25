@@ -1,11 +1,12 @@
 """Typed attribute models and the attribute base classes.
 
 The base infra (`BaseAttribute`, `BaseListAttribute`, `AnyAttribute`) lives in
-`models._base` next to `BaseNode`, which references it for typed reads; it is
-re-exported here so consumers have a single attribute import surface.
+`_base` (a leaf depending only on `models._config`); `models._nodes` imports it
+for `BaseNode`'s typed reads. It is re-exported here so consumers have a single
+attribute import surface.
 """
 
-from ngio_collections.models._base import (
+from ngio_collections.models.attributes._base import (
     AnyAttribute,
     AttributeType,
     BaseAttribute,

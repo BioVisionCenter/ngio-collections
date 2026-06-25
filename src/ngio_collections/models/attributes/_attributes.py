@@ -6,11 +6,9 @@ from typing import Annotated, ClassVar
 
 from pydantic import Field
 
-from ngio_collections.models._base import (
-    BaseAttribute,
-    BaseObj,
-    ReferenceObj,
-)
+from ngio_collections.models._config import BaseObj
+from ngio_collections.models._references import ReferenceObj
+from ngio_collections.models.attributes._base import BaseAttribute
 
 RgbaColor = Annotated[
     list[Annotated[int, Field(ge=0, le=255)]],

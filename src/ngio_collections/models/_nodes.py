@@ -22,123 +22,56 @@ A `ReferenceObj` is the portable `{id, type?, path?}` pointer `node.ref()` retur
 `add_ref` turns one into an in-tree stub. The write verbs (`create` / `save` /
 `save_inlined`) return the richer typed `RefNode` stub (via `stub_to`) so a
 reference can be decorated before it is attached.
+
+This module is the cohesive node core: the classes carry their immutable edit
+API, the spine-rebuild helpers they call, and the registry-driven construction
+factories. The factories and the recursive `AnyNode` validator are welded to the
+classes by Pydantic's `model_rebuild` cycle, so they stay co-located. The
+higher-order tree algorithms (inlining, namespacing, attribute-ref rewriting)
+live in the `treeops` layer.
 """
 
 from __future__ import annotations
 
-import hashlib
-from enum import StrEnum
 from collections.abc import Sequence
 from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
     Callable,
-    ClassVar,
     Generator,
     Literal,
     Self,
-    TypeVar,
     cast,
 )
 
 from pydantic import (
-    BaseModel,
-    ConfigDict,
     Field,
     JsonValue,
     PlainValidator,
     PrivateAttr,
-    RootModel,
     SerializeAsAny,
 )
-from pydantic.alias_generators import to_camel
 
-from ngio_collections.models._paths import (
-    JsonPath,
-    PathObj,
-    ZarrPath,
-    relativize as _relativize_path_str,
-)
+from ngio_collections.models._config import NodeObj, NodeState, NodeStateError
+from ngio_collections.models._paths import JsonPath, PathObj, ZarrPath
+from ngio_collections.models._references import IdStr, ReferenceObj
 from ngio_collections.models._registry import NodeRegistry, NodeTypes
+from ngio_collections.models.attributes._base import (
+    AnyAttribute,
+    AttributeType,
+    _AttributeKey,
+)
 
 if TYPE_CHECKING:
-    from ngio_collections._document import MetadataDocument
-
-
-class BaseObj(BaseModel):
-    """Frozen, camelCase-aliased base for non-node OME objects (paths, refs).
-
-    `extra="allow"` round-trips unknown / custom keys. Nodes do *not* use this
-    base — see `NodeObj`.
-    """
-
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        extra="allow",
-        frozen=True,
-    )
-
-
-class NodeObj(BaseModel):
-    """Frozen, camelCase-aliased base for the node hierarchy and node mixins.
-
-    Identical to `BaseObj` except `extra="forbid"`: a node's structural fields
-    are a closed set, so unknown node-level keys are rejected rather than
-    silently kept. Arbitrary / custom metadata belongs in a node's `attributes`
-    dict (which stays open). Consumers declaring a custom node type build their
-    field mixin on this base so the derived variants stay strict.
-    """
-
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        extra="forbid",
-        frozen=True,
-    )
-
-
-class NodeStateError(ValueError):
-    """A node is in the wrong state for the requested operation.
-
-    Subclasses `ValueError` so callers can keep catching `ValueError`. The
-    message points to the API that fits the node's actual state.
-    """
-
-
-class NodeState(StrEnum):
-    """How a node relates to on-disk storage (see :attr:`BaseNode.state`)."""
-
-    DETACHED = "detached"  # in memory only, no backing document
-    DOCUMENT = "document"  # backed by a document (root or descendant)
-
-
-# --- paths -----------------------------------------------------------------
-
-# Path mechanics (resolve / relativize / the DocPath value type) live in the
-# pure `_paths` module; re-exported here so the public names stay put.
+    from ngio_collections.io._document import MetadataDocument
 
 
 # --- references ------------------------------------------------------------
 
-ID_PATTERN = r"^[a-zA-Z0-9\-_.]+$"
-
-IdStr = Annotated[str, Field(pattern=ID_PATTERN)]
-
-
-class ReferenceObj(BaseObj):
-    """A portable pointer to a node that exists on disk.
-
-    Not a node itself: it carries no attributes and no type — locating the node
-    is its whole job. Resolved by loading the document at `path` and finding the
-    node whose `id` matches inside it (the resolved node carries the type). A
-    `None` path means a reference within the *same* document (resolve `id`
-    locally).
-    """
-
-    id: IdStr
-    path: PathObj | None = None
+# `ReferenceObj` and the id primitives are pure value types (see `_references`).
+# The functions that mint references from a document need the node registry, so
+# they live here, next to the node classes.
 
 
 def reference_to(id: str, document: MetadataDocument) -> ReferenceObj:
@@ -178,41 +111,10 @@ def stub_to(node: BaseNode, document: MetadataDocument) -> RefNode:
     )
 
 
-# --- attributes ------------------------------------------------------------
-
-
-class _AttributeKey:
-    """Mixin declaring the `attributes` dict key an attribute model maps to."""
-
-    key: ClassVar[str]
-
-    @classmethod
-    def name_space(cls) -> str | None:
-        """Return the `key`'s namespace prefix (before `:`), or `None`."""
-        if ":" in cls.key:
-            return cls.key.split(":")[0]
-        return None
-
-
-class BaseAttribute(_AttributeKey, BaseObj):
-    """Attribute whose value is a JSON object (e.g. `plate`, `well`)."""
-
-
-ItemType = TypeVar("ItemType")
-
-
-class BaseListAttribute(_AttributeKey, RootModel[list[ItemType]]):
-    """Attribute whose value is a JSON array (e.g. `coordinateSystems`)."""
-
-
-AnyAttribute = BaseAttribute | BaseListAttribute
-AttributeType = TypeVar("AttributeType", bound=AnyAttribute)
-
-
 # --- nodes -----------------------------------------------------------------
 
 
-def _set_private(node: BaseNode, name: str, value: Any) -> None:
+def set_private(node: BaseNode, name: str, value: Any) -> None:
     """Set a private attr on a frozen node (provenance plumbing only).
 
     Args:
@@ -390,7 +292,7 @@ class BaseNode(NodeObj):
         Raises:
             KeyError: If no node with `id` exists in the tree.
         """
-        new, found = _rebuild(self, id, fn)
+        new, found = rebuild(self, id, fn)
         if not found:
             raise KeyError(f"no node with id {id!r} in this tree")
         return cast("Self", new)
@@ -581,7 +483,7 @@ class BaseNode(NodeObj):
         Raises:
             KeyError: If no node with `id` exists in the tree.
         """
-        new, found = _remove(self, id)
+        new, found = remove(self, id)
         if not found:
             raise KeyError(f"no node with id {id!r} in this tree")
         return cast("Self", new)
@@ -624,8 +526,8 @@ class RefNode(BaseNode):
 
 # Concrete built-in families (collection / multiscale / singlescale) live in
 # their own modules (`_collection`, `_multiscale`, `_singlescale`) and are wired
-# into `DEFAULT_REGISTRY` by `_builtins`. This module keeps only the generic
-# bases and the registry-driven factories below.
+# into `DEFAULT_REGISTRY` by `_builtins`. This module keeps only the
+# generic bases and the registry-driven factories below.
 
 
 # --- inlined (read-only) hierarchy -----------------------------------------
@@ -648,7 +550,7 @@ class InlinedNode(BaseNode):
 # --- spine-rebuild helpers (functional) ------------------------------------
 
 
-def _rebuild(
+def rebuild(
     node: BaseNode, id: str, fn: Callable[[BaseNode], BaseNode]
 ) -> tuple[BaseNode, bool]:
     """Apply `fn` to the node with `id`, rebuilding the spine bottom-up.
@@ -672,7 +574,7 @@ def _rebuild(
         if found:
             new_children.append(child)
             continue
-        rebuilt, hit = _rebuild(child, id, fn)
+        rebuilt, hit = rebuild(child, id, fn)
         found = found or hit
         new_children.append(rebuilt)
     if not found:
@@ -680,7 +582,7 @@ def _rebuild(
     return node.model_copy(update={"nodes": tuple(new_children)}), True
 
 
-def _remove(node: BaseNode, id: str) -> tuple[BaseNode, bool]:
+def remove(node: BaseNode, id: str) -> tuple[BaseNode, bool]:
     """Remove the node with `id` from `node`'s children.
 
     Args:
@@ -702,47 +604,12 @@ def _remove(node: BaseNode, id: str) -> tuple[BaseNode, bool]:
         if found:
             new_children.append(child)
             continue
-        rebuilt, hit = _remove(child, id)
+        rebuilt, hit = remove(child, id)
         found = found or hit
         new_children.append(rebuilt)
     if not found:
         return node, False
     return node.model_copy(update={"nodes": tuple(new_children)}), True
-
-
-# --- references -> stubs ---------------------------------------------------
-
-
-def _relativize_attr_refs(value: JsonValue, base_url: str | None) -> JsonValue:
-    """Relativize every embedded path object in an attribute value.
-
-    Walks the JSON structure; any dict carrying the `DocPath` shape
-    (`{"type": "zarr"|"json", "path": <str>}`) has its `path` relativized against
-    `base_url` (best-effort, via `_paths.relativize`). This rewrites references
-    nested at any depth — e.g. `LabelsAttribute.source[*].path`,
-    `WellAttribute.column.path`, `AcquisitionAttribute.path` — while leaving
-    plain `path` strings (e.g. `ScaleTransformation.path`) untouched, since the
-    match is on the path-object *shape*, not the key name.
-
-    Args:
-        value: A JSON value drawn from a node's `attributes`.
-        base_url: The owning document's `url` (the relativization base).
-
-    Returns:
-        The value with matching path objects relativized (a new structure).
-    """
-    if isinstance(value, dict):
-        if value.get("type") in ("zarr", "json") and isinstance(
-            value.get("path"), str
-        ):
-            return {
-                **value,
-                "path": _relativize_path_str(cast("str", value["path"]), base_url),
-            }
-        return {k: _relativize_attr_refs(v, base_url) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_relativize_attr_refs(v, base_url) for v in value]
-    return value
 
 
 # --- construction (graceful fallback to a generic node) --------------------
@@ -772,7 +639,7 @@ def _find_type_path(value: Any) -> tuple[str | None, bool]:
 
 # The default registry starts empty; `_builtins.register_builtins` wires in the
 # collection / multiscale / singlescale families (called once from the package
-# `__init__`). Third-party types register through `register_family` below.
+# composition root). Third-party types register through `register_family`.
 DEFAULT_REGISTRY = NodeRegistry(Node, RefNode, InlinedNode)
 
 
@@ -865,170 +732,6 @@ def _build_inlined_child(value: Any) -> InlinedNode | RefNode:
         return build_ref_node(value)
     data = value if isinstance(value, dict) else value.model_dump()
     return DEFAULT_REGISTRY.get_inlined(node_type or "")(**data)
-
-
-def build_inlined(
-    source: BaseNode, children: tuple[InlinedNode | RefNode, ...]
-) -> InlinedNode:
-    """Build the `InlinedNode` mirror of an editable `source` node.
-
-    Copies `source`'s identity and attributes, attaches the already-resolved
-    `children`, and stamps the source's `_document` so `ref()` works on the
-    result.
-
-    Args:
-        source: The editable `Node` being inlined.
-        children: The resolved children (inlined nodes and/or leftover stubs).
-
-    Returns:
-        A typed `InlinedNode` mirroring `source`.
-    """
-    data = source.model_dump(exclude={"nodes", "path"})
-    cls = DEFAULT_REGISTRY.get_inlined(source.type or "")
-    inlined = cls(**data, nodes=children)
-    _set_private(inlined, "_document", source._document)
-    return inlined
-
-
-def assert_unique_ids(root: BaseNode) -> None:
-    """Assert that every node id in the tree is unique.
-
-    Node ids MUST be unique across the inlined (single-document) tree.
-    Inlining merges several source documents into one, where ids are only unique
-    per source — so collisions surface here. Unresolved `RefNode` stubs are
-    pointers, not materialized nodes (a stub left at a cycle necessarily shares
-    an ancestor's id), so they are not counted.
-
-    Args:
-        root: The root of the tree to validate.
-
-    Raises:
-        ValueError: If any materialized node id appears more than once.
-    """
-    seen: set[str] = set()
-    for node in root.walk():
-        node_id = getattr(node, "id", None)
-        if node_id is None:  # path-based stubs are pointers, not nodes
-            continue
-        if node_id in seen:
-            raise ValueError(f"duplicate node id {node_id!r} in document")
-        seen.add(node_id)
-
-
-def _rewrite_attr_refs(value: JsonValue, rename: dict[str, str]) -> JsonValue:
-    """Rewrite intra-document `{"id": <old>}` references in an attribute value.
-
-    Walks the JSON structure; any object carrying an `id` whose value was
-    renamed during inlining (i.e. it points at a node in `rename`) is updated to
-    the new id. Ids that are not node ids (e.g. coordinate-system definitions)
-    are absent from `rename` and left untouched.
-
-    Args:
-        value: A JSON value drawn from a node's `attributes`.
-        rename: Map of original node id -> namespaced id for the same document.
-
-    Returns:
-        The value with matching id references rewritten (a new structure).
-    """
-    if isinstance(value, dict):
-        new = {k: _rewrite_attr_refs(v, rename) for k, v in value.items()}
-        ref_id = new.get("id")
-        if isinstance(ref_id, str) and ref_id in rename:
-            new["id"] = rename[ref_id]
-        return new
-    if isinstance(value, list):
-        return [_rewrite_attr_refs(v, rename) for v in value]
-    return value
-
-
-def _occurrence_token(index_path: tuple[int, ...]) -> str:
-    """Return a deterministic 8-hex token for a document occurrence.
-
-    Seeded with the occurrence's child-index path from the root, so re-inlining
-    the same source yields the same token (reproducible), while the same document
-    inlined at two positions gets two distinct tokens.
-
-    Args:
-        index_path: The chain of child indices from the root to the boundary node
-            where this document occurrence begins.
-
-    Returns:
-        An 8-character hex token (32 bits).
-    """
-    seed = ".".join(str(i) for i in index_path)
-    return hashlib.blake2b(seed.encode(), digest_size=4).hexdigest()
-
-
-def namespace_ids(root: InlinedNode | RefNode) -> InlinedNode | RefNode:
-    """Make node ids globally unique as `<origin_id>-<occurrence_token>`.
-
-    Inlining merges several documents whose ids are only unique per source. Each
-    inlined document occurrence gets a short deterministic token from its
-    position in the tree (see `_occurrence_token`); a node's id becomes
-    `<origin_id>-<token>` (e.g. `image_inner-a1f3`, `image_0-a1f3`). The entry
-    document keeps **bare** ids (e.g. `root`). Each node keeps its real id in
-    `_origin_id` so `ref()` still yields a correct on-disk locator, and
-    intra-document attribute references (`{"id": ...}`) are rewritten to the new
-    ids per occurrence (so a doc inlined twice stays distinct). Path-based
-    `RefNode` stubs carry no id and are passed through untouched.
-
-    Args:
-        root: The inlined tree to namespace.
-
-    Returns:
-        A new inlined tree with namespaced ids and rewritten attribute refs.
-    """
-    renames: dict[int, str] = {}
-    origins: dict[int, str] = {}
-    node_region: dict[int, int] = {}
-    region_maps: dict[int, dict[str, str]] = {}
-
-    def assign(
-        node: BaseNode,
-        index_path: tuple[int, ...],
-        parent_doc: "MetadataDocument | None",
-        region: int,
-        token: str,
-    ) -> None:
-        orig = getattr(node, "id", None)
-        if orig is None:
-            return  # id-less pointer (unresolved document stub)
-        # A node whose document differs from its parent's begins a new document
-        # occurrence: its own id namespace for attribute refs, and one shared
-        # token. The entry document (no parent) keeps bare ids.
-        if node._document is not parent_doc or region not in region_maps:
-            region = id(node)
-            region_maps.setdefault(region, {})
-            token = "" if parent_doc is None else _occurrence_token(index_path)
-        new_id = orig if not token else f"{orig}-{token}"
-        renames[id(node)] = new_id
-        origins[id(node)] = orig
-        node_region[id(node)] = region
-        region_maps[region][orig] = new_id
-        for i, child in enumerate(getattr(node, "nodes", ()) or ()):
-            assign(child, (*index_path, i), node._document, region, token)
-
-    assign(root, (), None, 0, "")
-
-    def rebuild(node: BaseNode) -> BaseNode:
-        if getattr(node, "id", None) is None:
-            return node  # id-less pointer, left untouched
-        rename = region_maps[node_region[id(node)]]
-        new_attrs = cast(
-            "dict[str, JsonValue]", _rewrite_attr_refs(node.attributes, rename)
-        )
-        update: dict[str, Any] = {
-            "id": renames[id(node)],
-            "attributes": new_attrs,
-        }
-        children = getattr(node, "nodes", None)
-        if children is not None:  # not a leaf stub
-            update["nodes"] = tuple(rebuild(c) for c in children)
-        new = node.model_copy(update=update)
-        _set_private(new, "_origin_id", origins[id(node)])
-        return new
-
-    return cast("InlinedNode | RefNode", rebuild(root))
 
 
 AnyNode = Annotated[SerializeAsAny[Node | RefNode], PlainValidator(build_any_node)]

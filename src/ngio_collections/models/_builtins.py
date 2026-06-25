@@ -1,13 +1,14 @@
-"""Composition root: wire the built-in node families into a registry.
+"""Registry wiring for the built-in node families.
 
-Kept separate from the per-type modules (which stay pure class definitions) and
-from `_base` (which would import them circularly). `models.__init__` calls
-`register_builtins()` once at package import.
+Pairs with `register_family` (in `_nodes`): populates a registry with the
+collection / multiscale / singlescale families. Kept in its own module — apart
+from the per-type modules (which stay pure class definitions) and from `_nodes`
+(which would import them circularly). The package composition root
+(`ngio_collections.__init__`) calls `register_builtins()` once at import.
 """
 
 from __future__ import annotations
 
-from ngio_collections.models._base import DEFAULT_REGISTRY
 from ngio_collections.models._collection import (
     CollectionNode,
     InlinedCollectionNode,
@@ -18,6 +19,7 @@ from ngio_collections.models._multiscale import (
     MultiscaleNode,
     RefMultiscaleNode,
 )
+from ngio_collections.models._nodes import DEFAULT_REGISTRY
 from ngio_collections.models._registry import NodeRegistry
 from ngio_collections.models._singlescale import RefSinglescaleNode
 

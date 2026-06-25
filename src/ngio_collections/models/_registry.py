@@ -6,11 +6,11 @@ classes under one `type` key. Unregistered keys — and registered keys missing 
 given variant — fall back to the generic base passed at construction, per the
 RFC's graceful-degradation rules.
 
-The registry is a plain object, not a singleton. `models._base` builds the
+The registry is a plain object, not a singleton. `models._nodes` builds the
 module-level `DEFAULT_REGISTRY` with the built-in types; the node factories read
 it directly, so registering a new type makes it parse everywhere with no further
 wiring. The fallback base classes are injected at construction, so this module
-needs no runtime imports from `_base` (avoiding a circular import).
+needs no runtime imports from `_nodes` (avoiding a circular import).
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple, cast
 
 if TYPE_CHECKING:
-    from ngio_collections.models._base import InlinedNode, Node, RefNode
+    from ngio_collections.models._nodes import InlinedNode, Node, RefNode
 
 
 class NodeTypes(NamedTuple):

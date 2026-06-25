@@ -1,32 +1,26 @@
 """Pure model layer: frozen nodes, paths, references, and the edit engine.
 
-This subpackage re-exports the model types that make up the public API. The node
-constructors and `_document` plumbing stay internal to
-``ngio_collections.models._base``; the built-in node families live in their own
-``_collection`` / ``_multiscale`` / ``_singlescale`` modules and are wired into
-``DEFAULT_REGISTRY`` here via ``register_builtins``.
+This subpackage re-exports the model types that make up the public API. The
+cohesive node core (classes, edit API, and registry-driven construction
+factories) lives in ``ngio_collections.models._nodes``; the built-in node
+families live in their own ``_collection`` / ``_multiscale`` / ``_singlescale``
+modules and are wired into ``DEFAULT_REGISTRY`` by ``_builtins.register_builtins``
+at the package composition root.
 """
 
-from ngio_collections.models._base import (
+from ngio_collections.models._config import NodeObj, NodeState, NodeStateError
+from ngio_collections.models._nodes import (
     DEFAULT_REGISTRY,
     AnyInlinedNode,
     AnyNode,
     BaseNode,
-    IdStr,
     InlinedNode,
-    JsonPath,
     Node,
-    NodeObj,
-    NodeState,
-    NodeStateError,
-    PathObj,
     RefNode,
-    ReferenceObj,
-    ZarrPath,
     register_family,
 )
-from ngio_collections.models._paths import DocPath
-from ngio_collections.models._builtins import register_builtins
+from ngio_collections.models._paths import DocPath, JsonPath, PathObj, ZarrPath
+from ngio_collections.models._references import IdStr, ReferenceObj
 from ngio_collections.models.attributes import (
     AcquisitionAttribute,
     AcquisitionObj,
@@ -78,8 +72,6 @@ from ngio_collections.models._singlescale import (
     RefSinglescaleNode,
     SinglescaleType,
 )
-
-register_builtins()
 
 __all__ = [
     "DEFAULT_REGISTRY",

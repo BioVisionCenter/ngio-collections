@@ -19,9 +19,9 @@ import asyncio
 import threading
 from typing import Any, Coroutine, Literal, TypeVar
 
-from ngio_collections._resolver import Resolver
+from ngio_collections.io._resolver import Resolver
+from ngio_collections.io.store import LocalStore, ReadableStore
 from ngio_collections.models import BaseNode, InlinedNode, Node, RefNode
-from ngio_collections.store import LocalStore, ReadableStore
 
 T = TypeVar("T")
 

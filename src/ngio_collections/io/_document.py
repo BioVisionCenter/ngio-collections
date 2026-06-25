@@ -9,7 +9,7 @@ preserving every sibling key so an unedited round-trip is byte-identical.
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from ngio_collections.store import ReadableStore
+from ngio_collections.io.store import ReadableStore
 
 # The models are not versioned: there is exactly one OME payload version, stamped
 # on every document written by Resolver.create.

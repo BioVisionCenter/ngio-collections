@@ -15,8 +15,8 @@ annotate, and compose trees. Node constructors and the document layer are
 internal (reachable via the private modules if needed).
 """
 
-from ngio_collections._resolver import Resolver
-from ngio_collections._sync import (
+from ngio_collections.io import (
+    Resolver,
     create,
     delete,
     open,
@@ -87,13 +87,18 @@ from ngio_collections.models import (
     ZarrPath,
     register_family,
 )
-from ngio_collections.store import (
+from ngio_collections.io.store import (
     FsspecStore,
     LocalStore,
     ReadableStore,
     StoreReadOnlyError,
     WritableStore,
 )
+from ngio_collections.models._builtins import register_builtins
+
+# Composition root: populate DEFAULT_REGISTRY with the built-in node families
+# once, here, rather than as an import side-effect of the model layer.
+register_builtins()
 
 __all__ = [
     "DEFAULT_REGISTRY",

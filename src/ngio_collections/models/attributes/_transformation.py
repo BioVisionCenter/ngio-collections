@@ -17,7 +17,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Discriminator, Tag
 
-from ngio_collections.models._base import BaseObj, ReferenceObj
+from ngio_collections.models._config import BaseObj
+from ngio_collections.models._references import ReferenceObj
 
 
 class _TransformationBase(BaseObj):

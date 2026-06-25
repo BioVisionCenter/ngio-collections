@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from ngio_collections.models._base import InlinedNode, Node, NodeObj, RefNode
+from ngio_collections.models._config import NodeObj
+from ngio_collections.models._nodes import InlinedNode, Node, RefNode
 
 
 class CollectionType(NodeObj):

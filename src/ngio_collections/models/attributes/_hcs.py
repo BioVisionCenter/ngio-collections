@@ -6,13 +6,10 @@ from typing import ClassVar
 
 from pydantic import Field
 
-from ngio_collections.models._base import (
-    BaseAttribute,
-    BaseObj,
-    IdStr,
-    PathObj,
-    ReferenceObj,
-)
+from ngio_collections.models._config import BaseObj
+from ngio_collections.models._paths import PathObj
+from ngio_collections.models._references import IdStr, ReferenceObj
+from ngio_collections.models.attributes._base import BaseAttribute
 
 
 class AcquisitionObj(BaseObj):
