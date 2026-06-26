@@ -55,8 +55,8 @@ the cache elsewhere (e.g. a faster disk). The cache key covers only
 | ---------------- | ---------------------------------------------------------- |
 | `read (inlined)` | `open_inlined` over the on-disk layout, cold cache         |
 | `walk`           | full depth-first traversal of the in-memory tree           |
-| `find`           | `find(id=...)` for a random existing id (an O(n) walk)     |
-| `edit`           | `set_attrs` on a random node (immutable spine rebuild)     |
+| `find`           | `find(id)` for a random existing id (an index lookup, O(1))|
+| `edit`           | `set_attrs` on a random node (new tree; copy-on-write map) |
 | `write`          | `save_inlined` snapshot of a tree to one document          |
 
 `--ops` selects any subset (comma-separated, or `all`). `walk` / `find` / `edit`
@@ -67,8 +67,18 @@ cached dataset or the read path. Running the walk-group and `write` together
 holds two full trees in memory (~2× at 1M); isolate them with `--ops` for the
 largest runs.
 
-`write` uses `save_inlined` rather than `create` because `create` stamps the
-tree with its document (state → DOCUMENT), so it is not repeatable on one root.
+`write` uses `save_inlined` to snapshot the resolved (inlined) view to one
+self-contained document, repeatably, into a scratch dir.
+
+## Results & backend (v5)
+
+At ~1.0M nodes (in-memory, stdlib `PersistentMap`): build ~5.9 s, walk ~127 ms,
+`find` ~90 ns, a single `set_attrs` ~9.3 ms (one 1M-entry dict copy), and 200
+edits batched through one `mutate()` evolver ~38 µs each. The single-edit cost is
+fine for interactive use and batch edits amortise via the evolver, so the
+**stdlib backend is sufficient — no `pyrsistent` needed**. Bulk construction goes
+through `graph.TreeBuilder` (one O(n) pass); per-node `add_child` is O(n) and only
+for incremental edits.
 
 ## Sharding (`--shard`)
 
@@ -87,8 +97,8 @@ Controls the document boundary of the on-disk layout, which dominates the
 
 - **Add an operation:** write a zero-arg callable, add it to `ALL_OPS` and append
   `measure("<name>", fn, args.repeats)` to `results` in `benchmarks/__main__.py`.
-- **Change the layout / attributes:** edit the builders in
-  `benchmarks/dataset.py` (`build_scene` / `build_well` / `build_plate`), then
+- **Change the layout / attributes:** edit the builder in
+  `benchmarks/dataset.py` (`build_monolithic` / `_scene_children`), then
   re-run with `--rebuild`. Attributes are intentionally light (a `{"role": ...}`
   marker) so node *count*, not attribute validation, is what scales.
 - **Change measurement:** `benchmarks/harness.py` (timing, memory, formatting).

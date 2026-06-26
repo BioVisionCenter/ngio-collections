@@ -1,0 +1,28 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "name": "experiment",
+    "id": "root",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "image",
+        "attributes": {
+          "role": "raw",
+          "channel": "DAPI"
+        },
+        "nodes": []
+      },
+      {
+        "type": "multiscale",
+        "name": "Nuclei segmentation",
+        "id": "nuclei",
+        "attributes": {
+          "role": "label"
+        },
+        "nodes": []
+      }
+    ]
+  }
+}

@@ -4,20 +4,26 @@
       "version": "0.x",
       "type": "multiscale",
       "name": "labels",
+      "id": "labels",
       "attributes": {
         "coordinateSystems": [
           {
             "id": "labels_space",
+            "name": null,
             "axes": [
               {
                 "name": "y",
                 "type": "space",
-                "unit": "micrometer"
+                "unit": "micrometer",
+                "discrete": null,
+                "longName": null
               },
               {
                 "name": "x",
                 "type": "space",
-                "unit": "micrometer"
+                "unit": "micrometer",
+                "discrete": null,
+                "longName": null
               }
             ]
           }
@@ -35,28 +41,31 @@
           ]
         }
       },
-      "id": "labels",
       "nodes": [
         {
           "type": "singlescale",
+          "id": "labels_0",
           "attributes": {
             "coordinateTransformations": [
               {
+                "name": null,
                 "input": {
-                  "id": "labels_0"
+                  "id": "labels_0",
+                  "path": null
                 },
                 "output": {
-                  "id": "labels_space"
+                  "id": "labels_space",
+                  "path": null
                 },
                 "type": "scale",
                 "scale": [
                   1.0,
                   1.0
-                ]
+                ],
+                "path": null
               }
             ]
           },
-          "id": "labels_0",
           "path": {
             "type": "zarr",
             "path": "./0"
@@ -64,24 +73,28 @@
         },
         {
           "type": "singlescale",
+          "id": "labels_1",
           "attributes": {
             "coordinateTransformations": [
               {
+                "name": null,
                 "input": {
-                  "id": "labels_1"
+                  "id": "labels_1",
+                  "path": null
                 },
                 "output": {
-                  "id": "labels_space"
+                  "id": "labels_space",
+                  "path": null
                 },
                 "type": "scale",
                 "scale": [
                   2.0,
                   2.0
-                ]
+                ],
+                "path": null
               }
             ]
           },
-          "id": "labels_1",
           "path": {
             "type": "zarr",
             "path": "./1"

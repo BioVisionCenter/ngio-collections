@@ -1,26 +1,18 @@
-"""Pure model layer: frozen nodes, paths, references, and the edit engine.
+"""Pure value models reused across the package: paths, references, attributes.
 
-This subpackage re-exports the model types that make up the public API. The
-cohesive node core (classes, edit API, and registry-driven construction
-factories) lives in ``ngio_collections.models._nodes``; the built-in node
-families live in their own ``_collection`` / ``_multiscale`` / ``_singlescale``
-modules and are wired into ``DEFAULT_REGISTRY`` by ``_builtins.register_builtins``
-at the package composition root.
+No nodes and no IO. The node *spine* is the v5 `graph` layer (`NodeRecord` /
+`NodeTree`); this package holds the camelCase-aliased OME value objects — document
+paths, the portable `ReferenceObj`, and the typed attribute models — that nodes
+carry and that validation reads.
 """
 
-from ngio_collections.models._config import NodeObj, NodeState, NodeStateError
-from ngio_collections.models._nodes import (
-    DEFAULT_REGISTRY,
-    AnyInlinedNode,
-    AnyNode,
-    BaseNode,
-    InlinedNode,
-    Node,
-    NodeValidationError,
-    RefNode,
-    register_family,
+from ngio_collections.models._config import BaseObj, NodeStateError
+from ngio_collections.models._paths import (
+    DocPath,
+    JsonPath,
+    PathObj,
+    ZarrPath,
 )
-from ngio_collections.models._paths import DocPath, JsonPath, PathObj, ZarrPath
 from ngio_collections.models._references import IdStr, ReferenceObj
 from ngio_collections.models.attributes import (
     AcquisitionAttribute,
@@ -56,42 +48,20 @@ from ngio_collections.models.attributes import (
     TranslationTransformation,
     WellAttribute,
 )
-from ngio_collections.models._collection import (
-    CollectionNode,
-    CollectionType,
-    InlinedCollectionNode,
-    RefCollectionNode,
-)
-from ngio_collections.models._multiscale import (
-    InlinedMultiscaleNode,
-    MultiscaleNode,
-    MultiscaleType,
-    RefMultiscaleNode,
-)
-from ngio_collections.models._registry import NodeRegistry, NodeTypes
-from ngio_collections.models._singlescale import (
-    RefSinglescaleNode,
-    SinglescaleType,
-)
 
 __all__ = [
-    "DEFAULT_REGISTRY",
     "AcquisitionAttribute",
     "AcquisitionObj",
     "AffineTransformation",
     "AnyAttribute",
-    "AnyInlinedNode",
-    "AnyNode",
     "AttributeType",
     "Axis",
     "BaseAttribute",
     "BaseListAttribute",
-    "BaseNode",
+    "BaseObj",
     "BijectionTransformation",
     "ByDimensionItem",
     "ByDimensionTransformation",
-    "CollectionNode",
-    "CollectionType",
     "ColumnObj",
     "CoordinateSystem",
     "CoordinateSystemsAttribute",
@@ -103,28 +73,13 @@ __all__ = [
     "DocPath",
     "IdStr",
     "IdentityTransformation",
-    "InlinedCollectionNode",
-    "InlinedMultiscaleNode",
-    "InlinedNode",
     "JsonPath",
     "LabelObj",
     "LabelsAttribute",
     "MapAxisTransformation",
-    "MultiscaleNode",
-    "MultiscaleType",
-    "Node",
-    "NodeObj",
-    "NodeRegistry",
-    "NodeState",
     "NodeStateError",
-    "NodeTypes",
-    "NodeValidationError",
     "PathObj",
     "PlateAttribute",
-    "RefCollectionNode",
-    "RefMultiscaleNode",
-    "RefNode",
-    "RefSinglescaleNode",
     "ReferenceObj",
     "RgbaColor",
     "RotationTransformation",
@@ -132,9 +87,7 @@ __all__ = [
     "ScaleTransformation",
     "SceneAttribute",
     "SequenceTransformation",
-    "SinglescaleType",
     "TranslationTransformation",
     "WellAttribute",
     "ZarrPath",
-    "register_family",
 ]

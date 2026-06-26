@@ -7,47 +7,56 @@
       {
         "type": "multiscale",
         "name": "image",
+        "id": "image",
         "attributes": {
           "coordinateSystems": [
             {
               "id": "image_space",
+              "name": null,
               "axes": [
                 {
                   "name": "y",
                   "type": "space",
-                  "unit": "micrometer"
+                  "unit": "micrometer",
+                  "discrete": null,
+                  "longName": null
                 },
                 {
                   "name": "x",
                   "type": "space",
-                  "unit": "micrometer"
+                  "unit": "micrometer",
+                  "discrete": null,
+                  "longName": null
                 }
               ]
             }
           ]
         },
-        "id": "image",
         "nodes": [
           {
             "type": "singlescale",
+            "id": "image_0",
             "attributes": {
               "coordinateTransformations": [
                 {
+                  "name": null,
                   "input": {
-                    "id": "image_0"
+                    "id": "image_0",
+                    "path": null
                   },
                   "output": {
-                    "id": "image_space"
+                    "id": "image_space",
+                    "path": null
                   },
                   "type": "scale",
                   "scale": [
                     1.0,
                     1.0
-                  ]
+                  ],
+                  "path": null
                 }
               ]
             },
-            "id": "image_0",
             "path": {
               "type": "zarr",
               "path": "./0"
@@ -55,24 +64,28 @@
           },
           {
             "type": "singlescale",
+            "id": "image_1",
             "attributes": {
               "coordinateTransformations": [
                 {
+                  "name": null,
                   "input": {
-                    "id": "image_1"
+                    "id": "image_1",
+                    "path": null
                   },
                   "output": {
-                    "id": "image_space"
+                    "id": "image_space",
+                    "path": null
                   },
                   "type": "scale",
                   "scale": [
                     2.0,
                     2.0
-                  ]
+                  ],
+                  "path": null
                 }
               ]
             },
-            "id": "image_1",
             "path": {
               "type": "zarr",
               "path": "./1"
@@ -87,20 +100,26 @@
           {
             "type": "multiscale",
             "name": "nuclei",
+            "id": "nuclei",
             "attributes": {
               "coordinateSystems": [
                 {
                   "id": "nuclei_space",
+                  "name": null,
                   "axes": [
                     {
                       "name": "y",
                       "type": "space",
-                      "unit": "micrometer"
+                      "unit": "micrometer",
+                      "discrete": null,
+                      "longName": null
                     },
                     {
                       "name": "x",
                       "type": "space",
-                      "unit": "micrometer"
+                      "unit": "micrometer",
+                      "discrete": null,
+                      "longName": null
                     }
                   ]
                 }
@@ -119,33 +138,37 @@
                 ],
                 "source": [
                   {
-                    "id": "image"
+                    "id": "image",
+                    "path": null
                   }
                 ]
               }
             },
-            "id": "nuclei",
             "nodes": [
               {
                 "type": "singlescale",
+                "id": "nuclei_0",
                 "attributes": {
                   "coordinateTransformations": [
                     {
+                      "name": null,
                       "input": {
-                        "id": "nuclei_0"
+                        "id": "nuclei_0",
+                        "path": null
                       },
                       "output": {
-                        "id": "nuclei_space"
+                        "id": "nuclei_space",
+                        "path": null
                       },
                       "type": "scale",
                       "scale": [
                         1.0,
                         1.0
-                      ]
+                      ],
+                      "path": null
                     }
                   ]
                 },
-                "id": "nuclei_0",
                 "path": {
                   "type": "zarr",
                   "path": "./0"
@@ -153,24 +176,28 @@
               },
               {
                 "type": "singlescale",
+                "id": "nuclei_1",
                 "attributes": {
                   "coordinateTransformations": [
                     {
+                      "name": null,
                       "input": {
-                        "id": "nuclei_1"
+                        "id": "nuclei_1",
+                        "path": null
                       },
                       "output": {
-                        "id": "nuclei_space"
+                        "id": "nuclei_space",
+                        "path": null
                       },
                       "type": "scale",
                       "scale": [
                         2.0,
                         2.0
-                      ]
+                      ],
+                      "path": null
                     }
                   ]
                 },
-                "id": "nuclei_1",
                 "path": {
                   "type": "zarr",
                   "path": "./1"

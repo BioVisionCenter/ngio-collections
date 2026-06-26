@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import url2pathname
@@ -32,6 +33,11 @@ class LocalStore:
     async def get(self, url: str) -> bytes:
         """Return the raw bytes of the file at `url`.
 
+        The blocking read runs on a worker thread (`asyncio.to_thread`) so that
+        concurrent `get` calls overlap instead of serializing on the event loop —
+        the file read releases the GIL. This is what lets `Resolver`'s prefetch
+        pass fan out many document reads at once.
+
         Args:
             url: Filesystem path or `file://` URL to read.
 
@@ -41,7 +47,7 @@ class LocalStore:
         Raises:
             FileNotFoundError: If the file does not exist.
         """
-        return _to_path(url).read_bytes()
+        return await asyncio.to_thread(_to_path(url).read_bytes)
 
     async def put(self, url: str, data: bytes) -> None:
         """Write `data` to `url`, creating parent directories as needed.

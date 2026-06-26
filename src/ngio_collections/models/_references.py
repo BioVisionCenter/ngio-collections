@@ -1,8 +1,8 @@
 """The portable `ReferenceObj` pointer and node-id primitives.
 
 Pure value types: a `ReferenceObj` is the `{id, path?}` locator `node.ref()`
-returns. The functions that *mint* references from a document (`reference_to` /
-`stub_to`) need the node registry, so they live with the node core in `_nodes`.
+returns, alongside the `IdStr` id pattern. Resolving the node it points at is the
+resolver's job (load the document at `path`, find the node whose `id` matches).
 """
 
 from __future__ import annotations

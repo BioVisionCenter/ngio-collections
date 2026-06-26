@@ -1,4 +1,4 @@
-"""Builds the benchmark dataset and writes it to disk at a chosen sharding.
+"""Builds the benchmark dataset (v5) and writes it to disk at a chosen sharding.
 
 The dataset mirrors a realistic RFC-8 HCS collection:
 
@@ -11,24 +11,13 @@ and every scene holds 3 multiscale images, 5 multiscale labels and 10 tables
 
 so ``scenes_per_well == 11`` yields ~1.0M nodes (see ``scenes_for_target``).
 
-Two products are derived from the same builders:
-
-* ``build_monolithic`` returns the full, detached in-memory tree (every node
-  inline). It is what gets written to disk, and the canonical source the
-  in-memory operation benchmarks (walk / find / edit) run against.
-* ``write_sharded`` writes that tree to disk, splitting it into one document per
-  node at or above the chosen boundary (``leaf`` / ``scene`` / ``well`` /
-  ``plate``), or a single document (``none``). Parent documents reference their
-  children with the ``RefNode`` stubs that ``Resolver.create`` hands back,
-  composed via ``add_ref`` — the documented multi-document pattern. This is the
-  layout the ``open_inlined`` read benchmark resolves across.
-
-Generated datasets are expensive, so ``ensure_dataset`` caches them under
-``benchmarks/.data/<shard>-n<scenes>/`` and reuses them across runs.
-
-Tables have no built-in node type, so a small custom family is registered here
-(mirroring ``examples/custom_node_types.py``); all data still lives in the open
-``attributes`` dict.
+``build_monolithic`` returns the full detached in-memory ``NodeTree`` (every node
+inline), built in one O(n) pass with ``TreeBuilder``. ``write_sharded`` writes it
+to disk, splitting it into one document per node at or above the chosen boundary
+(``leaf`` / ``scene`` / ``well`` / ``plate``) or a single document (``none``);
+parent documents reference their children with relativized ``path`` stubs. That is
+the layout the ``open_inlined`` read benchmark resolves across. Datasets are cached
+under ``benchmarks/.data/<shard>-n<scenes>/`` and reused across runs.
 """
 
 from __future__ import annotations
@@ -36,13 +25,15 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 from typing import Literal
 
-import ngio_collections as ngc
-
 from benchmarks.harness import Result, measure_value
-from ngio_collections import RefNode, Resolver
+from ngio_collections.api._node import reference_path
+from ngio_collections.graph import ROOT, NodeId, NodeRecord, NodeTree, Reference, TreeBuilder
+from ngio_collections.io.store import LocalStore, WritableStore
+from ngio_collections.resolve import write_document
 
 # --- fixed layout (per the spec) --------------------------------------------
 
@@ -58,8 +49,7 @@ FIXED_NODES = 1 + PLATES + TOTAL_WELLS  # 4821 (root + plates + wells)
 ShardLevel = Literal["leaf", "scene", "well", "plate", "none"]
 
 # Depth at (and above) which a node becomes its own document. root=0, plate=1,
-# well=2, scene=3, leaf (multiscale/table)=4; everything below the boundary
-# stays inline.
+# well=2, scene=3, leaf (multiscale/table)=4.
 _BOUNDARY_DEPTH: dict[ShardLevel, int] = {
     "none": 0,
     "plate": 1,
@@ -69,38 +59,8 @@ _BOUNDARY_DEPTH: dict[ShardLevel, int] = {
 }
 
 
-# --- custom table family (no built-in table node) ---------------------------
-
-
-class _TableType(ngc.NodeObj):
-    """Marks the ``bench:table`` node type; data lives in ``attributes``."""
-
-    __slots__ = ()
-    node_type = "bench:table"
-
-
-class TableNode(_TableType, ngc.Node):
-    """Editable table node."""
-
-    __slots__ = ()
-
-
-class RefTableNode(_TableType, ngc.RefNode):
-    """Reference stub for a table document."""
-
-    __slots__ = ()
-
-
-class InlinedTableNode(_TableType, ngc.InlinedNode):
-    """Resolved (read-only) table node."""
-
-    __slots__ = ()
-
-
 def register_tables() -> None:
-    """Register the table family once (idempotent across re-runs)."""
-    if "bench:table" not in ngc.DEFAULT_REGISTRY:
-        ngc.register_family(TableNode, RefTableNode, InlinedTableNode)
+    """No-op: tables are plain `bench:table` records (no typed handle needed)."""
 
 
 # --- node-count helpers ------------------------------------------------------
@@ -131,110 +91,83 @@ def node_counts(scenes_per_well: int) -> dict[str, int]:
 
 
 def document_count(shard: ShardLevel, scenes_per_well: int) -> int:
-    """Number of documents (files) written for the given sharding.
-
-    A node becomes its own document iff its depth is at or above the shard
-    boundary; this counts every such node (root=0 .. leaf=4).
-    """
+    """Number of documents (files) written for the given sharding."""
     scenes = TOTAL_WELLS * scenes_per_well
     leaves = scenes * (IMAGES + LABELS + TABLES)
     per_depth = (1, PLATES, TOTAL_WELLS, scenes, leaves)  # depth 0..4
     return sum(per_depth[: _BOUNDARY_DEPTH[shard] + 1])
 
 
-# --- in-memory builders (detached) ------------------------------------------
+# --- in-memory builder (detached, one O(n) pass) ----------------------------
 
 
-def build_scene(scene_id: str) -> ngc.CollectionNode:
-    """Build one scene: 3 image + 5 label multiscales and 10 tables, inline."""
-    images = tuple(
-        ngc.MultiscaleNode(
-            id=f"{scene_id}-img{i}", name=f"img{i}", attributes={"role": "image"}
-        )
-        for i in range(IMAGES)
-    )
-    labels = tuple(
-        ngc.MultiscaleNode(
-            id=f"{scene_id}-lbl{i}", name=f"lbl{i}", attributes={"role": "label"}
-        )
-        for i in range(LABELS)
-    )
-    tables = tuple(
-        TableNode(id=f"{scene_id}-tbl{i}", name=f"tbl{i}", attributes={"role": "table"})
-        for i in range(TABLES)
-    )
-    return ngc.CollectionNode(
-        id=scene_id,
-        name=scene_id,
-        attributes={"role": "scene"},
-        nodes=(*images, *labels, *tables),
-    )
+def _scene_children(tb: TreeBuilder, scene_key: NodeId, scene_id: str) -> None:
+    for i in range(IMAGES):
+        tb.add_child(scene_key, NodeRecord(type="multiscale", id=f"{scene_id}-img{i}",
+                                           name=f"img{i}", attributes={"role": "image"}))
+    for i in range(LABELS):
+        tb.add_child(scene_key, NodeRecord(type="multiscale", id=f"{scene_id}-lbl{i}",
+                                           name=f"lbl{i}", attributes={"role": "label"}))
+    for i in range(TABLES):
+        tb.add_child(scene_key, NodeRecord(type="bench:table", id=f"{scene_id}-tbl{i}",
+                                           name=f"tbl{i}", attributes={"role": "table"}))
 
 
-def build_well(well_id: str, scenes_per_well: int) -> ngc.CollectionNode:
-    """Build one well containing ``scenes_per_well`` scenes."""
-    scenes = tuple(build_scene(f"{well_id}-s{s}") for s in range(scenes_per_well))
-    return ngc.CollectionNode(
-        id=well_id, name=well_id, attributes={"role": "well"}, nodes=scenes
-    )
-
-
-def build_plate(plate_id: str, scenes_per_well: int) -> ngc.CollectionNode:
-    """Build one plate containing its wells."""
-    wells = tuple(
-        build_well(f"{plate_id}-w{w}", scenes_per_well)
-        for w in range(WELLS_PER_PLATE)
-    )
-    return ngc.CollectionNode(
-        id=plate_id, name=plate_id, attributes={"role": "plate"}, nodes=wells
-    )
-
-
-def build_monolithic(scenes_per_well: int) -> ngc.CollectionNode:
-    """Build the full, detached collection tree with every node inline."""
-    plates = tuple(build_plate(f"p{p}", scenes_per_well) for p in range(PLATES))
-    return ngc.CollectionNode(
-        id="root", name="root", attributes={"role": "root"}, nodes=plates
-    )
+def build_monolithic(scenes_per_well: int) -> NodeTree:
+    """Build the full detached collection tree with every node inline (O(n))."""
+    tb = TreeBuilder(NodeRecord(type="collection", id="root", name="root",
+                                attributes={"role": "root"}, children=()))
+    for p in range(PLATES):
+        pid = f"p{p}"
+        pk = tb.add_child(ROOT, NodeRecord(type="collection", id=pid, name=pid,
+                                           attributes={"role": "plate"}, children=()))
+        for w in range(WELLS_PER_PLATE):
+            wid = f"{pid}-w{w}"
+            wk = tb.add_child(pk, NodeRecord(type="collection", id=wid, name=wid,
+                                             attributes={"role": "well"}, children=()))
+            for s in range(scenes_per_well):
+                sid = f"{wid}-s{s}"
+                sk = tb.add_child(wk, NodeRecord(type="collection", id=sid, name=sid,
+                                                 attributes={"role": "scene"}, children=()))
+                _scene_children(tb, sk, sid)
+    return tb.finish()
 
 
 # --- on-disk sharding --------------------------------------------------------
 
 
-async def _write_doc(
-    node: ngc.CollectionNode,
-    depth: int,
-    boundary: int,
-    resolver: Resolver,
-    parent_dir: Path,
-) -> tuple[str, RefNode]:
-    """Write ``node`` (and its subtree) to disk, returning ``(url, stub)``.
-
-    Above the boundary the node becomes a container document whose children are
-    written first (bottom-up) and attached as ``RefNode`` stubs; at the boundary
-    the whole subtree is written inline as one document.
-    """
-    node_dir = parent_dir / node.id
-    url = str(node_dir / "collection.json")
-    if depth == boundary:
-        ref = await resolver.create(url, node, overwrite=True)
-        return url, ref
-    container: ngc.CollectionNode = node.model_copy(update={"nodes": ()})
-    for child in node.nodes:
-        _, child_ref = await _write_doc(child, depth + 1, boundary, resolver, node_dir)
-        container = container.add_ref(parent_id=node.id, ref=child_ref)
-    ref = await resolver.create(url, container, overwrite=True)
-    return url, ref
+def _writable(store: object) -> WritableStore:
+    if not isinstance(store, WritableStore):
+        raise TypeError(f"{type(store).__name__} is not writable")
+    return store
 
 
-async def write_sharded(
-    root: ngc.CollectionNode,
-    shard: ShardLevel,
-    resolver: Resolver,
-    workdir: str | Path,
-) -> str:
-    """Write ``root`` to ``workdir`` at the given sharding; return the entry URL."""
-    url, _ = await _write_doc(root, 0, _BOUNDARY_DEPTH[shard], resolver, Path(workdir))
+async def _write_node(
+    tree: NodeTree, node_id: NodeId, depth: int, boundary: int, store: object, parent_dir: Path
+) -> tuple[str, Reference]:
+    """Write `node_id`'s subtree to disk; return its URL and a reference to it."""
+    rec = tree.record(node_id)
+    url = str(parent_dir / (rec.id or "node") / "collection.json")
+    children = tree.children_ids(node_id)
+    if depth >= boundary or not children:
+        await write_document(store, url, tree, root_id=node_id)
+    else:
+        # container document: children written as their own docs, referenced here
+        container = TreeBuilder(replace(rec, children=()))
+        for child in children:
+            child_url, child_ref = await _write_node(
+                tree, child, depth + 1, boundary, store, parent_dir / (rec.id or "node")
+            )
+            crec = tree.record(child)
+            container.add_child(ROOT, NodeRecord(type=crec.type, name=crec.name, ref=child_ref))
+        await write_document(store, url, container.finish(), root_id=ROOT)
+    return url, Reference(path=reference_path(url), id=rec.id)
+
+
+async def write_sharded(tree: NodeTree, shard: ShardLevel, store: object, workdir: str | Path) -> str:
+    """Write `tree` to `workdir` at the given sharding; return the entry URL."""
+    _writable(store)
+    url, _ = await _write_node(tree, ROOT, 0, _BOUNDARY_DEPTH[shard], store, Path(workdir))
     return url
 
 
@@ -256,44 +189,24 @@ def ensure_dataset(
     rebuild: bool = False,
     data_root: Path | None = None,
 ) -> tuple[str, list[Result]]:
-    """Return the entry-document URL for the dataset, generating it if needed.
-
-    Reuses a previously generated dataset (matching ``shard`` + scale) when its
-    completion marker is present. Otherwise builds the tree in memory and writes
-    it to disk, returning the two setup measurements (build + disk write). On
-    reuse the returned list is empty.
-    """
+    """Return the entry-document URL for the dataset, generating it if needed."""
     target_dir = dataset_dir(shard, scenes_per_well, data_root)
     marker = target_dir / _MARKER
 
     if rebuild and target_dir.exists():
         shutil.rmtree(target_dir)
-
     if not rebuild and marker.exists():
-        meta = json.loads(marker.read_text())
-        return meta["entry_url"], []
+        return json.loads(marker.read_text())["entry_url"], []
 
-    register_tables()
-    build_res, root = measure_value(
-        "build (in-mem)", lambda: build_monolithic(scenes_per_well)
-    )
+    build_res, tree = measure_value("build (in-mem)", lambda: build_monolithic(scenes_per_well))
 
     async def _write() -> str:
-        resolver = Resolver(ngc.LocalStore())
-        return await write_sharded(root, shard, resolver, target_dir)
+        return await write_sharded(tree, shard, LocalStore(), target_dir)
 
     write_res, entry_url = measure_value("dataset write (disk)", lambda: asyncio.run(_write()))
 
     target_dir.mkdir(parents=True, exist_ok=True)
-    marker.write_text(
-        json.dumps(
-            {
-                "entry_url": entry_url,
-                "shard": shard,
-                "scenes_per_well": scenes_per_well,
-                "nodes": estimate_nodes(scenes_per_well),
-            },
-            indent=2,
-        )
-    )
+    marker.write_text(json.dumps(
+        {"entry_url": entry_url, "shard": shard, "scenes_per_well": scenes_per_well,
+         "nodes": estimate_nodes(scenes_per_well)}, indent=2))
     return entry_url, [build_res, write_res]

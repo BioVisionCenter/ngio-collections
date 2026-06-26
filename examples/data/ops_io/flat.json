@@ -6,8 +6,8 @@
     "nodes": [
       {
         "type": "multiscale",
-        "id": "image",
         "name": "image",
+        "id": "image",
         "attributes": {
           "role": "raw",
           "in_collection": true

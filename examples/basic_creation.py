@@ -5,10 +5,11 @@
     └── labels (collection)
         └── nuclei (multiscale label, 2 single scales)
 
-Each multiscale carries a `coordinateSystems` attribute and each single scale a
-`coordinateTransformations` attribute, written through the typed RFC-8 models
-(`CoordinateSystemsAttribute`, `ScaleTransformation`, ...) via `set_attr` rather
-than raw dicts. The `nuclei` multiscale also carries a typed `labels` attribute.
+Trees are built handle-rooted and fluent: `new_node(...)` seeds a detached root and
+`add(child)` grafts a subtree. Each multiscale carries a `coordinateSystems`
+attribute and each single scale a `coordinateTransformations` attribute, written
+through the typed RFC-8 models via `set_attr`. Edits return the new tree root, so
+`node.find(id).set_attr(...)` round-trips into `create`.
 
 Run with: pixi run python examples/basic_creation.py
 """
@@ -18,23 +19,23 @@ from pathlib import Path
 import ngio_collections as ngc
 
 
-def single_scales(prefix: str) -> tuple[ngc.RefSinglescaleNode, ...]:
-    # Single scales point at the on-disk zarr arrays ("0", "1"); they are
-    # references, not embedded data, so the resolver leaves them as leaves.
-    # Ids must be unique across the whole collection (and match the id pattern,
-    # which is alphanumeric + -_. ), so we prefix them.
+def single_scales(prefix: str) -> tuple[ngc.Node, ...]:
+    # Single scales reference on-disk zarr arrays ("0", "1"): reference nodes, not
+    # embedded data. Ids must be unique across the collection, so we prefix them.
     return (
-        ngc.RefSinglescaleNode(id=f"{prefix}_0", path=ngc.ZarrPath(path="./0")),
-        ngc.RefSinglescaleNode(id=f"{prefix}_1", path=ngc.ZarrPath(path="./1")),
+        ngc.new_node("singlescale", id=f"{prefix}_0", ref=ngc.Reference(path=ngc.ZarrPath(path="./0"))),
+        ngc.new_node("singlescale", id=f"{prefix}_1", ref=ngc.Reference(path=ngc.ZarrPath(path="./1"))),
     )
 
 
-def build_multiscale(
-    prefix: str, extra_attr: ngc.AnyAttribute | None = None
-) -> ngc.MultiscaleNode:
+def build_multiscale(prefix: str, extra_attr: ngc.AnyAttribute | None = None) -> ngc.Node:
+    node = ngc.new_node("multiscale", id=prefix, name=prefix)
+    for scale in single_scales(prefix):
+        node = node.add(scale)  # tree-out: node is the multiscale root again
+
     # The multiscale defines the coordinate system its single scales map into.
-    coordinate_systems = ngc.CoordinateSystemsAttribute(
-        [
+    node = node.set_attr(
+        ngc.CoordinateSystemsAttribute([
             ngc.CoordinateSystem(
                 id=f"{prefix}_space",
                 axes=[
@@ -42,51 +43,35 @@ def build_multiscale(
                     ngc.Axis(name="x", type="space", unit="micrometer"),
                 ],
             )
-        ]
+        ])
     )
-    node = ngc.MultiscaleNode(
-        id=prefix, name=prefix, nodes=single_scales(prefix)
-    ).set_attr(id=prefix, value=coordinate_systems)
-
-    # Attributes are not node fields (nodes are strict); attach any extra typed
-    # attribute through `set_attr`, keyed by the multiscale id.
     if extra_attr is not None:
-        node = node.set_attr(id=prefix, value=extra_attr)
+        node = node.set_attr(extra_attr)
 
-    # Each single scale maps its array onto the shared coordinate system with a
-    # scale transform (level 1 is downsampled 2x).
+    # Each single scale maps its array onto the shared coordinate system.
     for level, factor in enumerate((1.0, 2.0)):
-        transforms = ngc.CoordinateTransformationsAttribute(
-            [
+        node = node.find(f"{prefix}_{level}").set_attr(
+            ngc.CoordinateTransformationsAttribute([
                 ngc.ScaleTransformation(
                     input=ngc.ReferenceObj(id=f"{prefix}_{level}"),
                     output=ngc.ReferenceObj(id=f"{prefix}_space"),
                     scale=[factor, factor],
                 )
-            ]
+            ])
         )
-        node = node.set_attr(id=f"{prefix}_{level}", value=transforms)
     return node
 
 
-def build_collection() -> ngc.CollectionNode:
-    """The in-memory tree. Frozen and detached until a Resolver writes it."""
-    # The label multiscale carries a typed `labels` attribute: a value->color
-    # map plus a reference back to the image it segments.
+def build_collection() -> ngc.Node:
+    """The in-memory tree, detached until `create` writes it."""
     nuclei = build_multiscale("nuclei").set_attr(
-        id="nuclei",
-        value=ngc.LabelsAttribute(
+        ngc.LabelsAttribute(
             label_attributes=[ngc.LabelObj(label_value=1, color=[255, 0, 0, 255])],
             source=[ngc.ReferenceObj(id="image")],
-        ),
+        )
     )
-    return ngc.CollectionNode(
-        id="root",
-        nodes=(
-            build_multiscale("image"),
-            ngc.CollectionNode(id="labels", nodes=(nuclei,)),
-        ),
-    )
+    labels = ngc.new_node("collection", id="labels").add(nuclei)
+    return ngc.new_node("collection", id="root").add(build_multiscale("image")).add(labels)
 
 
 def main() -> None:

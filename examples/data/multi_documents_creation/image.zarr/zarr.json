@@ -4,47 +4,56 @@
       "version": "0.x",
       "type": "multiscale",
       "name": "image",
+      "id": "image",
       "attributes": {
         "coordinateSystems": [
           {
             "id": "image_space",
+            "name": null,
             "axes": [
               {
                 "name": "y",
                 "type": "space",
-                "unit": "micrometer"
+                "unit": "micrometer",
+                "discrete": null,
+                "longName": null
               },
               {
                 "name": "x",
                 "type": "space",
-                "unit": "micrometer"
+                "unit": "micrometer",
+                "discrete": null,
+                "longName": null
               }
             ]
           }
         ]
       },
-      "id": "image",
       "nodes": [
         {
           "type": "singlescale",
+          "id": "image_0",
           "attributes": {
             "coordinateTransformations": [
               {
+                "name": null,
                 "input": {
-                  "id": "image_0"
+                  "id": "image_0",
+                  "path": null
                 },
                 "output": {
-                  "id": "image_space"
+                  "id": "image_space",
+                  "path": null
                 },
                 "type": "scale",
                 "scale": [
                   1.0,
                   1.0
-                ]
+                ],
+                "path": null
               }
             ]
           },
-          "id": "image_0",
           "path": {
             "type": "zarr",
             "path": "./0"
@@ -52,24 +61,28 @@
         },
         {
           "type": "singlescale",
+          "id": "image_1",
           "attributes": {
             "coordinateTransformations": [
               {
+                "name": null,
                 "input": {
-                  "id": "image_1"
+                  "id": "image_1",
+                  "path": null
                 },
                 "output": {
-                  "id": "image_space"
+                  "id": "image_space",
+                  "path": null
                 },
                 "type": "scale",
                 "scale": [
                   2.0,
                   2.0
-                ]
+                ],
+                "path": null
               }
             ]
           },
-          "id": "image_1",
           "path": {
             "type": "zarr",
             "path": "./1"
