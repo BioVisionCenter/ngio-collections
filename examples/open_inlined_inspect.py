@@ -52,7 +52,7 @@ def main() -> None:
 
     # The image stub's 'display' overlay is merged on top of its target.
     print("image attributes       :", dict(view.find("image").attributes))
-    print("validate_tree          :", ngc.validate_tree(view.tree))
+    print("validate               :", ngc.validate(view, validators=(ngc.well_under_plate, ngc.scale_matches_axes)))
 
     # Snapshot the resolved tree into one self-contained document.
     flat = str(base / "flat.json")

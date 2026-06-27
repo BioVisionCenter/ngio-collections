@@ -28,6 +28,8 @@ from ngio_collections.api._sync import (
     delete,
     open,
     open_inlined,
+    open_inlined_ref,
+    open_ref,
     save,
     save_inlined,
 )
@@ -40,43 +42,45 @@ from ngio_collections.io.store import (
 )
 from ngio_collections.models import *  # noqa: F403  (value models: attributes, paths, refs)
 from ngio_collections.validate import (
-    DEFAULT_VALIDATORS,
-    Issue,
-    Scope,
-    register_builtins,
+    ValidationError,
+    ValidatorType,
+    scale_matches_axes,
     validate,
-    validate_tree,
+    well_under_plate,
 )
 
-# Composition root: wire typed handles and built-in validators explicitly.
+# Composition root: wire the typed handles explicitly. Validators are passed
+# explicitly per call (no global registry) as a sequence of plain callables.
 register_node_types()
-register_builtins(DEFAULT_VALIDATORS)
 
 _API = [
     "CollectionNode",
     "FsspecStore",
-    "Issue",
     "LocalStore",
     "MultiscaleNode",
     "Node",
     "NodeTypeRegistry",
     "ReadableStore",
     "Reference",
-    "Scope",
     "SinglescaleNode",
     "StoreReadOnlyError",
+    "ValidationError",
+    "ValidatorType",
     "WritableStore",
     "create",
     "delete",
     "new_node",
     "open",
     "open_inlined",
+    "open_inlined_ref",
+    "open_ref",
     "register_node_type",
     "register_node_types",
     "save",
     "save_inlined",
+    "scale_matches_axes",
     "validate",
-    "validate_tree",
+    "well_under_plate",
     "wrap_node",
 ]
 

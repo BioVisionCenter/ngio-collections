@@ -15,6 +15,7 @@ from typing import Any, Coroutine, TypeVar
 from ngio_collections.api import _api
 from ngio_collections.api._node import Node
 from ngio_collections.io.store import ReadableStore
+from ngio_collections.models._references import ReferenceObj
 from ngio_collections.resolve import OnError
 
 T = TypeVar("T")
@@ -55,6 +56,27 @@ def open_inlined(
 ) -> Node:
     """Synchronous `open_inlined`."""
     return _run(_api.open_inlined(source, store, depth=depth, on_error=on_error))
+
+
+def open_ref(
+    ref: ReferenceObj,
+    base_url: str | None = None,
+    store: ReadableStore | None = None,
+) -> Node:
+    """Synchronous `open_ref`."""
+    return _run(_api.open_ref(ref, base_url, store))
+
+
+def open_inlined_ref(
+    ref: ReferenceObj,
+    base_url: str | None = None,
+    store: ReadableStore | None = None,
+    *,
+    depth: int | None = None,
+    on_error: OnError = "skip",
+) -> Node:
+    """Synchronous `open_inlined_ref`."""
+    return _run(_api.open_inlined_ref(ref, base_url, store, depth=depth, on_error=on_error))
 
 
 def create(

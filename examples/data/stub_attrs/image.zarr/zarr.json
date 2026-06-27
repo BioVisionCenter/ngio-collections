@@ -1,0 +1,19 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "id": "image",
+      "attributes": {
+        "channels": [
+          "DAPI",
+          "GFP"
+        ],
+        "display": "target-default"
+      },
+      "nodes": []
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

@@ -20,6 +20,7 @@ from ngio_collections.io.store import (
 )
 from ngio_collections.models._config import NodeStateError
 from ngio_collections.models._paths import meta_url
+from ngio_collections.models._references import ReferenceObj
 from ngio_collections.resolve import OnError, build, fetch_all, write_document
 
 
@@ -77,6 +78,77 @@ async def open_inlined(
     if url not in docs:
         raise FileNotFoundError(url)
     return wrap_node(build(url, docs, inline=True, depth=depth, on_error=on_error), ROOT)
+
+
+def _ref_url(ref: ReferenceObj, base_url: str | None) -> str:
+    """Resolve a `ReferenceObj` to the absolute URL of the document it points at.
+
+    Raises:
+        NodeStateError: If `ref` carries no path (an intra-document reference);
+            locate it locally on the owning tree with `node.find(ref.id)`.
+    """
+    if ref.path is None:
+        raise NodeStateError(
+            f"reference to {ref.id!r} has no path; it points within its own "
+            "document — locate it locally with node.find(ref.id)"
+        )
+    return ref.path.resolve(base_url)
+
+
+def _locate(root: Node, ref: ReferenceObj, url: str) -> Node:
+    """Find the node `ref.id` within the tree at `root`, or raise."""
+    node = root.find(ref.id)
+    if node is None:
+        raise LookupError(f"no node with id {ref.id!r} in document {url!r}")
+    return node
+
+
+async def open_ref(
+    ref: ReferenceObj,
+    base_url: str | None = None,
+    store: ReadableStore | None = None,
+) -> Node:
+    """Open the node subtree a `ReferenceObj` points at, as an editable tree.
+
+    Resolves `ref.path` (relative paths join against `base_url`, the URL of the
+    document the reference was read from), opens that document with cross-document
+    children left as reference stubs, and returns the handle for the node whose
+    local id is `ref.id`. Call `.subtree()` on the result to detach it into its
+    own tree.
+
+    Raises:
+        NodeStateError: If `ref` carries no path (an intra-document reference).
+        FileNotFoundError: If no document exists at the resolved URL.
+        LookupError: If `ref.id` is not found in that document.
+    """
+    store = _store(store)
+    url = _ref_url(ref, base_url)
+    return _locate(await open(url, store), ref, url)
+
+
+async def open_inlined_ref(
+    ref: ReferenceObj,
+    base_url: str | None = None,
+    store: ReadableStore | None = None,
+    *,
+    depth: int | None = None,
+    on_error: OnError = "skip",
+) -> Node:
+    """Open the node subtree a `ReferenceObj` points at, references inlined.
+
+    Like `open_ref`, but resolves the target document's own cross-document
+    references into one read-only tree (see `open_inlined`) before locating
+    `ref.id`.
+
+    Raises:
+        NodeStateError: If `ref` carries no path (an intra-document reference).
+        FileNotFoundError: If no document exists at the resolved URL.
+        LookupError: If `ref.id` is not found in that document.
+    """
+    store = _store(store)
+    url = _ref_url(ref, base_url)
+    view = await open_inlined(url, store, depth=depth, on_error=on_error)
+    return _locate(view, ref, url)
 
 
 async def create(

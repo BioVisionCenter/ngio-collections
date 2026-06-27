@@ -92,12 +92,13 @@ def test_validate_through_handle() -> None:
     plate = plate.add(new_node("collection", id="A1", attributes={
         "well": {"column": {"id": "c1"}, "row": {"id": "r1"}}
     }))
-    assert plate.find("A1").validate() == []  # well under plate -> ok
+    validators = (ngc.well_under_plate, ngc.scale_matches_axes)
+    assert plate.find("A1").validate(validators) == []  # well under plate -> ok
 
     orphan = new_node("collection", id="root")
     orphan = orphan.add(new_node("collection", id="A1", attributes={
         "well": {"column": {"id": "c1"}, "row": {"id": "r1"}}
     }))
-    issues = orphan.find("A1").validate()
-    assert [i.validator for i in issues] == ["well-under-plate"]
+    errors = orphan.find("A1").validate(validators)
+    assert [e.validator for e in errors] == ["well_under_plate"]
     assert plate.find("A1").has(PlateAttribute) is False  # the plate is the parent

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import ngio_collections.api._api as aio
 from ngio_collections.api import new_node
+from ngio_collections.models._paths import ZarrPath
+from ngio_collections.models._references import ReferenceObj
 from ngio_collections.models.attributes import WellAttribute
 
 DATA = "/data"
@@ -97,6 +99,65 @@ async def test_delete_removes_document() -> None:
     affected = await aio.delete(opened, store)
     assert affected == [f"{DATA}/c.json"]
     assert f"{DATA}/c.json" not in store.files
+
+
+async def test_open_ref_resolves_subtree_across_documents() -> None:
+    store = _MemoryStore()
+    image = new_node("multiscale", id="image", attributes={"role": "target"})
+    stub = await aio.create(f"{DATA}/image.zarr", image, store)
+    parent = new_node("collection", id="root").add_ref(stub)
+    await aio.create(f"{DATA}/c.json", parent, store)
+
+    # Take a reference the way a user would: from the unresolved stub on disk.
+    opened = await aio.open(f"{DATA}/c.json", store)
+    ref = ReferenceObj(id="image", path=opened.children()[0].record.ref.path)
+
+    node = await aio.open_ref(ref, opened.document_url, store)
+    assert node.id == "image" and node.type == "multiscale"
+    assert node.attributes["role"] == "target"
+    # The opened subtree is editable (cross-doc, not inlined/read-only).
+    assert node.tree.mode == "editable"
+
+
+async def test_open_inlined_ref_resolves_nested_references() -> None:
+    store = _MemoryStore()
+    # leaf -> mid -> entry chain of single-child documents
+    leaf = new_node("multiscale", id="leaf", attributes={"role": "deep"})
+    leaf_stub = await aio.create(f"{DATA}/leaf.zarr", leaf, store)
+    mid = new_node("collection", id="mid").add_ref(leaf_stub)
+    mid_stub = await aio.create(f"{DATA}/mid.json", mid, store)
+    entry = new_node("collection", id="root").add_ref(mid_stub)
+    await aio.create(f"{DATA}/entry.json", entry, store)
+
+    opened = await aio.open(f"{DATA}/entry.json", store)
+    ref = ReferenceObj(id="mid", path=opened.children()[0].record.ref.path)
+
+    view = await aio.open_inlined_ref(ref, opened.document_url, store)
+    assert view.id == "mid" and view.tree.mode == "resolved"
+    # The nested leaf reference was inlined too, not left as a stub.
+    leaf_node = view.find("leaf")
+    assert leaf_node is not None and not leaf_node.is_reference
+    assert leaf_node.attributes["role"] == "deep"
+
+
+async def test_open_ref_missing_id_raises_lookup_error() -> None:
+    import pytest
+
+    store = _MemoryStore()
+    image = new_node("multiscale", id="image")
+    await aio.create(f"{DATA}/image.zarr", image, store)
+    ref = ReferenceObj(id="absent", path=ZarrPath(path=f"{DATA}/image.zarr"))
+    with pytest.raises(LookupError):
+        await aio.open_ref(ref, store=store)
+
+
+async def test_open_ref_without_path_raises() -> None:
+    import pytest
+
+    from ngio_collections.models._config import NodeStateError
+
+    with pytest.raises(NodeStateError):
+        await aio.open_ref(ReferenceObj(id="image", path=None))
 
 
 async def test_create_refuses_existing_without_overwrite() -> None:

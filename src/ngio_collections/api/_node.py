@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import builtins
 from dataclasses import replace
-from typing import Iterator, Mapping, TypeVar
+from typing import Iterator, Mapping, Sequence, TypeVar
 
 from pydantic import JsonValue
 
@@ -36,8 +36,8 @@ from ngio_collections.models._paths import ZARR_METADATA_FILE
 from ngio_collections.models._references import ReferenceObj
 from ngio_collections.models.attributes import AnyAttribute
 from ngio_collections.validate import (
-    Issue,
-    ValidatorRegistry,
+    ValidationError,
+    ValidatorType,
     get_attribute,
     has_attribute,
     read_attribute,
@@ -142,6 +142,13 @@ class Node:
             return None
         return wrap_node(self._tree, self._id[:-1])
 
+    def ancestors(self) -> Iterator[Node]:
+        """Yield the parent, grandparent, … up to and including the root."""
+        node_id = self._id
+        while node_id:
+            node_id = node_id[:-1]
+            yield wrap_node(self._tree, node_id)
+
     def find(self, id: str) -> Node | None:
         """Return the first node in this subtree whose local id is `id`."""
         for key in self._tree.find(id):
@@ -197,9 +204,14 @@ class Node:
 
     # -- validation ---------------------------------------------------------
 
-    def validate(self, *, registry: ValidatorRegistry | None = None) -> list[Issue]:
-        """Run every applicable validator on this node; return the issues found."""
-        return validate(self._tree, self._id, registry=registry)
+    def validate(
+        self,
+        validators: Sequence[ValidatorType],
+        *,
+        raise_on_error: bool = False,
+    ) -> list[ValidationError]:
+        """Run `validators` over this node and its descendants; return failures."""
+        return validate(self, validators, raise_on_error=raise_on_error)
 
     # -- functional edits ---------------------------------------------------
     #
