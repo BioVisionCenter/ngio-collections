@@ -19,7 +19,9 @@ def main() -> None:
     print("after add:  ", [n.id for n in edited.walk()])
 
     # add() on any located node nests under it.
-    edited = edited.find("analysis").add(ngc.new_node("multiscale", id="result", name="result"))
+    edited = edited.find("analysis").add(
+        ngc.new_node("multiscale", id="result", name="result")
+    )
     print("after nest: ", [n.id for n in edited.walk()])
 
 

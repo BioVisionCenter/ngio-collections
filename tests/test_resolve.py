@@ -115,15 +115,31 @@ def test_type_mismatch_skips_or_raises() -> None:
 def test_cycle_terminates_and_leaves_stub() -> None:
     entry = _doc(
         "collection",
-        {"type": "collection", "id": "root", "nodes": [
-            {"type": "collection", "name": "a", "path": {"type": "json", "path": "./a.json"}}
-        ]},
+        {
+            "type": "collection",
+            "id": "root",
+            "nodes": [
+                {
+                    "type": "collection",
+                    "name": "a",
+                    "path": {"type": "json", "path": "./a.json"},
+                }
+            ],
+        },
     )
     a = _doc(
         "a",
-        {"type": "collection", "id": "a", "nodes": [
-            {"type": "collection", "name": "back", "path": {"type": "json", "path": "./collection.json"}}
-        ]},
+        {
+            "type": "collection",
+            "id": "a",
+            "nodes": [
+                {
+                    "type": "collection",
+                    "name": "back",
+                    "path": {"type": "json", "path": "./collection.json"},
+                }
+            ],
+        },
     )
     docs = {entry.url: entry, a.url: a}
     c = build(entry.url, docs, inline=True)
@@ -202,5 +218,10 @@ async def test_fetch_all_depth_zero_reads_only_entry() -> None:
 
 
 def test_reference_targets_lists_outgoing_urls() -> None:
-    entry = _doc("collection", _collection_with(_stub("a", "image"), _stub("b", "labels")))
-    assert set(reference_targets(entry)) == {f"{DATA}/image.json", f"{DATA}/labels.json"}
+    entry = _doc(
+        "collection", _collection_with(_stub("a", "image"), _stub("b", "labels"))
+    )
+    assert set(reference_targets(entry)) == {
+        f"{DATA}/image.json",
+        f"{DATA}/labels.json",
+    }

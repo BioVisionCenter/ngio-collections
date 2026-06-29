@@ -26,7 +26,14 @@ from typing import Literal, Mapping
 
 from pydantic import JsonValue
 
-from ngio_collections.graph import ROOT, NodeId, NodeRecord, NodeTree, Reference, TreeBuilder
+from ngio_collections.graph import (
+    ROOT,
+    NodeId,
+    NodeRecord,
+    NodeTree,
+    Reference,
+    TreeBuilder,
+)
 from ngio_collections.models._paths import DocPath, meta_url
 from ngio_collections.resolve._document import Document
 
@@ -143,7 +150,9 @@ class _Builder:
             record = _materialized_record(node_dict, doc.url)
             return _Resolved(record, node_dict, doc, depth, ancestors)
         if not self.inline:
-            return _Resolved(_reference_record(node_dict, doc.url), None, doc, depth, ancestors)
+            return _Resolved(
+                _reference_record(node_dict, doc.url), None, doc, depth, ancestors
+            )
         return self._inline_stub(node_dict, doc, depth, ancestors)
 
     def _inline_stub(
@@ -159,7 +168,9 @@ class _Builder:
         if depth == 0:
             return leave  # hop budget exhausted
         try:
-            target_url = meta_url(DocPath.model_validate(node_dict["path"]).resolve(doc.url))
+            target_url = meta_url(
+                DocPath.model_validate(node_dict["path"]).resolve(doc.url)
+            )
         except Exception:
             if self.on_error == "raise":
                 raise
@@ -182,7 +193,9 @@ class _Builder:
             return leave
         merged = _merge_record(node_dict, target.root, target.url)
         next_depth = None if depth is None else depth - 1
-        return _Resolved(merged, target.root, target, next_depth, ancestors | {target_url})
+        return _Resolved(
+            merged, target.root, target, next_depth, ancestors | {target_url}
+        )
 
 
 def _attributes(node_dict: dict) -> Mapping[str, JsonValue]:

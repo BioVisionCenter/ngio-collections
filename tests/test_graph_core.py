@@ -60,7 +60,9 @@ def test_pmap_evolver_batches_then_finishes_once() -> None:
 def test_record_rejects_branch_and_ref_together() -> None:
     with pytest.raises(ValueError):
         NodeRecord(
-            type="collection", children=(), ref=Reference(path=ZarrPath(path="../x.zarr"))
+            type="collection",
+            children=(),
+            ref=Reference(path=ZarrPath(path="../x.zarr")),
         )
 
 
@@ -85,7 +87,9 @@ def _sample() -> tuple[NodeTree, dict[str, tuple[str, ...]]]:
     c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
     c, img = c.add_child(ROOT, NodeRecord(type="multiscale", id="img", children=()))
     c, zero = c.add_child(img, NodeRecord(type="singlescale", id="0"))
-    c, labels = c.add_child(ROOT, NodeRecord(type="collection", id="labels", children=()))
+    c, labels = c.add_child(
+        ROOT, NodeRecord(type="collection", id="labels", children=())
+    )
     c, nuclei = c.add_child(labels, NodeRecord(type="multiscale", id="nuclei"))
     keys = {"root": ROOT, "img": img, "0": zero, "labels": labels, "nuclei": nuclei}
     return c, keys
@@ -193,21 +197,29 @@ def test_remove_root_raises_and_missing_is_idempotent() -> None:
 def test_tree_builder_matches_incremental_add_child() -> None:
     # Build the same tree two ways: incremental add_child vs the bulk TreeBuilder.
     tb = TreeBuilder(NodeRecord(type="collection", id="root", children=()))
-    img = tb.add_child(ROOT, NodeRecord(type="multiscale", id="img", attributes={"r": 1}, children=()))
+    img = tb.add_child(
+        ROOT, NodeRecord(type="multiscale", id="img", attributes={"r": 1}, children=())
+    )
     tb.add_child(img, NodeRecord(type="singlescale", id="0"))
     tb.add_child(ROOT, NodeRecord(type="collection", id="dup"))
-    tb.add_child(ROOT, NodeRecord(type="collection", id="dup"))  # duplicate -> positional
+    tb.add_child(
+        ROOT, NodeRecord(type="collection", id="dup")
+    )  # duplicate -> positional
     built = tb.finish()
 
     inc, _ = _sample_like_builder()
-    assert [built.record(n).id for n in built.walk()] == [inc.record(n).id for n in inc.walk()]
+    assert [built.record(n).id for n in built.walk()] == [
+        inc.record(n).id for n in inc.walk()
+    ]
     assert dict(built.record(("img",)).attributes) == {"r": 1}
     assert len(built.find("dup")) == 2  # both kept, distinct keys
 
 
 def _sample_like_builder() -> tuple[NodeTree, None]:
     c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
-    c, img = c.add_child(ROOT, NodeRecord(type="multiscale", id="img", attributes={"r": 1}, children=()))
+    c, img = c.add_child(
+        ROOT, NodeRecord(type="multiscale", id="img", attributes={"r": 1}, children=())
+    )
     c, _ = c.add_child(img, NodeRecord(type="singlescale", id="0"))
     c, _ = c.add_child(ROOT, NodeRecord(type="collection", id="dup"))
     c, _ = c.add_child(ROOT, NodeRecord(type="collection", id="dup"))

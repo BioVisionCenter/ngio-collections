@@ -75,7 +75,11 @@ def test_set_attrs_merge_and_rename_and_remove() -> None:
     root = root.find("img").set_attrs({"x": 1})  # each edit returns the tree root
     root = root.find("img").rename("Raw")
     img = root.find("img")
-    assert img.attributes["x"] == 1 and img.name == "Raw" and img.attributes["role"] == "raw"
+    assert (
+        img.attributes["x"] == 1
+        and img.name == "Raw"
+        and img.attributes["role"] == "raw"
+    )
     pruned = root.find("labels").remove()
     assert pruned.find("nuclei") is None and pruned.id == "root"
 
@@ -86,19 +90,29 @@ def test_set_attrs_merge_and_rename_and_remove() -> None:
 
 
 def test_validate_through_handle() -> None:
-    plate = new_node("collection", id="plate", attributes={
-        "plate": {"columns": [{"id": "c1"}], "rows": [{"id": "r1"}]}
-    })
-    plate = plate.add(new_node("collection", id="A1", attributes={
-        "well": {"column": {"id": "c1"}, "row": {"id": "r1"}}
-    }))
+    plate = new_node(
+        "collection",
+        id="plate",
+        attributes={"plate": {"columns": [{"id": "c1"}], "rows": [{"id": "r1"}]}},
+    )
+    plate = plate.add(
+        new_node(
+            "collection",
+            id="A1",
+            attributes={"well": {"column": {"id": "c1"}, "row": {"id": "r1"}}},
+        )
+    )
     validators = (ngc.well_under_plate, ngc.scale_matches_axes)
     assert plate.find("A1").validate(validators) == []  # well under plate -> ok
 
     orphan = new_node("collection", id="root")
-    orphan = orphan.add(new_node("collection", id="A1", attributes={
-        "well": {"column": {"id": "c1"}, "row": {"id": "r1"}}
-    }))
+    orphan = orphan.add(
+        new_node(
+            "collection",
+            id="A1",
+            attributes={"well": {"column": {"id": "c1"}, "row": {"id": "r1"}}},
+        )
+    )
     errors = orphan.find("A1").validate(validators)
     assert [e.validator for e in errors] == ["well_under_plate"]
     assert plate.find("A1").has(PlateAttribute) is False  # the plate is the parent

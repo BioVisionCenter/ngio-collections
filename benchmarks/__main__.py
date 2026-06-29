@@ -50,17 +50,39 @@ def _parse_ops(value: str) -> list[str]:
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="benchmarks", description=__doc__)
-    p.add_argument("--target", type=int, default=90_000, help="approx node count (default: 90,000)")
-    p.add_argument("--shard", choices=["leaf", "scene", "well", "plate", "none"], default="scene",
-                   help="document boundary for the on-disk layout (default: scene)")
-    p.add_argument("--ops", type=_parse_ops, default=list(ALL_OPS),
-                   help=f"subset of {{{','.join(ALL_OPS)}}} or 'all' (default: all)")
-    p.add_argument("--repeats", type=int, default=5, help="timed runs per op (default: 5)")
-    p.add_argument("--rebuild", action="store_true", help="regenerate the cached dataset")
-    p.add_argument("--data-root", type=str, default=None, help="override the dataset cache root")
-    p.add_argument("--seed", type=int, default=0, help="RNG seed for find/edit id sampling")
-    p.add_argument("--io-latency-ms", type=float, default=0.0,
-                   help="inject per-read latency (ms) via a DelayStore (default: 0)")
+    p.add_argument(
+        "--target", type=int, default=90_000, help="approx node count (default: 90,000)"
+    )
+    p.add_argument(
+        "--shard",
+        choices=["leaf", "scene", "well", "plate", "none"],
+        default="scene",
+        help="document boundary for the on-disk layout (default: scene)",
+    )
+    p.add_argument(
+        "--ops",
+        type=_parse_ops,
+        default=list(ALL_OPS),
+        help=f"subset of {{{','.join(ALL_OPS)}}} or 'all' (default: all)",
+    )
+    p.add_argument(
+        "--repeats", type=int, default=5, help="timed runs per op (default: 5)"
+    )
+    p.add_argument(
+        "--rebuild", action="store_true", help="regenerate the cached dataset"
+    )
+    p.add_argument(
+        "--data-root", type=str, default=None, help="override the dataset cache root"
+    )
+    p.add_argument(
+        "--seed", type=int, default=0, help="RNG seed for find/edit id sampling"
+    )
+    p.add_argument(
+        "--io-latency-ms",
+        type=float,
+        default=0.0,
+        help="inject per-read latency (ms) via a DelayStore (default: 0)",
+    )
     return p.parse_args()
 
 
@@ -104,7 +126,11 @@ def main() -> None:
     def _read_store() -> ngc.LocalStore | DelayStore:
         """A fresh store honoring --io-latency-ms (cold cache: new each call)."""
         store = ngc.LocalStore()
-        return DelayStore(store, args.io_latency_ms / 1000) if args.io_latency_ms else store
+        return (
+            DelayStore(store, args.io_latency_ms / 1000)
+            if args.io_latency_ms
+            else store
+        )
 
     results: list[Result] = list(setup_results)
     scratch: Path | None = None
@@ -118,30 +144,43 @@ def main() -> None:
             edit_ids = itertools.cycle(sample)
 
         if "read" in ops:
-            results.append(measure("read (inlined)",
-                                   lambda: ngc.open_inlined(entry_url, _read_store()), args.repeats))
+            results.append(
+                measure(
+                    "read (inlined)",
+                    lambda: ngc.open_inlined(entry_url, _read_store()),
+                    args.repeats,
+                )
+            )
         if "walk" in ops:
             assert view is not None
             results.append(measure("walk", lambda: _consume(view.walk()), args.repeats))
         if "find" in ops:
             assert view is not None
-            results.append(measure("find (random id)", lambda: view.find(next(find_ids)), args.repeats))
+            results.append(
+                measure(
+                    "find (random id)", lambda: view.find(next(find_ids)), args.repeats
+                )
+            )
         if "edit" in ops:
             assert view is not None
-            results.append(measure(
-                "edit (set_attrs)",
-                lambda: view.find(next(edit_ids)).set_attrs({"bench": 1}),
-                args.repeats,
-            ))
+            results.append(
+                measure(
+                    "edit (set_attrs)",
+                    lambda: view.find(next(edit_ids)).set_attrs({"bench": 1}),
+                    args.repeats,
+                )
+            )
         if "write" in ops:
             write_view = ngc.open_inlined(entry_url, _read_store())
             scratch = Path(tempfile.mkdtemp(prefix="ngio-bench-write-"))
             out_url = str(scratch / "snapshot.json")
-            results.append(measure(
-                "write (snapshot)",
-                lambda: ngc.save_inlined(write_view, out_url, overwrite=True),
-                args.repeats,
-            ))
+            results.append(
+                measure(
+                    "write (snapshot)",
+                    lambda: ngc.save_inlined(write_view, out_url, overwrite=True),
+                    args.repeats,
+                )
+            )
 
         print(format_table(results))
         print()

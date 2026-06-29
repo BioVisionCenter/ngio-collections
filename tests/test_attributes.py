@@ -43,7 +43,15 @@ def test_well_carries_reference_objects() -> None:
 
 def test_coordinate_systems_list_attribute_and_typed_axes() -> None:
     systems = CoordinateSystemsAttribute.model_validate(
-        [{"id": "cs0", "axes": [{"name": "x", "unit": "micrometer"}, {"name": "c", "discrete": True}]}]
+        [
+            {
+                "id": "cs0",
+                "axes": [
+                    {"name": "x", "unit": "micrometer"},
+                    {"name": "c", "discrete": True},
+                ],
+            }
+        ]
     )
     axes = systems.root[0].axes
     assert systems.root[0].id == "cs0"

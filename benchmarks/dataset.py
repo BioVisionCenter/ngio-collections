@@ -31,7 +31,14 @@ from typing import Literal
 
 from benchmarks.harness import Result, measure_value
 from ngio_collections.api._node import reference_path
-from ngio_collections.graph import ROOT, NodeId, NodeRecord, NodeTree, Reference, TreeBuilder
+from ngio_collections.graph import (
+    ROOT,
+    NodeId,
+    NodeRecord,
+    NodeTree,
+    Reference,
+    TreeBuilder,
+)
 from ngio_collections.io.store import LocalStore, WritableStore
 from ngio_collections.resolve import write_document
 
@@ -103,32 +110,84 @@ def document_count(shard: ShardLevel, scenes_per_well: int) -> int:
 
 def _scene_children(tb: TreeBuilder, scene_key: NodeId, scene_id: str) -> None:
     for i in range(IMAGES):
-        tb.add_child(scene_key, NodeRecord(type="multiscale", id=f"{scene_id}-img{i}",
-                                           name=f"img{i}", attributes={"role": "image"}))
+        tb.add_child(
+            scene_key,
+            NodeRecord(
+                type="multiscale",
+                id=f"{scene_id}-img{i}",
+                name=f"img{i}",
+                attributes={"role": "image"},
+            ),
+        )
     for i in range(LABELS):
-        tb.add_child(scene_key, NodeRecord(type="multiscale", id=f"{scene_id}-lbl{i}",
-                                           name=f"lbl{i}", attributes={"role": "label"}))
+        tb.add_child(
+            scene_key,
+            NodeRecord(
+                type="multiscale",
+                id=f"{scene_id}-lbl{i}",
+                name=f"lbl{i}",
+                attributes={"role": "label"},
+            ),
+        )
     for i in range(TABLES):
-        tb.add_child(scene_key, NodeRecord(type="bench:table", id=f"{scene_id}-tbl{i}",
-                                           name=f"tbl{i}", attributes={"role": "table"}))
+        tb.add_child(
+            scene_key,
+            NodeRecord(
+                type="bench:table",
+                id=f"{scene_id}-tbl{i}",
+                name=f"tbl{i}",
+                attributes={"role": "table"},
+            ),
+        )
 
 
 def build_monolithic(scenes_per_well: int) -> NodeTree:
     """Build the full detached collection tree with every node inline (O(n))."""
-    tb = TreeBuilder(NodeRecord(type="collection", id="root", name="root",
-                                attributes={"role": "root"}, children=()))
+    tb = TreeBuilder(
+        NodeRecord(
+            type="collection",
+            id="root",
+            name="root",
+            attributes={"role": "root"},
+            children=(),
+        )
+    )
     for p in range(PLATES):
         pid = f"p{p}"
-        pk = tb.add_child(ROOT, NodeRecord(type="collection", id=pid, name=pid,
-                                           attributes={"role": "plate"}, children=()))
+        pk = tb.add_child(
+            ROOT,
+            NodeRecord(
+                type="collection",
+                id=pid,
+                name=pid,
+                attributes={"role": "plate"},
+                children=(),
+            ),
+        )
         for w in range(WELLS_PER_PLATE):
             wid = f"{pid}-w{w}"
-            wk = tb.add_child(pk, NodeRecord(type="collection", id=wid, name=wid,
-                                             attributes={"role": "well"}, children=()))
+            wk = tb.add_child(
+                pk,
+                NodeRecord(
+                    type="collection",
+                    id=wid,
+                    name=wid,
+                    attributes={"role": "well"},
+                    children=(),
+                ),
+            )
             for s in range(scenes_per_well):
                 sid = f"{wid}-s{s}"
-                sk = tb.add_child(wk, NodeRecord(type="collection", id=sid, name=sid,
-                                                 attributes={"role": "scene"}, children=()))
+                sk = tb.add_child(
+                    wk,
+                    NodeRecord(
+                        type="collection",
+                        id=sid,
+                        name=sid,
+                        attributes={"role": "scene"},
+                        children=(),
+                    ),
+                )
                 _scene_children(tb, sk, sid)
     return tb.finish()
 
@@ -143,7 +202,12 @@ def _writable(store: object) -> WritableStore:
 
 
 async def _write_node(
-    tree: NodeTree, node_id: NodeId, depth: int, boundary: int, store: object, parent_dir: Path
+    tree: NodeTree,
+    node_id: NodeId,
+    depth: int,
+    boundary: int,
+    store: object,
+    parent_dir: Path,
 ) -> tuple[str, Reference]:
     """Write `node_id`'s subtree to disk; return its URL and a reference to it."""
     rec = tree.record(node_id)
@@ -159,15 +223,21 @@ async def _write_node(
                 tree, child, depth + 1, boundary, store, parent_dir / (rec.id or "node")
             )
             crec = tree.record(child)
-            container.add_child(ROOT, NodeRecord(type=crec.type, name=crec.name, ref=child_ref))
+            container.add_child(
+                ROOT, NodeRecord(type=crec.type, name=crec.name, ref=child_ref)
+            )
         await write_document(store, url, container.finish(), root_id=ROOT)
     return url, Reference(path=reference_path(url), id=rec.id)
 
 
-async def write_sharded(tree: NodeTree, shard: ShardLevel, store: object, workdir: str | Path) -> str:
+async def write_sharded(
+    tree: NodeTree, shard: ShardLevel, store: object, workdir: str | Path
+) -> str:
     """Write `tree` to `workdir` at the given sharding; return the entry URL."""
     _writable(store)
-    url, _ = await _write_node(tree, ROOT, 0, _BOUNDARY_DEPTH[shard], store, Path(workdir))
+    url, _ = await _write_node(
+        tree, ROOT, 0, _BOUNDARY_DEPTH[shard], store, Path(workdir)
+    )
     return url
 
 
@@ -177,7 +247,9 @@ DATA_ROOT = Path(__file__).parent / ".data"
 _MARKER = ".benchmark.json"
 
 
-def dataset_dir(shard: ShardLevel, scenes_per_well: int, data_root: Path | None = None) -> Path:
+def dataset_dir(
+    shard: ShardLevel, scenes_per_well: int, data_root: Path | None = None
+) -> Path:
     """Cache directory for a given (shard, scale) dataset."""
     return (data_root or DATA_ROOT) / f"{shard}-n{scenes_per_well}"
 
@@ -198,15 +270,27 @@ def ensure_dataset(
     if not rebuild and marker.exists():
         return json.loads(marker.read_text())["entry_url"], []
 
-    build_res, tree = measure_value("build (in-mem)", lambda: build_monolithic(scenes_per_well))
+    build_res, tree = measure_value(
+        "build (in-mem)", lambda: build_monolithic(scenes_per_well)
+    )
 
     async def _write() -> str:
         return await write_sharded(tree, shard, LocalStore(), target_dir)
 
-    write_res, entry_url = measure_value("dataset write (disk)", lambda: asyncio.run(_write()))
+    write_res, entry_url = measure_value(
+        "dataset write (disk)", lambda: asyncio.run(_write())
+    )
 
     target_dir.mkdir(parents=True, exist_ok=True)
-    marker.write_text(json.dumps(
-        {"entry_url": entry_url, "shard": shard, "scenes_per_well": scenes_per_well,
-         "nodes": estimate_nodes(scenes_per_well)}, indent=2))
+    marker.write_text(
+        json.dumps(
+            {
+                "entry_url": entry_url,
+                "shard": shard,
+                "scenes_per_well": scenes_per_well,
+                "nodes": estimate_nodes(scenes_per_well),
+            },
+            indent=2,
+        )
+    )
     return entry_url, [build_res, write_res]

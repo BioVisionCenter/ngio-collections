@@ -164,7 +164,9 @@ class NodeTree:
         parent = self.nodes[parent_id]
         if parent.is_reference:
             raise ValueError(f"cannot add a child to reference node {parent_id}")
-        child_rec = replace(record, children=() if record.children is not None else None)
+        child_rec = replace(
+            record, children=() if record.children is not None else None
+        )
         siblings = parent.children or ()
         child_key = (*parent_id, _segment_for(siblings, child_rec))
 
@@ -210,21 +212,26 @@ class NodeTree:
     ) -> NodeTree:
         """Replace the whole attribute bag of `node_id`."""
         rec = self.nodes[node_id]
-        return replace(self, nodes=self.nodes.set(node_id, replace(rec, attributes=dict(attributes))))
+        return replace(
+            self,
+            nodes=self.nodes.set(node_id, replace(rec, attributes=dict(attributes))),
+        )
 
-    def set_attrs(
-        self, node_id: NodeId, values: Mapping[str, JsonValue]
-    ) -> NodeTree:
+    def set_attrs(self, node_id: NodeId, values: Mapping[str, JsonValue]) -> NodeTree:
         """Merge `values` into the attribute bag of `node_id`."""
         rec = self.nodes[node_id]
         merged = {**rec.attributes, **values}
-        return replace(self, nodes=self.nodes.set(node_id, replace(rec, attributes=merged)))
+        return replace(
+            self, nodes=self.nodes.set(node_id, replace(rec, attributes=merged))
+        )
 
     def drop_attrs(self, node_id: NodeId, keys: tuple[str, ...]) -> NodeTree:
         """Remove `keys` from the attribute bag of `node_id` (missing keys ignored)."""
         rec = self.nodes[node_id]
         remaining = {k: v for k, v in rec.attributes.items() if k not in keys}
-        return replace(self, nodes=self.nodes.set(node_id, replace(rec, attributes=remaining)))
+        return replace(
+            self, nodes=self.nodes.set(node_id, replace(rec, attributes=remaining))
+        )
 
     def rename(self, node_id: NodeId, name: str | None) -> NodeTree:
         """Set the display `name` of `node_id`."""
@@ -266,7 +273,9 @@ class TreeBuilder:
         parent = self._nodes[parent_key]
         if parent.is_reference:
             raise ValueError(f"cannot add a child to reference node {parent_key}")
-        child_rec = replace(record, children=() if record.children is not None else None)
+        child_rec = replace(
+            record, children=() if record.children is not None else None
+        )
         siblings = parent.children or ()
         child_key = (*parent_key, _segment_for(siblings, child_rec))
         self._nodes[child_key] = child_rec

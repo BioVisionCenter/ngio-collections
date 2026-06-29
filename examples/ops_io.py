@@ -26,7 +26,9 @@ def main() -> None:
     url = str(base_path / "collection.json")
 
     # Write a child image document; create() hands back a reference stub.
-    image = ngc.new_node("multiscale", id="image", name="image", attributes={"role": "raw"})
+    image = ngc.new_node(
+        "multiscale", id="image", name="image", attributes={"role": "raw"}
+    )
     rf_image = ngc.create(str(base_path / "image.zarr"), image, overwrite=True)
 
     # Decorate the stub with an overlay the parent layers onto the child on read,

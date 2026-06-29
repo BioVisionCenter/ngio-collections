@@ -121,7 +121,11 @@ def test_scale_resolves_coordinate_system_from_ancestor() -> None:
 def test_node_with_two_capabilities_runs_both_validators() -> None:
     # A node that is both a `well` (no plate parent) AND carries a bad scale
     # transform against a coordinate system it defines itself.
-    bad = {**_well(), **_coordinate_systems("space", "z", "y", "x"), **_scale("space", 2.0, 2.0)}
+    bad = {
+        **_well(),
+        **_coordinate_systems("space", "z", "y", "x"),
+        **_scale("space", 2.0, 2.0),
+    }
     node = ngc.new_node("multiscale", id="x", attributes=bad)
     found = {e.validator for e in ngc.validate(node, validators=VALIDATORS)}
     assert found == {well_under_plate.__name__, scale_matches_axes.__name__}
@@ -137,8 +141,6 @@ def test_raise_on_error_reraises_first_failure() -> None:
         ngc.new_node("collection", id="A1", attributes=_well())
     )
     with pytest.raises(ngc.ValidationError) as exc_info:
-        ngc.validate(
-            orphan.find("A1"), validators=VALIDATORS, raise_on_error=True
-        )
+        ngc.validate(orphan.find("A1"), validators=VALIDATORS, raise_on_error=True)
     assert exc_info.value.validator == "well_under_plate"
     assert exc_info.value.node_id == ("A1",)

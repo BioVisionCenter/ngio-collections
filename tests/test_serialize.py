@@ -51,7 +51,10 @@ class _MemoryStore:
 def _sample_collection() -> NodeTree:
     c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
     c, img = c.add_child(
-        ROOT, NodeRecord(type="multiscale", id="img", attributes={"role": "raw"}, children=())
+        ROOT,
+        NodeRecord(
+            type="multiscale", id="img", attributes={"role": "raw"}, children=()
+        ),
     )
     c, _ = c.add_child(img, NodeRecord(type="singlescale", id="0", children=()))
     return c

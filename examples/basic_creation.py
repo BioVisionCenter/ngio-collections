@@ -23,27 +23,39 @@ def single_scales(prefix: str) -> tuple[ngc.Node, ...]:
     # Single scales reference on-disk zarr arrays ("0", "1"): reference nodes, not
     # embedded data. Ids must be unique across the collection, so we prefix them.
     return (
-        ngc.new_node("singlescale", id=f"{prefix}_0", ref=ngc.Reference(path=ngc.ZarrPath(path="./0"))),
-        ngc.new_node("singlescale", id=f"{prefix}_1", ref=ngc.Reference(path=ngc.ZarrPath(path="./1"))),
+        ngc.new_node(
+            "singlescale",
+            id=f"{prefix}_0",
+            ref=ngc.Reference(path=ngc.ZarrPath(path="./0")),
+        ),
+        ngc.new_node(
+            "singlescale",
+            id=f"{prefix}_1",
+            ref=ngc.Reference(path=ngc.ZarrPath(path="./1")),
+        ),
     )
 
 
-def build_multiscale(prefix: str, extra_attr: ngc.AnyAttribute | None = None) -> ngc.Node:
+def build_multiscale(
+    prefix: str, extra_attr: ngc.AnyAttribute | None = None
+) -> ngc.Node:
     node = ngc.new_node("multiscale", id=prefix, name=prefix)
     for scale in single_scales(prefix):
         node = node.add(scale)  # tree-out: node is the multiscale root again
 
     # The multiscale defines the coordinate system its single scales map into.
     node = node.set_attr(
-        ngc.CoordinateSystemsAttribute([
-            ngc.CoordinateSystem(
-                id=f"{prefix}_space",
-                axes=[
-                    ngc.Axis(name="y", type="space", unit="micrometer"),
-                    ngc.Axis(name="x", type="space", unit="micrometer"),
-                ],
-            )
-        ])
+        ngc.CoordinateSystemsAttribute(
+            [
+                ngc.CoordinateSystem(
+                    id=f"{prefix}_space",
+                    axes=[
+                        ngc.Axis(name="y", type="space", unit="micrometer"),
+                        ngc.Axis(name="x", type="space", unit="micrometer"),
+                    ],
+                )
+            ]
+        )
     )
     if extra_attr is not None:
         node = node.set_attr(extra_attr)
@@ -51,13 +63,15 @@ def build_multiscale(prefix: str, extra_attr: ngc.AnyAttribute | None = None) ->
     # Each single scale maps its array onto the shared coordinate system.
     for level, factor in enumerate((1.0, 2.0)):
         node = node.find(f"{prefix}_{level}").set_attr(
-            ngc.CoordinateTransformationsAttribute([
-                ngc.ScaleTransformation(
-                    input=ngc.ReferenceObj(id=f"{prefix}_{level}"),
-                    output=ngc.ReferenceObj(id=f"{prefix}_space"),
-                    scale=[factor, factor],
-                )
-            ])
+            ngc.CoordinateTransformationsAttribute(
+                [
+                    ngc.ScaleTransformation(
+                        input=ngc.ReferenceObj(id=f"{prefix}_{level}"),
+                        output=ngc.ReferenceObj(id=f"{prefix}_space"),
+                        scale=[factor, factor],
+                    )
+                ]
+            )
         )
     return node
 
@@ -71,7 +85,9 @@ def build_collection() -> ngc.Node:
         )
     )
     labels = ngc.new_node("collection", id="labels").add(nuclei)
-    return ngc.new_node("collection", id="root").add(build_multiscale("image")).add(labels)
+    return (
+        ngc.new_node("collection", id="root").add(build_multiscale("image")).add(labels)
+    )
 
 
 def main() -> None:

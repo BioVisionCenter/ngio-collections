@@ -32,7 +32,14 @@ def main() -> None:
     # ("region") rides in the open attributes dict.
     root = (
         ngc.new_node("collection", id="experiment", name="My Experiment")
-        .add(ngc.new_node("fractal:table", id="t1", name="regionprops", attributes={"region": "FOV_1"}))
+        .add(
+            ngc.new_node(
+                "fractal:table",
+                id="t1",
+                name="regionprops",
+                attributes={"region": "FOV_1"},
+            )
+        )
         .add(ngc.new_node("mobie:view", id="v1", name="view"))
     )
     ngc.create(url, root, overwrite=True)
@@ -42,13 +49,21 @@ def main() -> None:
     opened = ngc.open(url)
     table = opened.find("t1")
     view = opened.find("v1")
-    print(f"open():         {type(table).__name__}, region={table.attributes['region']!r}")
+    print(
+        f"open():         {type(table).__name__}, region={table.attributes['region']!r}"
+    )
     print(f"unregistered:   {type(view).__name__}, type={view.type!r}")
 
     # open_inlined(): the same handle class, since v5 has one class per type.
     inlined = ngc.open_inlined(url).find("t1")
-    print(f"open_inlined(): {type(inlined).__name__}, region={inlined.attributes['region']!r}")
-    print("isinstance(_, TableNode):", isinstance(table, TableNode), isinstance(inlined, TableNode))
+    print(
+        f"open_inlined(): {type(inlined).__name__}, region={inlined.attributes['region']!r}"
+    )
+    print(
+        "isinstance(_, TableNode):",
+        isinstance(table, TableNode),
+        isinstance(inlined, TableNode),
+    )
 
 
 if __name__ == "__main__":

@@ -132,8 +132,7 @@ class Node:
     def children(self) -> tuple[Node, ...]:
         """Return this node's direct children."""
         return tuple(
-            wrap_node(self._tree, child)
-            for child in self._tree.children_ids(self._id)
+            wrap_node(self._tree, child) for child in self._tree.children_ids(self._id)
         )
 
     def parent(self) -> Node | None:
@@ -169,7 +168,11 @@ class Node:
         src = self._tree
         root = src.record(self._id)
         builder = TreeBuilder(
-            replace(root, origin_url=None, children=() if root.children is not None else None)
+            replace(
+                root,
+                origin_url=None,
+                children=() if root.children is not None else None,
+            )
         )
         remap: dict[NodeId, NodeId] = {self._id: ROOT}
         for node_id in src.walk(self._id):

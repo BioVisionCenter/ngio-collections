@@ -100,7 +100,8 @@ def format_table(results: list[Result]) -> str:
         for r in results
     ]
     widths = [
-        max(len(headers[i]), *(len(row[i]) for row in rows)) for i in range(len(headers))
+        max(len(headers[i]), *(len(row[i]) for row in rows))
+        for i in range(len(headers))
     ]
 
     def fmt(cells: tuple[str, ...]) -> str:

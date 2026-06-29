@@ -30,7 +30,9 @@ class PersistentMap(Generic[K, V]):
 
     __slots__ = ("_data",)
 
-    def __init__(self, data: Mapping[K, V] | None = None, *, _own: bool = False) -> None:
+    def __init__(
+        self, data: Mapping[K, V] | None = None, *, _own: bool = False
+    ) -> None:
         """Wrap `data`, copying it unless `_own` transfers exclusive ownership.
 
         Args:

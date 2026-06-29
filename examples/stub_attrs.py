@@ -90,7 +90,9 @@ def main() -> None:
         attributes={"display": "in-memory-stub"},  # overlay set at construction
     )
     other_url = str(base / "collection-readonly-child.json")
-    ngc.create(other_url, ngc.new_node("collection", id="root").add_ref(stub), overwrite=True)
+    ngc.create(
+        other_url, ngc.new_node("collection", id="root").add_ref(stub), overwrite=True
+    )
 
     view = ngc.open_inlined(other_url)
     print("ref without writing:", dict(view.find("image").attributes))

@@ -31,7 +31,9 @@ def main() -> None:
 
     # The labels multiscale records, in its `labels` attribute, the image it
     # segments — via that portable reference.
-    labels = build_multiscale("labels", extra_attr=ngc.LabelsAttribute(source=[image_ref]))
+    labels = build_multiscale(
+        "labels", extra_attr=ngc.LabelsAttribute(source=[image_ref])
+    )
     rf_labels = ngc.create(labels_url, labels, overwrite=True)
     print("image ref :", image_ref.model_dump())
 

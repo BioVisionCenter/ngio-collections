@@ -48,7 +48,5 @@ class CoordinateSystemsAttribute(BaseListAttribute[CoordinateSystem]):
     key: ClassVar[str] = "coordinateSystems"
 
 
-class CoordinateTransformationsAttribute(
-    BaseListAttribute[CoordinateTransformation]
-):
+class CoordinateTransformationsAttribute(BaseListAttribute[CoordinateTransformation]):
     key: ClassVar[str] = "coordinateTransformations"

@@ -77,7 +77,9 @@ async def open_inlined(
     docs = await fetch_all(url, store, depth=depth)
     if url not in docs:
         raise FileNotFoundError(url)
-    return wrap_node(build(url, docs, inline=True, depth=depth, on_error=on_error), ROOT)
+    return wrap_node(
+        build(url, docs, inline=True, depth=depth, on_error=on_error), ROOT
+    )
 
 
 def _ref_url(ref: ReferenceObj, base_url: str | None) -> str:
@@ -175,11 +177,15 @@ async def create(
         raise NodeStateError(
             f"a document already exists at {url!r}; open it and save(), or pass overwrite=True"
         )
-    await write_document(store, url, root.tree, root_id=root.node_id, relativize=relativize)
+    await write_document(
+        store, url, root.tree, root_id=root.node_id, relativize=relativize
+    )
     return _stub_for(root, url)
 
 
-async def save(node: Node, store: ReadableStore | None = None, *, relativize: bool = True) -> Node:
+async def save(
+    node: Node, store: ReadableStore | None = None, *, relativize: bool = True
+) -> Node:
     """Write an opened tree back into its own document; return a reference stub.
 
     Single-document: the node's whole document is rewritten (preserving sibling
@@ -191,7 +197,9 @@ async def save(node: Node, store: ReadableStore | None = None, *, relativize: bo
     """
     store = _store(store)
     if node.tree.mode == "resolved":
-        raise NodeStateError("node is inlined (read-only); use save_inlined() to snapshot it")
+        raise NodeStateError(
+            "node is inlined (read-only); use save_inlined() to snapshot it"
+        )
     if node.is_detached:
         raise NodeStateError("node has no backing document; use create() first")
     url = node.document_url
@@ -223,8 +231,12 @@ async def save_inlined(
     store = _store(store)
     url = meta_url(destination)
     if not overwrite and await _exists(store, url):
-        raise NodeStateError(f"a document already exists at {url!r}; pass overwrite=True")
-    await write_document(store, url, view.tree, root_id=view.node_id, relativize=relativize)
+        raise NodeStateError(
+            f"a document already exists at {url!r}; pass overwrite=True"
+        )
+    await write_document(
+        store, url, view.tree, root_id=view.node_id, relativize=relativize
+    )
     return _stub_for(view, url)
 
 

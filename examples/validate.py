@@ -41,12 +41,23 @@ def main() -> None:
 
     # A multiscale whose single scale's scale factors do not match its axes.
     bad = ngc.new_node(
-        "multiscale", id="img",
-        attributes={"coordinateSystems": [{"id": "space", "axes": [{"name": "z"}, {"name": "y"}, {"name": "x"}]}]},
+        "multiscale",
+        id="img",
+        attributes={
+            "coordinateSystems": [
+                {"id": "space", "axes": [{"name": "z"}, {"name": "y"}, {"name": "x"}]}
+            ]
+        },
     ).add(
-        ngc.new_node("singlescale", id="0", attributes={
-            "coordinateTransformations": [{"type": "scale", "output": {"id": "space"}, "scale": [2.0, 2.0]}]
-        })
+        ngc.new_node(
+            "singlescale",
+            id="0",
+            attributes={
+                "coordinateTransformations": [
+                    {"type": "scale", "output": {"id": "space"}, "scale": [2.0, 2.0]}
+                ]
+            },
+        )
     )
     for error in ngc.validate(bad, validators=validators):
         print("scale vs axes    :", error.validator, "—", error)

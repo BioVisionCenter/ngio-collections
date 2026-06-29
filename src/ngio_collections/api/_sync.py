@@ -76,7 +76,9 @@ def open_inlined_ref(
     on_error: OnError = "skip",
 ) -> Node:
     """Synchronous `open_inlined_ref`."""
-    return _run(_api.open_inlined_ref(ref, base_url, store, depth=depth, on_error=on_error))
+    return _run(
+        _api.open_inlined_ref(ref, base_url, store, depth=depth, on_error=on_error)
+    )
 
 
 def create(
@@ -88,10 +90,16 @@ def create(
     relativize: bool = True,
 ) -> Node:
     """Synchronous `create`."""
-    return _run(_api.create(destination, root, store, overwrite=overwrite, relativize=relativize))
+    return _run(
+        _api.create(
+            destination, root, store, overwrite=overwrite, relativize=relativize
+        )
+    )
 
 
-def save(node: Node, store: ReadableStore | None = None, *, relativize: bool = True) -> Node:
+def save(
+    node: Node, store: ReadableStore | None = None, *, relativize: bool = True
+) -> Node:
     """Synchronous `save`."""
     return _run(_api.save(node, store, relativize=relativize))
 
@@ -106,7 +114,9 @@ def save_inlined(
 ) -> Node:
     """Synchronous `save_inlined`."""
     return _run(
-        _api.save_inlined(view, destination, store, overwrite=overwrite, relativize=relativize)
+        _api.save_inlined(
+            view, destination, store, overwrite=overwrite, relativize=relativize
+        )
     )
 
 
