@@ -14,6 +14,9 @@ build/
 .ruff_cache/
 .mypy_cache/
 
+# benchmark dataset cache
+benchmarks/.data/
+
 # editors / OS
 .DS_Store
 .idea/

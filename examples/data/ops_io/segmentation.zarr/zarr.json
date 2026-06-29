@@ -1,0 +1,18 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "id": "segmentation",
+      "name": "segmentation",
+      "attributes": {
+        "labels": {
+          "source": "image"
+        }
+      },
+      "nodes": []
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

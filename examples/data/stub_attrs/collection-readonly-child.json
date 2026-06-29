@@ -1,0 +1,20 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "root",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "image",
+        "attributes": {
+          "display": "in-memory-stub"
+        },
+        "path": {
+          "type": "zarr",
+          "path": "./image.zarr"
+        }
+      }
+    ]
+  }
+}

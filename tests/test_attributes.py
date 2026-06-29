@@ -1,113 +1,93 @@
-"""Built-in attribute models through the typed attrs view."""
+"""Validation tests for the typed OME attribute models (decoupled from nodes).
+
+These exercise the kept attribute models directly via `model_validate` /
+construction — the same models the v5 capability lenses validate through. Node
+integration is covered separately in `test_node.py` / `test_validate.py`.
+"""
+
+from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
 
-import ngio_collections as ngc
-from ngio_collections.models import (
-    AcquisitionObj,
-    ColumnObj,
-    LabelObj,
-    RowObj,
+from ngio_collections.models._references import ReferenceObj
+from ngio_collections.models.attributes import (
+    CoordinateSystemsAttribute,
+    CustomTransformation,
+    PlateAttribute,
+    ScaleTransformation,
+    SceneAttribute,
+    SequenceTransformation,
+    TranslationTransformation,
+    WellAttribute,
 )
 
 
-def _node() -> ngc.BaseNode:
-    return ngc.BaseNode(type="x", id="n1", name="n1")
-
-
-def test_plate_attribute_round_trip():
-    plate = ngc.PlateAttribute(
-        acquisitions=[AcquisitionObj(id="acq1", name="Acquisition 1")],
-        columns=[ColumnObj(id="col1", name="1")],
-        rows=[RowObj(id="rowA", name="A")],
+def test_plate_validates_columns_and_rows() -> None:
+    plate = PlateAttribute.model_validate(
+        {"columns": [{"id": "1"}, {"id": "2"}], "rows": [{"id": "A"}]}
     )
-    node = _node()
-    node.attrs[ngc.PlateAttribute] = plate
-    assert ngc.PlateAttribute in node.attrs
-    assert node.attrs[ngc.PlateAttribute] == plate
+    assert [c.id for c in plate.columns] == ["1", "2"]
+    assert plate.acquisitions == []  # optional, defaults empty
 
 
-def test_plate_requires_columns_and_rows():
+def test_plate_requires_columns_and_rows() -> None:
     with pytest.raises(ValidationError):
-        ngc.PlateAttribute(acquisitions=[])
+        PlateAttribute.model_validate({"rows": [{"id": "A"}]})
 
 
-def test_well_attribute_stored_spec_shaped():
-    well = ngc.WellAttribute(
-        column=ngc.ReferenceObj(id="col1"), row=ngc.ReferenceObj(id="rowA")
+def test_well_carries_reference_objects() -> None:
+    well = WellAttribute.model_validate({"column": {"id": "c1"}, "row": {"id": "r1"}})
+    assert isinstance(well.column, ReferenceObj) and well.column.id == "c1"
+
+
+def test_coordinate_systems_list_attribute_and_typed_axes() -> None:
+    systems = CoordinateSystemsAttribute.model_validate(
+        [
+            {
+                "id": "cs0",
+                "axes": [
+                    {"name": "x", "unit": "micrometer"},
+                    {"name": "c", "discrete": True},
+                ],
+            }
+        ]
     )
-    node = _node()
-    node.attrs[ngc.WellAttribute] = well
-    # exclude_none keeps the stored dict spec-shaped (no "path": null).
-    assert node.attributes["well"] == {
-        "column": {"id": "col1"},
-        "row": {"id": "rowA"},
-    }
-    assert node.attrs[ngc.WellAttribute] == well
+    axes = systems.root[0].axes
+    assert systems.root[0].id == "cs0"
+    assert [a.name for a in axes] == ["x", "c"]
+    assert axes[0].unit == "micrometer" and axes[1].discrete is True
 
 
-def test_acquisition_attribute_is_a_reference():
-    node = _node()
-    node.attrs[ngc.AcquisitionAttribute] = ngc.AcquisitionAttribute(id="acq1")
-    assert node.attributes["acquisition"] == {"id": "acq1"}
-
-
-def test_labels_attribute_uses_camel_case_aliases():
-    labels = ngc.LabelsAttribute(
-        label_attributes=[LabelObj(label_value=1, color=[255, 0, 0, 255])],
-        source=[ngc.ReferenceObj(id="raw")],
-    )
-    node = _node()
-    node.attrs[ngc.LabelsAttribute] = labels
-    stored = node.attributes["labels"]
-    assert stored["labelAttributes"] == [{"labelValue": 1, "color": [255, 0, 0, 255]}]
-    assert node.attrs[ngc.LabelsAttribute] == labels
-
-
-@pytest.mark.parametrize("color", [[255, 0, 0], [256, 0, 0, 0], [-1, 0, 0, 0]])
-def test_label_color_must_be_four_uint8(color):
-    with pytest.raises(ValidationError, match="color"):
-        LabelObj(label_value=1, color=color)
-
-
-def test_coordinate_systems_list_attribute_round_trip():
-    systems = ngc.CoordinateSystemsAttribute(
-        [ngc.CoordinateSystem(id="physical", axes=[{"name": "x", "type": "space"}])]
-    )
-    node = _node()
-    node.attrs[ngc.CoordinateSystemsAttribute] = systems
-    assert node.attributes["coordinateSystems"] == [
-        {"id": "physical", "axes": [{"name": "x", "type": "space"}]}
-    ]
-    loaded = node.attrs.get(ngc.CoordinateSystemsAttribute)
-    assert loaded is not None
-    assert loaded.root[0].id == "physical"
-
-
-def test_scene_attribute_round_trip():
-    scene = ngc.SceneAttribute(
-        coordinate_systems=[
-            ngc.CoordinateSystem(id="world", axes=[{"name": "x", "type": "space"}])
-        ],
-        coordinate_transformations=[
-            ngc.CoordinateTransformation.model_validate(
+def test_scene_with_nested_typed_transformations() -> None:
+    scene = SceneAttribute.model_validate(
+        {
+            "coordinateSystems": [{"id": "cs0", "axes": [{"name": "x"}]}],
+            "coordinateTransformations": [
                 {
-                    "type": "translation",
-                    "translation": [0, 0, 100],
-                    "input": {
-                        "id": "physical",
-                        "path": {"type": "zarr", "path": "./tile_0.zarr"},
-                    },
-                    "output": {"id": "world"},
+                    "type": "sequence",
+                    "input": {"id": "cs0"},
+                    "output": {"id": "cs1"},
+                    "transformations": [
+                        {"type": "scale", "scale": [1.0, 1.0]},
+                        {"type": "translation", "translation": [0.0, 5.0]},
+                    ],
                 }
-            )
-        ],
+            ],
+        }
     )
-    node = _node()
-    node.attrs[ngc.SceneAttribute] = scene
-    stored = node.attributes["scene"]
-    assert stored["coordinateSystems"][0]["id"] == "world"
-    # Extra transform fields (translation) survive the round trip.
-    assert stored["coordinateTransformations"][0]["translation"] == [0, 0, 100]
-    assert node.attrs[ngc.SceneAttribute] == scene
+    seq = scene.coordinate_transformations[0]
+    assert isinstance(seq, SequenceTransformation)
+    assert isinstance(seq.transformations[0], ScaleTransformation)
+    assert seq.transformations[0].scale == [1.0, 1.0]
+    assert isinstance(seq.transformations[1], TranslationTransformation)
+
+
+def test_unknown_transformation_falls_back_to_custom_and_round_trips() -> None:
+    systems = CoordinateSystemsAttribute.model_validate([])  # sanity: empty list ok
+    assert systems.root == []
+    transform = CustomTransformation.model_validate(
+        {"type": "myorg:nonlinear", "input": {"id": "a"}, "warp": [1, 2, 3]}
+    )
+    assert transform.type == "myorg:nonlinear"
+    assert transform.warp == [1, 2, 3]  # extra="allow" keeps unknown fields

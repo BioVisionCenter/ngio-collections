@@ -1,0 +1,25 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "root",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "name": "image",
+        "path": {
+          "type": "zarr",
+          "path": "./image.zarr"
+        }
+      },
+      {
+        "type": "multiscale",
+        "name": "labels",
+        "path": {
+          "type": "zarr",
+          "path": "./labels.zarr"
+        }
+      }
+    ]
+  }
+}

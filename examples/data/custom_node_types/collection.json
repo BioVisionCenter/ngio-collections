@@ -1,0 +1,25 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "name": "My Experiment",
+    "id": "experiment",
+    "nodes": [
+      {
+        "type": "fractal:table",
+        "name": "regionprops",
+        "id": "t1",
+        "attributes": {
+          "region": "FOV_1"
+        },
+        "nodes": []
+      },
+      {
+        "type": "mobie:view",
+        "name": "view",
+        "id": "v1",
+        "nodes": []
+      }
+    ]
+  }
+}

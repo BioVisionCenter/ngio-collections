@@ -1,0 +1,19 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "root",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "name": "image",
+        "id": "image",
+        "attributes": {
+          "role": "raw",
+          "in_collection": true
+        },
+        "nodes": []
+      }
+    ]
+  }
+}

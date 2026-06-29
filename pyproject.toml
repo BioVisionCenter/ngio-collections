@@ -7,6 +7,7 @@ version = "0.1.0"
 
 [project.optional-dependencies]
 fsspec = ["fsspec"]
+speedups = ["orjson"]
 
 [build-system]
 build-backend = "hatchling.build"
@@ -25,6 +26,8 @@ ngio_collections = { path = ".", editable = true }
 [tool.pixi.tasks]
 
 [tool.pixi.feature.dev.dependencies]
+orjson = "*"
+fsspec = "*"
 ruff = ">=0.1"
 pytest = ">=8"
 pytest-asyncio = ">=0.24"
@@ -58,3 +61,14 @@ python = ".pixi/envs/dev"
 # Tests freely subscript JsonValue-typed JSON test data; only the package
 # itself is held to ty's standards.
 include = ["src"]
+
+[tool.ruff.lint]
+select = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+"examples/*" = ["D"]
+"benchmarks/*" = ["D"]

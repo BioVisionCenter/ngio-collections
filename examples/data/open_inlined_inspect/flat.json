@@ -1,0 +1,26 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "root",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "image",
+        "attributes": {
+          "role": "raw",
+          "display": "grayscale"
+        },
+        "nodes": []
+      },
+      {
+        "type": "multiscale",
+        "id": "nuclei",
+        "attributes": {
+          "role": "label"
+        },
+        "nodes": []
+      }
+    ]
+  }
+}

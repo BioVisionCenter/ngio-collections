@@ -1,96 +1,18 @@
-"""ngio-collections: OME-NGFF RFC-8 collection metadata.
+"""ngio_collections: functional, immutable OME-Zarr (RFC-8) collection metadata.
 
-Parse, validate, navigate, edit, and write back collection metadata
-documents. Async-first. See DESIGN.md for the architecture.
+The in-memory model is an immutable, indexed `NodeTree` of `NodeRecord`s; you hold
+a `Node` handle into it. Reads (`walk` / `find` / lenses) return located handles;
+edits return a new tree. `open` reads one editable document (cross-document stubs
+stay references); `open_inlined` resolves references across boundaries into a
+read-only tree. Writing is single-document (`create` / `save`), with
+`save_inlined` to snapshot a resolved tree.
+
+The whole public surface — the verbs, the `Node` handles, the store backends, and
+the value models (attributes, paths, references) — is re-exported here from
+`ngio_collections.api`.
 """
 
-from ngio_collections.api import (
-    open_collection,
-    open_multiscale,
-    write_collection,
-    write_multiscale,
-)
-from ngio_collections.document import (
-    MetadataDocument,
-    MetadataDocumentForm,
-    NotOmeDocumentError,
-    parse_metadata_document,
-)
-from ngio_collections.models import (
-    AcquisitionAttribute,
-    BaseAttribute,
-    BaseListAttribute,
-    BaseNode,
-    BaseObj,
-    CollectionNode,
-    CollectionRef,
-    CoordinateSystem,
-    CoordinateSystemsAttribute,
-    CoordinateTransformation,
-    CoordinateTransformationsAttribute,
-    JsonPath,
-    LabelsAttribute,
-    MultiscaleNode,
-    MultiscaleRef,
-    PathObj,
-    PlateAttribute,
-    ReferenceObj,
-    SceneAttribute,
-    SinglescaleNode,
-    WellAttribute,
-    ZarrPath,
-    merged_attributes,
-)
-from ngio_collections.registry import DEFAULT_REGISTRY, NodeRegistry
-from ngio_collections.resolver import Resolver
-from ngio_collections.store import (
-    FsspecStore,
-    LocalStore,
-    ReadableStore,
-    StoreReadOnlyError,
-    WritableStore,
-)
+from ngio_collections import api as _api
+from ngio_collections.api import *  # noqa: F403
 
-__version__ = "0.1.0"
-
-__all__ = [
-    "DEFAULT_REGISTRY",
-    "AcquisitionAttribute",
-    "BaseAttribute",
-    "BaseListAttribute",
-    "BaseNode",
-    "BaseObj",
-    "CollectionNode",
-    "CollectionRef",
-    "CoordinateSystem",
-    "CoordinateSystemsAttribute",
-    "CoordinateTransformation",
-    "CoordinateTransformationsAttribute",
-    "MetadataDocument",
-    "MetadataDocumentForm",
-    "FsspecStore",
-    "JsonPath",
-    "LabelsAttribute",
-    "LocalStore",
-    "MultiscaleNode",
-    "MultiscaleRef",
-    "NodeRegistry",
-    "NotOmeDocumentError",
-    "PathObj",
-    "PlateAttribute",
-    "ReadableStore",
-    "ReferenceObj",
-    "Resolver",
-    "SceneAttribute",
-    "SinglescaleNode",
-    "StoreReadOnlyError",
-    "WellAttribute",
-    "WritableStore",
-    "ZarrPath",
-    "merged_attributes",
-    "open_collection",
-    "open_multiscale",
-    "parse_metadata_document",
-    "write_collection",
-    "write_multiscale",
-]
+__all__ = list(_api.__all__)

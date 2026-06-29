@@ -1,14 +1,26 @@
 # Roadmap
 
 **Status:** revised 2026-06-11 (simplicity over completeness) · companion to
-[DESIGN.md](DESIGN.md)
+[DESIGN.md](DESIGN.md) · **partly superseded by the functional rewrite (see banner)**
+
+> **Implementation note (2026-06-19).** The local read+write story is
+> implemented and green, but via the **functional / immutable rewrite** — see
+> DESIGN.md's "Implementation note" banner. The milestones below are kept as a
+> historical record; their *specifics* that no longer apply: the registry
+> (M1: `NodeRegistry` / `DEFAULT_REGISTRY`), the structural-validator /
+> attribute-class / `SinglescaleNode` model (M1, in `models/nodes.py`), the
+> `Stored`/`Resolved` split (M5, `models/resolved.py`), and the sync
+> `ngio_collections.api` facade (M3/M5). The real surface is a single frozen
+> `Node`/`RefNode` model in `models/_base.py` and an async `Resolver`
+> (`inline` / `create` / `save` / `delete_subtree`); the §5 merge rule lives in
+> `merge` / `split`. Use `asyncio.run(...)` — there is no sync facade.
 
 Scope of this roadmap: a complete, round-trip-safe **local** implementation —
 parse, validate, navigate, edit, save on the local filesystem. Remote and
 mixed-store support remain the primary eventual use case (the core stays
 async-native for that reason), but their implementation is deferred:
 `FsspecStore` exists only as an interface skeleton; `RouterStore` is
-design-only (DESIGN.md �6), with no code yet. Everything
+design-only (DESIGN.md §6), with no code yet. Everything
 deferred is recorded under [Future work](#future-work) below and in
 DESIGN.md §10.
 
@@ -20,8 +32,9 @@ Sequencing principles:
   the roadmap ends when the local write path round-trips.
 - CI from milestone 1, so every subsequent milestone lands gated.
 
-Current state: structural skeleton (modules, signatures, and trivial pieces
-in place; behavior stubbed), trimmed to the local-scope surface.
+Current state: the full local story is implemented and tested green
+(parse → inline → edit → write-back, document-granular) via the functional
+rewrite; remote/mixed-store remain deferred (see Future work).
 
 ---
 
@@ -114,7 +127,33 @@ Document-granular editing — the core value proposition.
 
 **Done when:** editing one node's attributes and saving touches exactly one
 file on disk, and a re-opened tree reflects the edit with everything else
-byte-identical. That is also the end of this roadmap.
+byte-identical.
+
+## M5 — Round-trip via the Stored/Resolved split (added 2026-06-18)
+
+The headline use case: open an inlined collection, edit it in memory, write it
+back keeping the file structure and attributes correct. See DESIGN.md §11.
+
+- [x] Split `BaseNode` into `StoredNode` (wire/parse/serialize, `BaseNode`
+  alias kept) and a new `ResolvedNode` layer (`models/resolved.py`): plain
+  mutable working model with the `attrs` / `add` / `pop` edit API, typed twins
+  for the built-ins + generic fallback (opt-in via the `resolved_form`
+  ClassVar).
+- [x] `Resolver.inline()` rebuilt as StoredNode-tree → ResolvedNode-tree, each
+  node retaining `_home` / `_stored` / `_edge` provenance.
+- [x] `Resolver.save_tree(root)`: ResolvedNode-tree → StoredNode-documents —
+  attributes un-merged by origin (edge keeps overrides, DESIGN.md §9.4), added
+  nodes embedded in their parent's document, only changed documents rewritten,
+  unknown keys preserved.
+- [x] `WritableStore.delete` + `Resolver.delete_subtree` (destructive companion
+  to `pop()`'s in-memory unlink).
+- [x] Sync `write_collection_back` / `write_multiscale_back`; `open_*` return
+  the resolved tree.
+
+**Done when:** open → edit (attrs add/remove, add node, pop node) → write-back
+lands each change in the right document, leaves untouched files byte-identical,
+and a no-op write-back touches nothing (`tests/test_resolved_roundtrip.py`,
+`examples/08_resolved_edit.py`).
 
 ---
 
@@ -135,7 +174,10 @@ re-evaluate once M4 is done. See also DESIGN.md §10.
 - **`Resolver.write(node, url, stub_path=...)`** — externalizing a node into
   a new document (collection restructuring). Bottom-up *composition* by
   reference is covered 2026-06-12 by the sync writers returning reference
-  stubs (with `relativize` path rewriting); restructuring stays deferred.
+  stubs (with `relativize` path rewriting), and write-back of an opened tree
+  by M5's `save_tree` (2026-06-18); what remains deferred is externalizing an
+  *added* node into its own new document (added nodes embed in their parent's
+  document).
 - **Attribute-registry extensibility** — removed as dead code (the `attrs`
   view takes attribute classes directly); re-add only if a use case appears.
 - **Conformance suite** against the RFC-8 examples; revisit the open spec
