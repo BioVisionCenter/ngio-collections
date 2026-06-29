@@ -1,0 +1,26 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "root",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "attributes": {
+          "display": "grayscale"
+        },
+        "path": {
+          "type": "zarr",
+          "path": "./image.zarr"
+        }
+      },
+      {
+        "type": "multiscale",
+        "path": {
+          "type": "zarr",
+          "path": "./nuclei.zarr"
+        }
+      }
+    ]
+  }
+}

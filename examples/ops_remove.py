@@ -1,7 +1,7 @@
-"""Delete a subtree with `remove()`.
+"""Remove a subtree with `remove()`.
 
-`remove()` takes a node id and returns a new tree with that node and all
-its descendants removed.
+`remove()` is called on the located node and returns the new tree root with that
+node and all its descendants removed (the source tree is untouched).
 
 Run with: pixi run python examples/ops_remove.py
 """
@@ -12,9 +12,7 @@ from basic_creation import build_collection
 def main() -> None:
     root = build_collection()
 
-    # remove() unlinks the node and all its descendants.
-    # If the node is still present on disk, it will be restored.
-    edited = root.remove(id="labels")
+    edited = root.find("labels").remove()
 
     print("before:", [n.id for n in root.walk()])
     print("after: ", [n.id for n in edited.walk()])

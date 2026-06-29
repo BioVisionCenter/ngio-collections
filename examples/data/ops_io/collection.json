@@ -6,7 +6,7 @@
     "nodes": [
       {
         "type": "multiscale",
-        "id": "image",
+        "name": "image",
         "attributes": {
           "in_collection": true
         },

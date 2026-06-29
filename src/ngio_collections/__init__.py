@@ -1,170 +1,18 @@
-"""ngio_collections: functional, immutable, round-trip-safe OME collections.
+"""ngio_collections: functional, immutable OME-Zarr (RFC-8) collection metadata.
 
-Frozen node values; resolution and editing return new trees and never mutate the
-source. `open` reads one editable document (cross-document children stay
-`RefNode` stubs); `open_inlined` resolves references across boundaries into a
-read-only `InlinedNode` tree. Both accept either a document URL or a
-`ReferenceObj` (then returning the node it locates). Writing is single-document
-(`create` / `save`),
-with `save_inlined` to snapshot a resolved tree; each returns a `RefNode`
-so documents compose bottom-up via `add_ref`.
+The in-memory model is an immutable, indexed `NodeTree` of `NodeRecord`s; you hold
+a `Node` handle into it. Reads (`walk` / `find` / lenses) return located handles;
+edits return a new tree. `open` reads one editable document (cross-document stubs
+stay references); `open_inlined` resolves references across boundaries into a
+read-only tree. Writing is single-document (`create` / `save`), with
+`save_inlined` to snapshot a resolved tree.
 
-The public surface is deliberately small: the :class:`Resolver`, the store
-backends and protocols, and the node/path/reference model types needed to build,
-annotate, and compose trees. Node constructors and the document layer are
-internal (reachable via the private modules if needed).
+The whole public surface — the verbs, the `Node` handles, the store backends, and
+the value models (attributes, paths, references) — is re-exported here from
+`ngio_collections.api`.
 """
 
-from ngio_collections._resolver import Resolver
-from ngio_collections._sync import (
-    create,
-    delete,
-    open,
-    open_inlined,
-    save,
-    save_inlined,
-)
-from ngio_collections.models import (
-    DEFAULT_REGISTRY,
-    AcquisitionAttribute,
-    AcquisitionObj,
-    AffineTransformation,
-    AnyAttribute,
-    AnyInlinedNode,
-    AnyNode,
-    AttributeType,
-    Axis,
-    BaseAttribute,
-    BaseListAttribute,
-    BaseNode,
-    BijectionTransformation,
-    ByDimensionItem,
-    ByDimensionTransformation,
-    CollectionNode,
-    CollectionType,
-    ColumnObj,
-    CoordinateSystem,
-    CoordinateSystemsAttribute,
-    CoordinatesTransformation,
-    CoordinateTransformation,
-    CoordinateTransformationsAttribute,
-    CustomTransformation,
-    DisplacementsTransformation,
-    IdStr,
-    IdentityTransformation,
-    InlinedCollectionNode,
-    InlinedMultiscaleNode,
-    InlinedNode,
-    JsonPath,
-    LabelObj,
-    LabelsAttribute,
-    MapAxisTransformation,
-    MultiscaleNode,
-    MultiscaleType,
-    Node,
-    NodeObj,
-    NodeRegistry,
-    NodeState,
-    NodeStateError,
-    NodeTypes,
-    PathObj,
-    PlateAttribute,
-    RefCollectionNode,
-    RefMultiscaleNode,
-    RefNode,
-    RefSinglescaleNode,
-    ReferenceObj,
-    RgbaColor,
-    RotationTransformation,
-    RowObj,
-    ScaleTransformation,
-    SceneAttribute,
-    SequenceTransformation,
-    SinglescaleType,
-    TranslationTransformation,
-    WellAttribute,
-    ZarrPath,
-    register_family,
-)
-from ngio_collections.store import (
-    FsspecStore,
-    LocalStore,
-    ReadableStore,
-    StoreReadOnlyError,
-    WritableStore,
-)
+from ngio_collections import api as _api
+from ngio_collections.api import *  # noqa: F403
 
-__all__ = [
-    "DEFAULT_REGISTRY",
-    "AcquisitionAttribute",
-    "AcquisitionObj",
-    "AffineTransformation",
-    "AnyAttribute",
-    "AnyInlinedNode",
-    "AnyNode",
-    "AttributeType",
-    "Axis",
-    "BaseAttribute",
-    "BaseListAttribute",
-    "BaseNode",
-    "BijectionTransformation",
-    "ByDimensionItem",
-    "ByDimensionTransformation",
-    "CollectionNode",
-    "CollectionType",
-    "ColumnObj",
-    "CoordinateSystem",
-    "CoordinateSystemsAttribute",
-    "CoordinateTransformation",
-    "CoordinateTransformationsAttribute",
-    "CoordinatesTransformation",
-    "CustomTransformation",
-    "DisplacementsTransformation",
-    "FsspecStore",
-    "IdStr",
-    "IdentityTransformation",
-    "InlinedCollectionNode",
-    "InlinedMultiscaleNode",
-    "InlinedNode",
-    "JsonPath",
-    "LabelObj",
-    "LabelsAttribute",
-    "LocalStore",
-    "MapAxisTransformation",
-    "MultiscaleNode",
-    "MultiscaleType",
-    "Node",
-    "NodeObj",
-    "NodeRegistry",
-    "NodeState",
-    "NodeStateError",
-    "NodeTypes",
-    "PathObj",
-    "PlateAttribute",
-    "ReadableStore",
-    "RefCollectionNode",
-    "RefMultiscaleNode",
-    "RefNode",
-    "RefSinglescaleNode",
-    "ReferenceObj",
-    "RgbaColor",
-    "RotationTransformation",
-    "RowObj",
-    "ScaleTransformation",
-    "SceneAttribute",
-    "SequenceTransformation",
-    "SinglescaleType",
-    "Resolver",
-    "StoreReadOnlyError",
-    "TranslationTransformation",
-    "WellAttribute",
-    "WritableStore",
-    "ZarrPath",
-    "create",
-    "delete",
-    "open",
-    "open_inlined",
-    "register_family",
-    "save",
-    "save_inlined",
-]
+__all__ = list(_api.__all__)

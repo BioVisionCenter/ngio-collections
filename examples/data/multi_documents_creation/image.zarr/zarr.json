@@ -3,22 +3,27 @@
     "ome": {
       "version": "0.x",
       "type": "multiscale",
-      "id": "image",
       "name": "image",
+      "id": "image",
       "attributes": {
         "coordinateSystems": [
           {
             "id": "image_space",
+            "name": null,
             "axes": [
               {
                 "name": "y",
                 "type": "space",
-                "unit": "micrometer"
+                "unit": "micrometer",
+                "discrete": null,
+                "longName": null
               },
               {
                 "name": "x",
                 "type": "space",
-                "unit": "micrometer"
+                "unit": "micrometer",
+                "discrete": null,
+                "longName": null
               }
             ]
           }
@@ -31,17 +36,21 @@
           "attributes": {
             "coordinateTransformations": [
               {
+                "name": null,
                 "input": {
-                  "id": "image_0"
+                  "id": "image_0",
+                  "path": null
                 },
                 "output": {
-                  "id": "image_space"
+                  "id": "image_space",
+                  "path": null
                 },
                 "type": "scale",
                 "scale": [
                   1.0,
                   1.0
-                ]
+                ],
+                "path": null
               }
             ]
           },
@@ -56,17 +65,21 @@
           "attributes": {
             "coordinateTransformations": [
               {
+                "name": null,
                 "input": {
-                  "id": "image_1"
+                  "id": "image_1",
+                  "path": null
                 },
                 "output": {
-                  "id": "image_space"
+                  "id": "image_space",
+                  "path": null
                 },
                 "type": "scale",
                 "scale": [
                   2.0,
                   2.0
-                ]
+                ],
+                "path": null
               }
             ]
           },

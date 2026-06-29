@@ -12,11 +12,11 @@ from typing import ClassVar
 
 from pydantic import Field
 
-from ngio_collections.models._base import (
+from ngio_collections.models._config import BaseObj
+from ngio_collections.models._references import IdStr
+from ngio_collections.models.attributes._base import (
     BaseAttribute,
     BaseListAttribute,
-    BaseObj,
-    IdStr,
 )
 from ngio_collections.models.attributes._transformation import (
     CoordinateTransformation,
@@ -48,7 +48,5 @@ class CoordinateSystemsAttribute(BaseListAttribute[CoordinateSystem]):
     key: ClassVar[str] = "coordinateSystems"
 
 
-class CoordinateTransformationsAttribute(
-    BaseListAttribute[CoordinateTransformation]
-):
+class CoordinateTransformationsAttribute(BaseListAttribute[CoordinateTransformation]):
     key: ClassVar[str] = "coordinateTransformations"
