@@ -221,6 +221,7 @@ class Node:
             replace(
                 root,
                 origin_url=None,
+                edge=None,
                 children=() if root.children is not None else None,
             )
         )
@@ -230,7 +231,7 @@ class Node:
                 continue
             record = src.record(node_id)
             remap[node_id] = builder.add_child(
-                remap[node_id[:-1]], replace(record, origin_url=None)
+                remap[node_id[:-1]], replace(record, origin_url=None, edge=None)
             )
         return wrap_node(builder.finish(), ROOT)
 

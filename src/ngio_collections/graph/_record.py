@@ -47,6 +47,23 @@ class Reference:
 
 
 @dataclass(frozen=True, slots=True)
+class EdgeInfo:
+    """Provenance of an inlined boundary node: the reference edge it collapsed.
+
+    Retained when inlining splices a stub's target into the tree, so the §5
+    attribute merge stays invertible (edge keeps overrides): `ref` is the stub's
+    pointer, `attributes` / `name` are the stub's own pre-merge values, and
+    `origin_url` is the document that declared the stub. This is groundwork for
+    per-document write-back of resolved trees (`save_tree`).
+    """
+
+    ref: Reference
+    attributes: Mapping[str, JsonValue] = field(default=_EMPTY_ATTRS)
+    name: str | None = None
+    origin_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class NodeRecord:
     """One immutable node row; see the module docstring for the shape invariant."""
 
@@ -57,6 +74,7 @@ class NodeRecord:
     children: tuple[NodeId, ...] | None = None
     ref: Reference | None = None
     origin_url: str | None = None
+    edge: EdgeInfo | None = None
 
     def __post_init__(self) -> None:
         """Validate the branch / leaf / reference shape invariant."""

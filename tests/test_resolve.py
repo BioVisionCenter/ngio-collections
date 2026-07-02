@@ -84,6 +84,27 @@ def test_open_inlined_merges_target_root() -> None:
     assert c.mode == "resolved"
 
 
+def test_inlined_boundary_node_retains_the_collapsed_edge() -> None:
+    docs = _inline_fixture()
+    c = build(f"{DATA}/collection.json", docs, inline=True)
+    (key,) = c.children_ids(ROOT)
+    edge = c.record(key).edge
+    # the stub's own pre-merge values survive, so the merge is invertible
+    assert edge is not None
+    assert edge.ref.path.path == "./image.json" and edge.ref.id is None
+    assert dict(edge.attributes) == {"role": "raw"}  # stub overlay only
+    assert edge.name == "img"
+    assert edge.origin_url == f"{DATA}/collection.json"  # declaring document
+    # non-boundary nodes carry no edge
+    assert c.record(ROOT).edge is None
+
+
+def test_materialized_and_reference_records_have_no_edge() -> None:
+    entry = _doc("collection", _collection_with(_stub("img", "image"), _image()))
+    c = build(entry.url, {entry.url: entry}, inline=False)
+    assert all(c.record(k).edge is None for k in c.walk())
+
+
 def test_depth_zero_disables_inlining() -> None:
     docs = _inline_fixture()
     c = build(f"{DATA}/collection.json", docs, inline=True, depth=0)

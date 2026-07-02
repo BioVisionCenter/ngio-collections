@@ -28,6 +28,7 @@ from pydantic import JsonValue
 
 from ngio_collections.graph import (
     ROOT,
+    EdgeInfo,
     NodeId,
     NodeRecord,
     NodeTree,
@@ -191,7 +192,7 @@ class _Builder:
                     f"root type {target.root.get('type')!r} at {target_url!r}"
                 )
             return leave
-        merged = _merge_record(node_dict, target.root, target.url)
+        merged = _merge_record(stub, target.root, target.url)
         next_depth = None if depth is None else depth - 1
         return _Resolved(
             merged, target.root, target, next_depth, ancestors | {target_url}
@@ -228,14 +229,19 @@ def _reference_record(node_dict: dict, origin_url: str) -> NodeRecord:
     )
 
 
-def _merge_record(stub_dict: dict, target_root: dict, target_url: str) -> NodeRecord:
-    """Merge an inlined stub into its target root (stub attrs win, name falls back)."""
+def _merge_record(stub: NodeRecord, target_root: dict, target_url: str) -> NodeRecord:
+    """Merge an inlined stub into its target root (stub attrs win, name falls back).
+
+    The collapsed edge is retained on `edge` — the stub's own pre-merge values —
+    so the merge stays invertible (write-back can split edited keys by origin).
+    """
+    assert stub.ref is not None
     target_attrs = _attributes(target_root)
-    stub_attrs = _attributes(stub_dict)
+    stub_attrs = stub.attributes
     attributes = {**target_attrs, **stub_attrs} if stub_attrs else target_attrs
     name = target_root.get("name")
     if name is None:
-        name = stub_dict.get("name")
+        name = stub.name
     return NodeRecord(
         type=target_root["type"],
         name=name,
@@ -243,4 +249,10 @@ def _merge_record(stub_dict: dict, target_root: dict, target_url: str) -> NodeRe
         attributes=attributes,
         children=() if "nodes" in target_root else None,
         origin_url=target_url,
+        edge=EdgeInfo(
+            ref=stub.ref,
+            attributes=stub.attributes,
+            name=stub.name,
+            origin_url=stub.origin_url,
+        ),
     )

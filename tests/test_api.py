@@ -144,6 +144,19 @@ async def test_save_inlined_snapshots_to_one_document() -> None:
     assert not flat.find("image").is_reference
 
 
+async def test_subtree_of_inlined_node_is_fully_detached() -> None:
+    store = MemoryStore()
+    image = new_node("multiscale", id="image", attributes={"role": "x"})
+    stub = await aio.create(f"{DATA}/image.zarr", image, store)
+    parent = new_node("collection", id="root").add_ref(stub.set_attrs({"role": "raw"}))
+    await aio.create(f"{DATA}/c.json", parent, store)
+
+    view = await aio.open_inlined(f"{DATA}/c.json", store)
+    assert view.find("image").record.edge is not None  # boundary provenance kept
+    sub = view.find("image").subtree()
+    assert sub.is_detached and sub.record.edge is None  # ...but not extracted
+
+
 async def test_delete_removes_document() -> None:
     store = MemoryStore()
     root = new_node("collection", id="root").add(new_node("multiscale", id="img"))

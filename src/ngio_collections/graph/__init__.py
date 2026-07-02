@@ -10,11 +10,12 @@ from __future__ import annotations
 from ngio_collections.graph._tree import Mode, NodeTree, TreeBuilder
 from ngio_collections.graph._ids import ROOT, NodeId, child, depth, is_ancestor, parent
 from ngio_collections.graph._pmap import Evolver, PersistentMap
-from ngio_collections.graph._record import NodeRecord, Reference
+from ngio_collections.graph._record import EdgeInfo, NodeRecord, Reference
 
 __all__ = [
     "ROOT",
     "NodeTree",
+    "EdgeInfo",
     "Evolver",
     "Mode",
     "NodeId",
