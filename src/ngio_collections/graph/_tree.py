@@ -205,6 +205,31 @@ class NodeTree:
         evolver.set(parent_key, replace(parent, children=kept))
         return replace(self, nodes=evolver.finish(), by_local_id=by_local_id, refs=refs)
 
+    def replace(self, node_id: NodeId, record: NodeRecord) -> NodeTree:
+        """Replace the subtree at `node_id` with the single `record`, in place.
+
+        The node keeps its `NodeId` — and therefore its sibling position; the
+        parent's children tuple is untouched — while its old record and every
+        descendant are removed. `record` is seeded empty like `add_child`.
+        """
+        _seedable(record)
+        self.nodes[node_id]  # KeyError if absent
+        new_rec = replace(
+            record, children=() if record.children is not None else None
+        )
+        evolver = self.nodes.mutate()
+        by_local_id = self.by_local_id
+        refs = self.refs
+        for descendant in tuple(self.walk(node_id)):
+            rec = self.nodes[descendant]
+            evolver.delete(descendant)
+            by_local_id = _index_remove(by_local_id, rec.id, descendant)
+            refs = _index_remove(refs, _ref_key(rec), descendant)
+        evolver.set(node_id, new_rec)
+        by_local_id = _index_add(by_local_id, new_rec.id, node_id)
+        refs = _index_add(refs, _ref_key(new_rec), node_id)
+        return replace(self, nodes=evolver.finish(), by_local_id=by_local_id, refs=refs)
+
     # -- data edits (structure-preserving; indices unchanged) ---------------
 
     def set_attributes(

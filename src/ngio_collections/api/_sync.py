@@ -120,6 +120,22 @@ def save_inlined(
     )
 
 
+def externalize(
+    node: Node,
+    destination: str,
+    store: ReadableStore | None = None,
+    *,
+    overwrite: bool = False,
+    relativize: bool = True,
+) -> Node:
+    """Synchronous `externalize`."""
+    return _run(
+        _api.externalize(
+            node, destination, store, overwrite=overwrite, relativize=relativize
+        )
+    )
+
+
 def delete(node: Node, store: ReadableStore | None = None) -> list[str]:
     """Synchronous `delete`."""
     return _run(_api.delete(node, store))

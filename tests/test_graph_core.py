@@ -189,6 +189,36 @@ def test_remove_root_raises_and_missing_is_idempotent() -> None:
     assert c.remove(("does", "not", "exist")) is c
 
 
+def test_replace_swaps_subtree_keeping_key_and_position() -> None:
+    c, k = _sample()
+    stub = NodeRecord(
+        type="multiscale", id="img", ref=Reference(path=ZarrPath(path="/img.zarr"))
+    )
+    c2 = c.replace(k["img"], stub)
+    # same key, same sibling position, descendants gone
+    assert c2.children_ids(ROOT) == (k["img"], k["labels"])
+    assert c2.record(k["img"]).is_reference
+    assert k["0"] not in c2 and c2.find("0") == ()
+    # indices follow the new record
+    assert c2.find("img") == (k["img"],)
+    assert c2.referrers("img") == ()  # Reference above carries no id
+    # original untouched
+    assert k["0"] in c and not c.record(k["img"]).is_reference
+
+
+def test_replace_updates_indices_on_id_change() -> None:
+    c, k = _sample()
+    c2 = c.replace(k["labels"], NodeRecord(type="collection", id="annotations"))
+    assert c2.find("labels") == () and c2.find("nuclei") == ()
+    assert c2.find("annotations") == (k["labels"],)  # key is structural, kept
+
+
+def test_replace_missing_raises() -> None:
+    c, _ = _sample()
+    with pytest.raises(KeyError):
+        c.replace(("absent",), NodeRecord(type="collection", id="x"))
+
+
 # --------------------------------------------------------------------------- #
 # refs index (structural references)
 # --------------------------------------------------------------------------- #

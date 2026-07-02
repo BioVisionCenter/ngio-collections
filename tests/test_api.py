@@ -154,6 +154,104 @@ async def test_delete_removes_document() -> None:
     assert f"{DATA}/c.json" not in store
 
 
+async def test_externalize_splits_node_into_own_document() -> None:
+    store = MemoryStore()
+    root = new_node(
+        "collection",
+        id="root",
+        children=[
+            new_node(
+                "multiscale",
+                id="img",
+                attributes={"role": "raw"},
+                children=[new_node("singlescale", id="0")],
+            ),
+            new_node("multiscale", id="table"),
+        ],
+    )
+    await aio.create(f"{DATA}/c.json", root, store)
+    before = await aio.open_inlined(f"{DATA}/c.json", store)
+
+    opened = await aio.open(f"{DATA}/c.json", store)
+    updated = await aio.externalize(opened.find("img"), f"{DATA}/img.zarr", store)
+
+    # returned root: a stub in place of the node, same sibling position
+    children = updated.children()
+    assert [c.id for c in children] == ["img", "table"]
+    assert children[0].is_reference and children[0].ref_path == f"{DATA}/img.zarr"
+    assert updated.find("0") is None
+
+    # the new document holds the subtree
+    img_doc = await aio.open(f"{DATA}/img.zarr", store)
+    assert [n.id for n in img_doc.walk()] == ["img", "0"]
+    assert img_doc.attributes["role"] == "raw"
+
+    # the home document was rewritten; the inlined view is unchanged
+    reopened = await aio.open(f"{DATA}/c.json", store)
+    assert reopened.find("img").is_reference
+    after = await aio.open_inlined(f"{DATA}/c.json", store)
+    assert [(n.id, dict(n.attributes)) for n in after.walk()] == [
+        (n.id, dict(n.attributes)) for n in before.walk()
+    ]
+
+
+async def test_externalize_rejects_invalid_targets() -> None:
+    import pytest
+
+    from ngio_collections.models._config import NodeStateError
+
+    store = MemoryStore()
+    image = new_node("multiscale", id="image")
+    stub = await aio.create(f"{DATA}/image.zarr", image, store)
+    root = new_node(
+        "collection", id="root", children=[new_node("multiscale", id="img")]
+    ).add_ref(stub)
+    await aio.create(f"{DATA}/c.json", root, store)
+    opened = await aio.open(f"{DATA}/c.json", store)
+
+    with pytest.raises(NodeStateError):  # document root: already its own document
+        await aio.externalize(opened, f"{DATA}/x.zarr", store)
+    with pytest.raises(NodeStateError):  # already a reference
+        await aio.externalize(opened.find("image"), f"{DATA}/x.zarr", store)
+    with pytest.raises(NodeStateError):  # detached
+        await aio.externalize(
+            new_node("collection", id="d", children=[new_node("multiscale", id="m")])
+            .find("m"),
+            f"{DATA}/x.zarr",
+            store,
+        )
+    inlined = await aio.open_inlined(f"{DATA}/c.json", store)
+    with pytest.raises(NodeStateError):  # inlined trees are read-only
+        await aio.externalize(inlined.find("img"), f"{DATA}/x.zarr", store)
+    with pytest.raises(NodeStateError):  # occupied destination
+        await aio.externalize(opened.find("img"), f"{DATA}/image.zarr", store)
+    # ... unless overwrite is passed
+    updated = await aio.externalize(
+        opened.find("img"), f"{DATA}/image.zarr", store, overwrite=True
+    )
+    assert updated.find("img").is_reference
+
+
+def test_externalize_sync_on_local_store(tmp_path) -> None:
+    import ngio_collections as ngc
+
+    root = ngc.new_node(
+        "collection",
+        id="root",
+        children=[
+            ngc.new_node(
+                "multiscale", id="img", children=[ngc.new_node("singlescale", id="0")]
+            )
+        ],
+    )
+    ngc.create(str(tmp_path / "c.json"), root)
+    opened = ngc.open(str(tmp_path / "c.json"))
+    updated = ngc.externalize(opened.find("img"), str(tmp_path / "img.zarr"))
+    assert (tmp_path / "img.zarr" / "zarr.json").exists()
+    assert updated.find("img").is_reference
+    assert ngc.open_inlined(str(tmp_path / "c.json")).find("0") is not None
+
+
 async def test_open_ref_resolves_subtree_across_documents() -> None:
     store = MemoryStore()
     image = new_node("multiscale", id="image", attributes={"role": "target"})

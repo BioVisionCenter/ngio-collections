@@ -26,6 +26,7 @@ from ngio_collections.graph import Reference
 from ngio_collections.api._sync import (
     create,
     delete,
+    externalize,
     open,
     open_inlined,
     open_inlined_ref,
@@ -71,6 +72,7 @@ _API = [
     "WritableStore",
     "create",
     "delete",
+    "externalize",
     "new_node",
     "open",
     "open_inlined",
