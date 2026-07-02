@@ -8,7 +8,7 @@ plus inlining and delete, through the real `open`/`create`/`save`/`save_inlined`
 from __future__ import annotations
 
 import ngio_collections.api._api as aio
-from ngio_collections.api import new_node
+from ngio_collections.api import MemoryStore, new_node
 from ngio_collections.models._paths import ZarrPath
 from ngio_collections.models._references import ReferenceObj
 from ngio_collections.models.attributes import WellAttribute
@@ -16,27 +16,8 @@ from ngio_collections.models.attributes import WellAttribute
 DATA = "/data"
 
 
-class _MemoryStore:
-    """A writable in-memory store (url -> bytes)."""
-
-    def __init__(self) -> None:
-        self.files: dict[str, bytes] = {}
-
-    async def get(self, url: str) -> bytes:
-        try:
-            return self.files[url]
-        except KeyError as exc:
-            raise FileNotFoundError(url) from exc
-
-    async def put(self, url: str, data: bytes) -> None:
-        self.files[url] = data
-
-    async def delete(self, url: str) -> None:
-        self.files.pop(url, None)
-
-
 async def test_create_open_edit_save_roundtrip() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     root = new_node("collection", id="root").add(
         new_node("multiscale", id="img", attributes={"role": "raw"})
     )
@@ -54,7 +35,7 @@ async def test_create_open_edit_save_roundtrip() -> None:
 
 
 async def test_compose_via_reference_then_open_and_inline() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     # child document
     image = new_node("multiscale", id="image", attributes={"role": "target"})
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
@@ -77,7 +58,7 @@ async def test_compose_via_reference_then_open_and_inline() -> None:
 
 
 async def test_ref_stub_matches_create_stub() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     image = new_node("multiscale", id="image", name="Image")
     created_stub = await aio.create(f"{DATA}/image.zarr", image, store)
 
@@ -99,7 +80,7 @@ async def test_ref_stub_matches_create_stub() -> None:
 
 
 async def test_minted_stubs_carry_id_and_are_findable_after_reopen() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     image = new_node("multiscale", id="image", name="Image")
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
     assert stub.id == "image" and stub.record.ref.id == "image"
@@ -118,7 +99,7 @@ async def test_minted_stubs_carry_id_and_are_findable_after_reopen() -> None:
 
 
 async def test_id_less_doc_root_stub_opens_and_resolves() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     image = new_node("multiscale", name="anonymous", attributes={"role": "target"})
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
     assert stub.id is None and stub.record.ref.id is None
@@ -135,7 +116,7 @@ async def test_id_less_doc_root_stub_opens_and_resolves() -> None:
 
 
 async def test_children_literal_mixes_stub_and_embedded() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     image = new_node("multiscale", id="image", attributes={"role": "target"})
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
     table = new_node("multiscale", id="table", attributes={"role": "table"})
@@ -149,7 +130,7 @@ async def test_children_literal_mixes_stub_and_embedded() -> None:
 
 
 async def test_save_inlined_snapshots_to_one_document() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     image = new_node("multiscale", id="image", attributes={"role": "x"})
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
     parent = new_node("collection", id="root").add_ref(stub)
@@ -164,17 +145,17 @@ async def test_save_inlined_snapshots_to_one_document() -> None:
 
 
 async def test_delete_removes_document() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     root = new_node("collection", id="root").add(new_node("multiscale", id="img"))
     await aio.create(f"{DATA}/c.json", root, store)
     opened = await aio.open(f"{DATA}/c.json", store)
     affected = await aio.delete(opened, store)
     assert affected == [f"{DATA}/c.json"]
-    assert f"{DATA}/c.json" not in store.files
+    assert f"{DATA}/c.json" not in store
 
 
 async def test_open_ref_resolves_subtree_across_documents() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     image = new_node("multiscale", id="image", attributes={"role": "target"})
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
     parent = new_node("collection", id="root").add_ref(stub)
@@ -192,7 +173,7 @@ async def test_open_ref_resolves_subtree_across_documents() -> None:
 
 
 async def test_open_inlined_ref_resolves_nested_references() -> None:
-    store = _MemoryStore()
+    store = MemoryStore()
     # leaf -> mid -> entry chain of single-child documents
     leaf = new_node("multiscale", id="leaf", attributes={"role": "deep"})
     leaf_stub = await aio.create(f"{DATA}/leaf.zarr", leaf, store)
@@ -215,7 +196,7 @@ async def test_open_inlined_ref_resolves_nested_references() -> None:
 async def test_open_ref_missing_id_raises_lookup_error() -> None:
     import pytest
 
-    store = _MemoryStore()
+    store = MemoryStore()
     image = new_node("multiscale", id="image")
     await aio.create(f"{DATA}/image.zarr", image, store)
     ref = ReferenceObj(id="absent", path=ZarrPath(path=f"{DATA}/image.zarr"))
@@ -237,7 +218,7 @@ async def test_create_refuses_existing_without_overwrite() -> None:
 
     from ngio_collections.models._config import NodeStateError
 
-    store = _MemoryStore()
+    store = MemoryStore()
     root = new_node("collection", id="root")
     await aio.create(f"{DATA}/c.json", root, store)
     with pytest.raises(NodeStateError):

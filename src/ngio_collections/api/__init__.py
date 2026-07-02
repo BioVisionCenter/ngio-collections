@@ -36,6 +36,7 @@ from ngio_collections.api._sync import (
 from ngio_collections.io.store import (
     FsspecStore,
     LocalStore,
+    MemoryStore,
     ReadableStore,
     StoreReadOnlyError,
     WritableStore,
@@ -57,6 +58,7 @@ _API = [
     "CollectionNode",
     "FsspecStore",
     "LocalStore",
+    "MemoryStore",
     "MultiscaleNode",
     "Node",
     "NodeTypeRegistry",
