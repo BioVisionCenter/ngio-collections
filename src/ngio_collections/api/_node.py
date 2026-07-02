@@ -351,11 +351,19 @@ def new_node(
     attributes: Mapping[str, JsonValue] | None = None,
     children: Sequence[Node] | None = None,
     ref: Reference | None = None,
+    origin_url: str | None = None,
 ) -> Node:
     """Create a detached collection rooted at a new node and return its handle.
 
     A node with a `ref` is a leaf reference stub; otherwise it is a branch whose
     `children` subtrees are grafted in order (and can keep growing via `add`).
+
+    `origin_url` is provenance: pass it to reconstruct a node known to live in
+    the document at that URL without reading it (a cache, a mirror, a serialized
+    description). It makes the node document-backed rather than detached — it
+    drives `is_detached`, `document_url`, `ref()` / `ref_stub()`, and `save`
+    routing (`create()` rejects document-backed trees) — and the caller asserts
+    the document actually exists. Grafted `children` keep their own origins.
     """
     if children is not None and ref is not None:
         raise ValueError("a reference stub is a leaf; it cannot take children")
@@ -366,6 +374,7 @@ def new_node(
         attributes=dict(attributes) if attributes else {},
         children=None if ref is not None else (),
         ref=ref,
+        origin_url=None if origin_url is None else meta_url(origin_url),
     )
     node = wrap_node(NodeTree.of(record), ROOT)
     return node.add(*children) if children else node

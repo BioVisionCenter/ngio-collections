@@ -58,6 +58,27 @@ def test_detached_state() -> None:
     assert root.is_detached and root.document_url is None
 
 
+def test_new_node_with_origin_url_is_document_backed() -> None:
+    node = new_node("multiscale", id="img", origin_url="/data/image.zarr")
+    assert not node.is_detached
+    assert node.document_url == "/data/image.zarr/zarr.json"  # normalized
+
+    # provenance-dependent helpers work without any IO
+    locator = node.ref()
+    assert locator.id == "img" and locator.path.path == "/data/image.zarr"
+    stub = node.ref_stub()
+    assert stub.is_reference and stub.id == "img"
+    assert stub.ref_path == "/data/image.zarr"
+
+
+def test_grafting_preserves_origin_url() -> None:
+    backed = new_node("multiscale", id="img", origin_url="/data/image.zarr")
+    root = new_node("collection", id="root").add(backed)
+    grafted = root.find("img")
+    assert grafted.document_url == "/data/image.zarr/zarr.json"
+    assert root.is_detached  # the root itself carries no origin
+
+
 def test_new_node_with_children() -> None:
     root = new_node(
         "collection",

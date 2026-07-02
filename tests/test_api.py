@@ -213,6 +213,17 @@ async def test_open_ref_without_path_raises() -> None:
         await aio.open_ref(ReferenceObj(id="image", path=None))
 
 
+async def test_create_rejects_a_tree_built_with_origin_url() -> None:
+    import pytest
+
+    from ngio_collections.models._config import NodeStateError
+
+    store = MemoryStore()
+    node = new_node("multiscale", id="img", origin_url=f"{DATA}/image.zarr")
+    with pytest.raises(NodeStateError):
+        await aio.create(f"{DATA}/other.zarr", node, store)
+
+
 async def test_create_refuses_existing_without_overwrite() -> None:
     import pytest
 
