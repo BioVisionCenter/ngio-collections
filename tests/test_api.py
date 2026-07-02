@@ -76,6 +76,41 @@ async def test_compose_via_reference_then_open_and_inline() -> None:
     assert image_node.attributes["role"] == "raw"  # stub overlay wins
 
 
+async def test_ref_stub_matches_create_stub() -> None:
+    store = _MemoryStore()
+    image = new_node("multiscale", id="image", name="Image")
+    created_stub = await aio.create(f"{DATA}/image.zarr", image, store)
+
+    # a stub minted from the opened node is the same shape create() returned
+    opened = await aio.open(f"{DATA}/image.zarr", store)
+    stub = opened.ref_stub()
+    assert stub.is_reference and stub.is_detached
+    assert stub.ref_path == created_stub.ref_path == f"{DATA}/image.zarr"
+    assert stub.record.ref.id == "image"
+    assert stub.type == "multiscale" and stub.name == "Image"
+
+    # and it composes into a parent exactly like create()'s stub does
+    parent = new_node("collection", id="root").add_ref(stub)
+    await aio.create(f"{DATA}/c.json", parent, store)
+    inlined = await aio.open_inlined(f"{DATA}/c.json", store)
+    image_node = inlined.find("image")
+    assert image_node is not None and not image_node.is_reference
+
+
+async def test_children_literal_mixes_stub_and_embedded() -> None:
+    store = _MemoryStore()
+    image = new_node("multiscale", id="image", attributes={"role": "target"})
+    stub = await aio.create(f"{DATA}/image.zarr", image, store)
+    table = new_node("multiscale", id="table", attributes={"role": "table"})
+    scene = new_node("collection", id="scene", children=[stub, table])
+    await aio.create(f"{DATA}/scene.json", scene, store)
+
+    inlined = await aio.open_inlined(f"{DATA}/scene.json", store)
+    assert [n.id for n in inlined.children()] == ["image", "table"]
+    assert inlined.find("image").attributes["role"] == "target"
+    assert inlined.find("table").attributes["role"] == "table"
+
+
 async def test_save_inlined_snapshots_to_one_document() -> None:
     store = _MemoryStore()
     image = new_node("multiscale", id="image", attributes={"role": "x"})

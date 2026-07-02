@@ -9,8 +9,8 @@ can compose into a parent with `add_ref`.
 
 from __future__ import annotations
 
-from ngio_collections.api._node import Node, new_node, reference_path, wrap_node
-from ngio_collections.graph import ROOT, Reference
+from ngio_collections.api._node import Node, _reference_stub, wrap_node
+from ngio_collections.graph import ROOT
 from ngio_collections.io import _json
 from ngio_collections.io.store import (
     LocalStore,
@@ -43,15 +43,6 @@ async def _exists(store: ReadableStore, url: str) -> bool:
     except FileNotFoundError:
         return False
     return True
-
-
-def _stub_for(node: Node, url: str) -> Node:
-    """Build a detached reference stub locating `node` in the document at `url`."""
-    return new_node(
-        node.type,
-        name=node.name,
-        ref=Reference(path=reference_path(url), id=node.id),
-    )
 
 
 async def open(source: str, store: ReadableStore | None = None) -> Node:
@@ -180,7 +171,7 @@ async def create(
     await write_document(
         store, url, root.tree, root_id=root.node_id, relativize=relativize
     )
-    return _stub_for(root, url)
+    return _reference_stub(root, url)
 
 
 async def save(
@@ -211,7 +202,7 @@ async def save(
     await write_document(
         store, url, node.tree, root_id=ROOT, relativize=relativize, existing=existing
     )
-    return _stub_for(node, url)
+    return _reference_stub(node, url)
 
 
 async def save_inlined(
@@ -237,7 +228,7 @@ async def save_inlined(
     await write_document(
         store, url, view.tree, root_id=view.node_id, relativize=relativize
     )
-    return _stub_for(view, url)
+    return _reference_stub(view, url)
 
 
 async def delete(node: Node, store: ReadableStore | None = None) -> list[str]:

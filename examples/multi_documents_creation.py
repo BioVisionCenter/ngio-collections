@@ -39,7 +39,7 @@ def main() -> None:
 
     # Build the parent in memory and attach both references (still detached:
     # paths are relativized when the document is written).
-    root = ngc.new_node("collection", id="root").add_ref(rf_image).add_ref(rf_labels)
+    root = ngc.new_node("collection", id="root").add_ref(rf_image, rf_labels)
     ngc.create(url, root, overwrite=True)
 
     print(f"\nwrote {url}\n")

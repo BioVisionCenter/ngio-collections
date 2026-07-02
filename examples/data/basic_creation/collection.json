@@ -12,21 +12,16 @@
           "coordinateSystems": [
             {
               "id": "image_space",
-              "name": null,
               "axes": [
                 {
                   "name": "y",
                   "type": "space",
-                  "unit": "micrometer",
-                  "discrete": null,
-                  "longName": null
+                  "unit": "micrometer"
                 },
                 {
                   "name": "x",
                   "type": "space",
-                  "unit": "micrometer",
-                  "discrete": null,
-                  "longName": null
+                  "unit": "micrometer"
                 }
               ]
             }
@@ -39,21 +34,17 @@
             "attributes": {
               "coordinateTransformations": [
                 {
-                  "name": null,
                   "input": {
-                    "id": "image_0",
-                    "path": null
+                    "id": "image_0"
                   },
                   "output": {
-                    "id": "image_space",
-                    "path": null
+                    "id": "image_space"
                   },
                   "type": "scale",
                   "scale": [
                     1.0,
                     1.0
-                  ],
-                  "path": null
+                  ]
                 }
               ]
             },
@@ -68,21 +59,17 @@
             "attributes": {
               "coordinateTransformations": [
                 {
-                  "name": null,
                   "input": {
-                    "id": "image_1",
-                    "path": null
+                    "id": "image_1"
                   },
                   "output": {
-                    "id": "image_space",
-                    "path": null
+                    "id": "image_space"
                   },
                   "type": "scale",
                   "scale": [
                     2.0,
                     2.0
-                  ],
-                  "path": null
+                  ]
                 }
               ]
             },
@@ -105,21 +92,16 @@
               "coordinateSystems": [
                 {
                   "id": "nuclei_space",
-                  "name": null,
                   "axes": [
                     {
                       "name": "y",
                       "type": "space",
-                      "unit": "micrometer",
-                      "discrete": null,
-                      "longName": null
+                      "unit": "micrometer"
                     },
                     {
                       "name": "x",
                       "type": "space",
-                      "unit": "micrometer",
-                      "discrete": null,
-                      "longName": null
+                      "unit": "micrometer"
                     }
                   ]
                 }
@@ -138,8 +120,7 @@
                 ],
                 "source": [
                   {
-                    "id": "image",
-                    "path": null
+                    "id": "image"
                   }
                 ]
               }
@@ -151,21 +132,17 @@
                 "attributes": {
                   "coordinateTransformations": [
                     {
-                      "name": null,
                       "input": {
-                        "id": "nuclei_0",
-                        "path": null
+                        "id": "nuclei_0"
                       },
                       "output": {
-                        "id": "nuclei_space",
-                        "path": null
+                        "id": "nuclei_space"
                       },
                       "type": "scale",
                       "scale": [
                         1.0,
                         1.0
-                      ],
-                      "path": null
+                      ]
                     }
                   ]
                 },
@@ -180,21 +157,17 @@
                 "attributes": {
                   "coordinateTransformations": [
                     {
-                      "name": null,
                       "input": {
-                        "id": "nuclei_1",
-                        "path": null
+                        "id": "nuclei_1"
                       },
                       "output": {
-                        "id": "nuclei_space",
-                        "path": null
+                        "id": "nuclei_space"
                       },
                       "type": "scale",
                       "scale": [
                         2.0,
                         2.0
-                      ],
-                      "path": null
+                      ]
                     }
                   ]
                 },

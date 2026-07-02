@@ -109,18 +109,58 @@ class Node:
         """The URL of the document backing this node, or `None` if detached."""
         return self.record.origin_url
 
+    @property
+    def ref_path(self) -> str | None:
+        """The document path this reference stores, or `None` if not a reference."""
+        ref = self.record.ref
+        return None if ref is None else ref.path.path
+
+    def require_id(self) -> str:
+        """Return this node's local id, narrowing it to `str`.
+
+        Raises:
+            NodeStateError: If the node carries no id.
+        """
+        id = self.record.id
+        if id is None:
+            raise NodeStateError("node has no id; it cannot be referenced")
+        return id
+
+    def require_document_url(self) -> str:
+        """Return the URL of this node's backing document, narrowing it to `str`.
+
+        Raises:
+            NodeStateError: If the node is detached (no backing document).
+        """
+        url = self.record.origin_url
+        if url is None:
+            raise NodeStateError(
+                f"node {self.record.id!r} is detached; persist it first"
+            )
+        return url
+
     def ref(self) -> ReferenceObj:
         """Return a portable `{id, path}` locator for this node on disk.
 
         Raises:
             NodeStateError: If the node is detached or carries no id.
         """
-        record = self.record
-        if record.id is None:
-            raise NodeStateError("node has no id; it cannot be referenced")
-        if record.origin_url is None:
-            raise NodeStateError(f"node {record.id!r} is detached; persist it first")
-        return ReferenceObj(id=record.id, path=reference_path(record.origin_url))
+        return ReferenceObj(
+            id=self.require_id(), path=reference_path(self.require_document_url())
+        )
+
+    def ref_stub(self) -> Node:
+        """Return a detached reference stub locating this node in its origin document.
+
+        The stub is the same shape `create`/`save` return: attach it under a
+        parent with `add_ref` to link this node's document rather than embed its
+        subtree. Unlike `ref()`, no local id is required — a stub whose `id` is
+        `None` points at the document root.
+
+        Raises:
+            NodeStateError: If the node is detached (no backing document).
+        """
+        return _reference_stub(self, self.require_document_url())
 
     # -- navigation ---------------------------------------------------------
 
@@ -229,7 +269,7 @@ class Node:
 
     def set_attr(self, value: AnyAttribute) -> Node:
         """Set the typed attribute `value` (keyed by its model's `key`)."""
-        dumped = value.model_dump(mode="json", by_alias=True)
+        dumped = value.model_dump(mode="json", by_alias=True, exclude_none=True)
         return self._root(self._tree.set_attrs(self._id, {value.key: dumped}))
 
     def set_attrs(self, values: Mapping[str, JsonValue]) -> Node:
@@ -245,15 +285,19 @@ class Node:
         """Set this node's display name."""
         return self._root(self._tree.rename(self._id, name))
 
-    def add(self, child: Node) -> Node:
-        """Graft `child`'s subtree under this node; return the tree root."""
-        return self._root(_graft(self._tree, self._id, child._tree, child._id))
+    def add(self, *children: Node) -> Node:
+        """Graft each child's subtree under this node, in order; return the tree root."""
+        tree = self._tree
+        for child in children:
+            tree = _graft(tree, self._id, child._tree, child._id)
+        return self._root(tree)
 
-    def add_ref(self, stub: Node) -> Node:
-        """Attach a reference `stub` (from `create`/`save`) under this node."""
-        if not stub.is_reference:
-            raise ValueError("add_ref expects a reference node (e.g. from create)")
-        return self.add(stub)
+    def add_ref(self, *stubs: Node) -> Node:
+        """Attach reference stubs (from `create`/`save`/`ref_stub`) under this node."""
+        for stub in stubs:
+            if not stub.is_reference:
+                raise ValueError("add_ref expects reference nodes (e.g. from create)")
+        return self.add(*stubs)
 
     def remove(self) -> Node:
         """Remove this node from its parent; return the tree root."""
@@ -295,13 +339,16 @@ def new_node(
     id: str | None = None,
     name: str | None = None,
     attributes: Mapping[str, JsonValue] | None = None,
+    children: Sequence[Node] | None = None,
     ref: Reference | None = None,
 ) -> Node:
-    """Create a detached, single-node collection and return its root handle.
+    """Create a detached collection rooted at a new node and return its handle.
 
-    A node with a `ref` is a leaf reference stub; otherwise it is an empty branch
-    ready to grow via `add`.
+    A node with a `ref` is a leaf reference stub; otherwise it is a branch whose
+    `children` subtrees are grafted in order (and can keep growing via `add`).
     """
+    if children is not None and ref is not None:
+        raise ValueError("a reference stub is a leaf; it cannot take children")
     record = NodeRecord(
         type=node_type,
         id=id,
@@ -310,7 +357,17 @@ def new_node(
         children=None if ref is not None else (),
         ref=ref,
     )
-    return wrap_node(NodeTree.of(record), ROOT)
+    node = wrap_node(NodeTree.of(record), ROOT)
+    return node.add(*children) if children else node
+
+
+def _reference_stub(node: Node, url: str) -> Node:
+    """Build a detached reference stub locating `node` in the document at `url`."""
+    return new_node(
+        node.type,
+        name=node.name,
+        ref=Reference(path=reference_path(url), id=node.id),
+    )
 
 
 # -- typed-subclass registry (populated by the composition root) ------------
