@@ -6,6 +6,7 @@
     "nodes": [
       {
         "type": "multiscale",
+        "id": "image",
         "attributes": {
           "display": "stub-override-v2",
           "in_collection": true

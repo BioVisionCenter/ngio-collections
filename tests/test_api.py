@@ -86,6 +86,7 @@ async def test_ref_stub_matches_create_stub() -> None:
     stub = opened.ref_stub()
     assert stub.is_reference and stub.is_detached
     assert stub.ref_path == created_stub.ref_path == f"{DATA}/image.zarr"
+    assert stub.id == created_stub.id == "image"
     assert stub.record.ref.id == "image"
     assert stub.type == "multiscale" and stub.name == "Image"
 
@@ -95,6 +96,42 @@ async def test_ref_stub_matches_create_stub() -> None:
     inlined = await aio.open_inlined(f"{DATA}/c.json", store)
     image_node = inlined.find("image")
     assert image_node is not None and not image_node.is_reference
+
+
+async def test_minted_stubs_carry_id_and_are_findable_after_reopen() -> None:
+    store = _MemoryStore()
+    image = new_node("multiscale", id="image", name="Image")
+    stub = await aio.create(f"{DATA}/image.zarr", image, store)
+    assert stub.id == "image" and stub.record.ref.id == "image"
+
+    parent = new_node("collection", id="root").add_ref(stub)
+    assert parent.find("image") is not None  # findable in-memory
+    await aio.create(f"{DATA}/c.json", parent, store)
+
+    reopened = await aio.open(f"{DATA}/c.json", store)
+    found = reopened.find("image")
+    assert found is not None and found.is_reference
+
+    # remove() works uniformly on a stub located by id
+    pruned = found.remove()
+    assert pruned.find("image") is None
+
+
+async def test_id_less_doc_root_stub_opens_and_resolves() -> None:
+    store = _MemoryStore()
+    image = new_node("multiscale", name="anonymous", attributes={"role": "target"})
+    stub = await aio.create(f"{DATA}/image.zarr", image, store)
+    assert stub.id is None and stub.record.ref.id is None
+
+    parent = new_node("collection", id="root").add_ref(stub)
+    await aio.create(f"{DATA}/c.json", parent, store)
+
+    (child,) = (await aio.open(f"{DATA}/c.json", store)).children()
+    assert child.is_reference and child.id is None
+
+    (resolved,) = (await aio.open_inlined(f"{DATA}/c.json", store)).children()
+    assert not resolved.is_reference
+    assert resolved.attributes["role"] == "target"
 
 
 async def test_children_literal_mixes_stub_and_embedded() -> None:

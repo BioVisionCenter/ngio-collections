@@ -154,8 +154,10 @@ class Node:
 
         The stub is the same shape `create`/`save` return: attach it under a
         parent with `add_ref` to link this node's document rather than embed its
-        subtree. Unlike `ref()`, no local id is required — a stub whose `id` is
-        `None` points at the document root.
+        subtree. It carries this node's local id, so it serializes with an `id`
+        and stays findable by `find(id)` wherever it lands. Unlike `ref()`, no
+        local id is required — a stub whose `id` is `None` points at the
+        document root (and is only structurally addressable).
 
         Raises:
             NodeStateError: If the node is detached (no backing document).
@@ -189,7 +191,15 @@ class Node:
             yield wrap_node(self._tree, node_id)
 
     def find(self, id: str) -> Node | None:
-        """Return the first node in this subtree whose local id is `id`."""
+        """Return the first node in this subtree whose local id is `id`.
+
+        This covers unresolved reference stubs too: a stub minted by `create` /
+        `save` / `ref_stub` carries its target root's local id, so a
+        cross-document child is findable by id in a single-document `open` and
+        can be handled uniformly (e.g. `remove()`d). The exception is an
+        id-less stub — a plain doc-root reference, legal on disk — which is not
+        id-addressable; reach it structurally via `children()` / `walk()`.
+        """
         for key in self._tree.find(id):
             if key == self._id or is_ancestor(self._id, key):
                 return wrap_node(self._tree, key)
@@ -362,9 +372,16 @@ def new_node(
 
 
 def _reference_stub(node: Node, url: str) -> Node:
-    """Build a detached reference stub locating `node` in the document at `url`."""
+    """Build a detached reference stub locating `node` in the document at `url`.
+
+    The stub carries `node`'s local id both as its own `id` (so it serializes
+    with one and stays addressable via `find` wherever it is grafted) and as the
+    `Reference.id` to locate inside the target document. A node without an id
+    yields an id-less doc-root stub.
+    """
     return new_node(
         node.type,
+        id=node.id,
         name=node.name,
         ref=Reference(path=reference_path(url), id=node.id),
     )

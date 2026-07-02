@@ -6,6 +6,7 @@
     "nodes": [
       {
         "type": "multiscale",
+        "id": "image",
         "attributes": {
           "display": "grayscale"
         },
@@ -16,6 +17,7 @@
       },
       {
         "type": "multiscale",
+        "id": "nuclei",
         "path": {
           "type": "zarr",
           "path": "./nuclei.zarr"
