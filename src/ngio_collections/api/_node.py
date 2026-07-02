@@ -109,18 +109,60 @@ class Node:
         """The URL of the document backing this node, or `None` if detached."""
         return self.record.origin_url
 
+    @property
+    def ref_path(self) -> str | None:
+        """The document path this reference stores, or `None` if not a reference."""
+        ref = self.record.ref
+        return None if ref is None else ref.path.path
+
+    def require_id(self) -> str:
+        """Return this node's local id, narrowing it to `str`.
+
+        Raises:
+            NodeStateError: If the node carries no id.
+        """
+        id = self.record.id
+        if id is None:
+            raise NodeStateError("node has no id; it cannot be referenced")
+        return id
+
+    def require_document_url(self) -> str:
+        """Return the URL of this node's backing document, narrowing it to `str`.
+
+        Raises:
+            NodeStateError: If the node is detached (no backing document).
+        """
+        url = self.record.origin_url
+        if url is None:
+            raise NodeStateError(
+                f"node {self.record.id!r} is detached; persist it first"
+            )
+        return url
+
     def ref(self) -> ReferenceObj:
         """Return a portable `{id, path}` locator for this node on disk.
 
         Raises:
             NodeStateError: If the node is detached or carries no id.
         """
-        record = self.record
-        if record.id is None:
-            raise NodeStateError("node has no id; it cannot be referenced")
-        if record.origin_url is None:
-            raise NodeStateError(f"node {record.id!r} is detached; persist it first")
-        return ReferenceObj(id=record.id, path=reference_path(record.origin_url))
+        return ReferenceObj(
+            id=self.require_id(), path=reference_path(self.require_document_url())
+        )
+
+    def ref_stub(self) -> Node:
+        """Return a detached reference stub locating this node in its origin document.
+
+        The stub is the same shape `create`/`save` return: attach it under a
+        parent with `add_ref` to link this node's document rather than embed its
+        subtree. It carries this node's local id, so it serializes with an `id`
+        and stays findable by `find(id)` wherever it lands. Unlike `ref()`, no
+        local id is required — a stub whose `id` is `None` points at the
+        document root (and is only structurally addressable).
+
+        Raises:
+            NodeStateError: If the node is detached (no backing document).
+        """
+        return _reference_stub(self, self.require_document_url())
 
     # -- navigation ---------------------------------------------------------
 
@@ -149,7 +191,15 @@ class Node:
             yield wrap_node(self._tree, node_id)
 
     def find(self, id: str) -> Node | None:
-        """Return the first node in this subtree whose local id is `id`."""
+        """Return the first node in this subtree whose local id is `id`.
+
+        This covers unresolved reference stubs too: a stub minted by `create` /
+        `save` / `ref_stub` carries its target root's local id, so a
+        cross-document child is findable by id in a single-document `open` and
+        can be handled uniformly (e.g. `remove()`d). The exception is an
+        id-less stub — a plain doc-root reference, legal on disk — which is not
+        id-addressable; reach it structurally via `children()` / `walk()`.
+        """
         for key in self._tree.find(id):
             if key == self._id or is_ancestor(self._id, key):
                 return wrap_node(self._tree, key)
@@ -171,6 +221,7 @@ class Node:
             replace(
                 root,
                 origin_url=None,
+                edge=None,
                 children=() if root.children is not None else None,
             )
         )
@@ -180,7 +231,7 @@ class Node:
                 continue
             record = src.record(node_id)
             remap[node_id] = builder.add_child(
-                remap[node_id[:-1]], replace(record, origin_url=None)
+                remap[node_id[:-1]], replace(record, origin_url=None, edge=None)
             )
         return wrap_node(builder.finish(), ROOT)
 
@@ -229,37 +280,54 @@ class Node:
 
     def set_attr(self, value: AnyAttribute) -> Node:
         """Set the typed attribute `value` (keyed by its model's `key`)."""
-        dumped = value.model_dump(mode="json", by_alias=True)
+        dumped = value.model_dump(mode="json", by_alias=True, exclude_none=True)
         return self._root(self._tree.set_attrs(self._id, {value.key: dumped}))
 
-    def set_attrs(self, values: Mapping[str, JsonValue]) -> Node:
-        """Merge raw `values` into this node's attribute bag."""
-        return self._root(self._tree.set_attrs(self._id, values))
+    def set_attrs(
+        self,
+        values: Mapping[str, JsonValue],
+        *,
+        drop: Sequence[str | builtins.type[AnyAttribute]] = (),
+    ) -> Node:
+        """Merge raw `values` into this node's attribute bag, removing `drop`.
+
+        `drop` (str keys or attribute classes) is applied after the merge, in
+        one edit — so a merge-then-drop needs no re-`find` between two calls.
+        """
+        return self._root(self._tree.set_attrs(self._id, values, drop=_attr_keys(drop)))
 
     def drop_attrs(self, *keys: str | builtins.type[AnyAttribute]) -> Node:
         """Remove `keys` from this node's bag (str keys or attribute classes)."""
-        resolved = tuple(k if isinstance(k, str) else k.key for k in keys)
-        return self._root(self._tree.drop_attrs(self._id, resolved))
+        return self._root(self._tree.drop_attrs(self._id, _attr_keys(keys)))
 
     def rename(self, name: str | None) -> Node:
         """Set this node's display name."""
         return self._root(self._tree.rename(self._id, name))
 
-    def add(self, child: Node) -> Node:
-        """Graft `child`'s subtree under this node; return the tree root."""
-        return self._root(_graft(self._tree, self._id, child._tree, child._id))
+    def add(self, *children: Node) -> Node:
+        """Graft each child's subtree under this node, in order; return the tree root."""
+        tree = self._tree
+        for child in children:
+            tree = _graft(tree, self._id, child._tree, child._id)
+        return self._root(tree)
 
-    def add_ref(self, stub: Node) -> Node:
-        """Attach a reference `stub` (from `create`/`save`) under this node."""
-        if not stub.is_reference:
-            raise ValueError("add_ref expects a reference node (e.g. from create)")
-        return self.add(stub)
+    def add_ref(self, *stubs: Node) -> Node:
+        """Attach reference stubs (from `create`/`save`/`ref_stub`) under this node."""
+        for stub in stubs:
+            if not stub.is_reference:
+                raise ValueError("add_ref expects reference nodes (e.g. from create)")
+        return self.add(*stubs)
 
     def remove(self) -> Node:
         """Remove this node from its parent; return the tree root."""
         if not self._id:
             raise ValueError("cannot remove the root node")
         return self._root(self._tree.remove(self._id))
+
+
+def _attr_keys(keys: Sequence[str | builtins.type[AnyAttribute]]) -> tuple[str, ...]:
+    """Resolve attribute classes to their `key`, passing str keys through."""
+    return tuple(k if isinstance(k, str) else k.key for k in keys)
 
 
 def reference_path(url: str) -> DocPath:
@@ -295,13 +363,24 @@ def new_node(
     id: str | None = None,
     name: str | None = None,
     attributes: Mapping[str, JsonValue] | None = None,
+    children: Sequence[Node] | None = None,
     ref: Reference | None = None,
+    origin_url: str | None = None,
 ) -> Node:
-    """Create a detached, single-node collection and return its root handle.
+    """Create a detached collection rooted at a new node and return its handle.
 
-    A node with a `ref` is a leaf reference stub; otherwise it is an empty branch
-    ready to grow via `add`.
+    A node with a `ref` is a leaf reference stub; otherwise it is a branch whose
+    `children` subtrees are grafted in order (and can keep growing via `add`).
+
+    `origin_url` is provenance: pass it to reconstruct a node known to live in
+    the document at that URL without reading it (a cache, a mirror, a serialized
+    description). It makes the node document-backed rather than detached — it
+    drives `is_detached`, `document_url`, `ref()` / `ref_stub()`, and `save`
+    routing (`create()` rejects document-backed trees) — and the caller asserts
+    the document actually exists. Grafted `children` keep their own origins.
     """
+    if children is not None and ref is not None:
+        raise ValueError("a reference stub is a leaf; it cannot take children")
     record = NodeRecord(
         type=node_type,
         id=id,
@@ -309,8 +388,26 @@ def new_node(
         attributes=dict(attributes) if attributes else {},
         children=None if ref is not None else (),
         ref=ref,
+        origin_url=None if origin_url is None else meta_url(origin_url),
     )
-    return wrap_node(NodeTree.of(record), ROOT)
+    node = wrap_node(NodeTree.of(record), ROOT)
+    return node.add(*children) if children else node
+
+
+def _reference_stub(node: Node, url: str) -> Node:
+    """Build a detached reference stub locating `node` in the document at `url`.
+
+    The stub carries `node`'s local id both as its own `id` (so it serializes
+    with one and stays addressable via `find` wherever it is grafted) and as the
+    `Reference.id` to locate inside the target document. A node without an id
+    yields an id-less doc-root stub.
+    """
+    return new_node(
+        node.type,
+        id=node.id,
+        name=node.name,
+        ref=Reference(path=reference_path(url), id=node.id),
+    )
 
 
 # -- typed-subclass registry (populated by the composition root) ------------
@@ -349,7 +446,12 @@ NODE_TYPES = NodeTypeRegistry()
 
 
 def wrap_node(collection: NodeTree, node_id: NodeId) -> Node:
-    """Wrap `node_id` in its typed handle (generic `Node` if unregistered)."""
+    """Wrap `node_id` in its typed handle (generic `Node` if unregistered).
+
+    This is the seam `register_node_type` consumers go through; its `NodeTree` /
+    `NodeId` parameters come from an existing handle (`node.tree`, `node.node_id`)
+    rather than from the internal `graph` package.
+    """
     return NODE_TYPES.wrap(collection, node_id)
 
 

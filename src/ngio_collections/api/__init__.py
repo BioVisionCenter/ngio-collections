@@ -26,6 +26,7 @@ from ngio_collections.graph import Reference
 from ngio_collections.api._sync import (
     create,
     delete,
+    externalize,
     open,
     open_inlined,
     open_inlined_ref,
@@ -33,9 +34,11 @@ from ngio_collections.api._sync import (
     save,
     save_inlined,
 )
+from ngio_collections.io import fingerprint
 from ngio_collections.io.store import (
     FsspecStore,
     LocalStore,
+    MemoryStore,
     ReadableStore,
     StoreReadOnlyError,
     WritableStore,
@@ -57,6 +60,7 @@ _API = [
     "CollectionNode",
     "FsspecStore",
     "LocalStore",
+    "MemoryStore",
     "MultiscaleNode",
     "Node",
     "NodeTypeRegistry",
@@ -69,6 +73,8 @@ _API = [
     "WritableStore",
     "create",
     "delete",
+    "externalize",
+    "fingerprint",
     "new_node",
     "open",
     "open_inlined",

@@ -9,7 +9,9 @@ read-only tree. Writing is single-document (`create` / `save`), with
 
 The whole public surface — the verbs, the `Node` handles, the store backends, and
 the value models (attributes, paths, references) — is re-exported here from
-`ngio_collections.api`.
+`ngio_collections.api`. This top level IS the public API: the subpackages
+(`graph`, `resolve`, `io`, `models`, `validate`) are internal layout and may be
+reorganized without notice.
 """
 
 from ngio_collections import api as _api

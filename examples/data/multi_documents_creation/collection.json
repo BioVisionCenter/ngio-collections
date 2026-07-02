@@ -7,6 +7,7 @@
       {
         "type": "multiscale",
         "name": "image",
+        "id": "image",
         "path": {
           "type": "zarr",
           "path": "./image.zarr"
@@ -15,6 +16,7 @@
       {
         "type": "multiscale",
         "name": "labels",
+        "id": "labels",
         "path": {
           "type": "zarr",
           "path": "./labels.zarr"

@@ -5,8 +5,9 @@
     └── labels (collection)
         └── nuclei (multiscale label, 2 single scales)
 
-Trees are built handle-rooted and fluent: `new_node(...)` seeds a detached root and
-`add(child)` grafts a subtree. Each multiscale carries a `coordinateSystems`
+Trees are built handle-rooted and fluent: `new_node(...)` seeds a detached root
+(taking `children=[...]` up front) and `add(*children)` grafts further subtrees.
+Each multiscale carries a `coordinateSystems`
 attribute and each single scale a `coordinateTransformations` attribute, written
 through the typed RFC-8 models via `set_attr`. Edits return the new tree root, so
 `node.find(id).set_attr(...)` round-trips into `create`.
@@ -39,9 +40,9 @@ def single_scales(prefix: str) -> tuple[ngc.Node, ...]:
 def build_multiscale(
     prefix: str, extra_attr: ngc.AnyAttribute | None = None
 ) -> ngc.Node:
-    node = ngc.new_node("multiscale", id=prefix, name=prefix)
-    for scale in single_scales(prefix):
-        node = node.add(scale)  # tree-out: node is the multiscale root again
+    node = ngc.new_node(
+        "multiscale", id=prefix, name=prefix, children=single_scales(prefix)
+    )
 
     # The multiscale defines the coordinate system its single scales map into.
     node = node.set_attr(

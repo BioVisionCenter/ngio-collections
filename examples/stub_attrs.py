@@ -20,7 +20,8 @@ attributes to it. The child can be read-only or remote (e.g. on http): you only
 ever write the local parent. And you don't even need to write the child to
 *reference* it — `create(child)` is just a convenience that returns a stub; when
 the child already exists you mint the reference in memory with
-`new_node(ref=Reference(...))` + `add_ref` (shown at the end). `open_inlined`
+`new_node(ref=Reference(...))` + `add_ref`, or `node.ref_stub()` on an opened
+child (both shown at the end). `open_inlined`
 still has to *read* the child to merge attributes, but never writes it.
 
 Run with: pixi run python examples/stub_attrs.py
@@ -96,6 +97,11 @@ def main() -> None:
 
     view = ngc.open_inlined(other_url)
     print("ref without writing:", dict(view.find("image").attributes))
+
+    # When the child *is* readable, skip the hand-built Reference: `ref_stub()`
+    # mints the same stub from an opened node (still never writing the child).
+    stub = ngc.open(child_url).ref_stub()
+    print("ref_stub shortcut  :", stub.type, stub.ref_path)
 
 
 if __name__ == "__main__":

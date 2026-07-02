@@ -9,8 +9,13 @@ can compose into a parent with `add_ref`.
 
 from __future__ import annotations
 
-from ngio_collections.api._node import Node, new_node, reference_path, wrap_node
-from ngio_collections.graph import ROOT, Reference
+from ngio_collections.api._node import (
+    Node,
+    _reference_stub,
+    reference_path,
+    wrap_node,
+)
+from ngio_collections.graph import ROOT, NodeRecord, Reference
 from ngio_collections.io import _json
 from ngio_collections.io.store import (
     LocalStore,
@@ -43,15 +48,6 @@ async def _exists(store: ReadableStore, url: str) -> bool:
     except FileNotFoundError:
         return False
     return True
-
-
-def _stub_for(node: Node, url: str) -> Node:
-    """Build a detached reference stub locating `node` in the document at `url`."""
-    return new_node(
-        node.type,
-        name=node.name,
-        ref=Reference(path=reference_path(url), id=node.id),
-    )
 
 
 async def open(source: str, store: ReadableStore | None = None) -> Node:
@@ -180,7 +176,7 @@ async def create(
     await write_document(
         store, url, root.tree, root_id=root.node_id, relativize=relativize
     )
-    return _stub_for(root, url)
+    return _reference_stub(root, url)
 
 
 async def save(
@@ -211,7 +207,7 @@ async def save(
     await write_document(
         store, url, node.tree, root_id=ROOT, relativize=relativize, existing=existing
     )
-    return _stub_for(node, url)
+    return _reference_stub(node, url)
 
 
 async def save_inlined(
@@ -237,7 +233,65 @@ async def save_inlined(
     await write_document(
         store, url, view.tree, root_id=view.node_id, relativize=relativize
     )
-    return _stub_for(view, url)
+    return _reference_stub(view, url)
+
+
+async def externalize(
+    node: Node,
+    destination: str,
+    store: ReadableStore | None = None,
+    *,
+    overwrite: bool = False,
+    relativize: bool = True,
+) -> Node:
+    """Split `node` out of its document into its own document at `destination`.
+
+    The restructuring verb: writes the subtree at `node` as a new document,
+    replaces the node in its tree with a reference stub at the same sibling
+    position, saves the node's home document, and returns the updated tree's
+    root handle. The composition direction — linking a *detached* child — is
+    the plain sequence `create` → `add_ref` → `save`.
+
+    Not atomic: the new document is written first, so if saving the home
+    document fails, the new document exists but the home document still embeds
+    the subtree (re-running after the failure is safe with `overwrite=True`).
+
+    Raises:
+        NodeStateError: If `node` is inlined (read-only), already a reference,
+            detached, its document's root (already its own document), or a
+            document exists at `destination` and `overwrite` is `False`.
+    """
+    store = _store(store)
+    if node.tree.mode == "resolved":
+        raise NodeStateError(
+            "node is inlined (read-only); open() its document to restructure it"
+        )
+    if node.is_reference:
+        raise NodeStateError("node is already a reference to its own document")
+    home_url = node.require_document_url()
+    if not node.node_id:
+        raise NodeStateError(
+            f"node is the root of its document {home_url!r}; it already is its "
+            "own document"
+        )
+    url = meta_url(destination)
+    if not overwrite and await _exists(store, url):
+        raise NodeStateError(
+            f"a document already exists at {url!r}; pass overwrite=True"
+        )
+    await write_document(
+        store, url, node.tree, root_id=node.node_id, relativize=relativize
+    )
+    stub = NodeRecord(
+        type=node.type,
+        id=node.id,
+        name=node.name,
+        ref=Reference(path=reference_path(url), id=node.id),
+        origin_url=home_url,
+    )
+    root = wrap_node(node.tree.replace(node.node_id, stub), ROOT)
+    await save(root, store, relativize=relativize)
+    return root
 
 
 async def delete(node: Node, store: ReadableStore | None = None) -> list[str]:

@@ -17,6 +17,8 @@ it), which is why callers compare parsed content, never raw bytes.
 
 from __future__ import annotations
 
+import hashlib
+import json as _stdlib_json
 from typing import Any
 
 try:
@@ -40,3 +42,21 @@ except ModuleNotFoundError:
     def dumps(obj: Any) -> bytes:
         """Serialize ``obj`` to indented JSON bytes via stdlib ``json``."""
         return json.dumps(obj, indent=2).encode()
+
+
+def fingerprint(data: bytes) -> str:
+    """Return a canonical content hash (sha256 hex) of the JSON document `data`.
+
+    Raw bytes are not stable across serializers (see the module docstring), so
+    the hash is taken over a canonical re-encoding of the *parsed* content —
+    sorted keys, compact separators, escaped non-ASCII, always via the stdlib
+    encoder regardless of the `orjson` fast path. Two documents fingerprint
+    equal iff their parsed content is equal, whatever wrote the bytes.
+
+    Raises:
+        ValueError: If `data` is not valid JSON (via `json.JSONDecodeError`).
+    """
+    canonical = _stdlib_json.dumps(
+        loads(data), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()
