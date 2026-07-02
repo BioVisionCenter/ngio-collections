@@ -21,6 +21,26 @@ Tier 3 = subsystem proposals that deserve their own design conversation.
 
 ---
 
+## Status update — reviewed & (mostly) implemented (2026-07-02, ngio side)
+
+Every item was reviewed item-by-item and landed on the `ergonomic-apis`
+branch where accepted. Outcomes:
+
+| Item | Outcome | Notes |
+|---|---|---|
+| 1.1 `origin_url` | **shipped** | As `new_node(..., origin_url=)` (constructor knob, no `with_origin`). URL normalized like the read path; `create()` still rejects document-backed trees. |
+| 1.2 `MemoryStore` | **shipped** | As sketched (`initial=`, `read_only=`, `items()`), exported top-level. |
+| 1.3 stub-id contract | **shipped, but the premise was wrong** | Written stubs did *not* carry an id (it lived only on the internal `Reference.id`, which the serializer ignores) — so this was a fix, not documentation: minted stubs now set the record id too. Contract documented on `Node.find` / `Node.ref_stub`; id-less doc-root stubs stay legal and are only structurally addressable. **Corollary: fractal's positional-removal workaround was correct, not stale — retire it only against ngio ≥ this branch.** |
+| 1.4 facade completeness | **shipped (docs only)** | README + package docstring declare the top level as the public surface; subpackages stay un-renamed (rejected as churn). With 1.1 shipped, all `graph` imports can go. |
+| 2.1 merge+drop / session | **small form shipped; session deferred** | `set_attrs(values, drop=())`, drop applied after the merge, attribute classes accepted. The `tree.edit()` transaction was declined for now: a second mutable editing surface, for a cost that is negligible at metadata-tree sizes. |
+| 2.2 `attach()` | **rejected** | Embed-vs-link is a real choice for a document-backed child (embed a copy vs link), not derivable from state. The explicit form is one line: `p.add(c)` / `p.add_ref(c.ref_stub())`. |
+| 2.3 externalize-and-link | **shipped, different shape** | As the *restructuring* verb `externalize(node, destination)`: split a node already inside an opened tree into its own document, stub left at the same sibling position, home document saved. The wishlist's detached-child form remains the 3-line `create` → `add_ref` → `save` composition. |
+| 3.1 `save_tree` | **groundwork shipped; verb deferred** | Blocker removed: inlining now retains the collapsed edge (`EdgeInfo`: stub ref, pre-merge attributes/name, declaring document) so the attribute merge is invertible. `save_tree` itself gets its own design round. |
+| 3.2 fingerprints / `StatStore` | **split** | `fingerprint()` shipped (canonical content hash, stable across JSON serializers). `StatStore` deferred until `FsspecStore` exists — no protocol extension without an implementation behind it. |
+| 3.3 patch language | **deferred, as proposed** | Downstream-first per this document's own framing. The primitives a patch applier needs (construction incl. `origin_url`, edits, reference linking) are all on the public surface. |
+
+---
+
 ## Tier 1 — small unblocking fixes
 
 ### 1.1 `origin_url` on node construction
@@ -275,6 +295,7 @@ filter/context selection language. All of that stays in
 - Switch `BaseAttribute` / `ReferenceObj` / `BaseObj` imports from
   `ngio_collections.models` to the top-level facade (already public).
 - Delete all `ngio_collections.graph` imports once 1.1 lands.
-- Retire the positional-removal workaround in `_ops.py` once 1.3 is
-  documented (stubs are id-findable today; the workaround's assumption is
-  stale).
+- Retire the positional-removal workaround in `_ops.py` — but only against
+  ngio ≥ the `ergonomic-apis` branch. (Correction from the review: the
+  workaround's assumption was *right* — written stubs carried no id until the
+  1.3 fix landed; see the status update above.)
