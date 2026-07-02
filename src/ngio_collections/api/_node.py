@@ -447,7 +447,12 @@ NODE_TYPES = NodeTypeRegistry()
 
 
 def wrap_node(collection: NodeTree, node_id: NodeId) -> Node:
-    """Wrap `node_id` in its typed handle (generic `Node` if unregistered)."""
+    """Wrap `node_id` in its typed handle (generic `Node` if unregistered).
+
+    This is the seam `register_node_type` consumers go through; its `NodeTree` /
+    `NodeId` parameters come from an existing handle (`node.tree`, `node.node_id`)
+    rather than from the internal `graph` package.
+    """
     return NODE_TYPES.wrap(collection, node_id)
 
 

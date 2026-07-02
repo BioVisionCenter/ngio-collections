@@ -15,6 +15,20 @@ The simplest way to run them is with [pixi](https://pixi.prefix.dev/latest/).
 pixi run python examples/01_sync_api.py
 ```
 
+## Public surface
+
+Everything supported for downstream use is importable from the top level:
+
+```python
+import ngio_collections as ngc
+```
+
+The subpackages (`ngio_collections.graph`, `resolve`, `io`, `models`,
+`validate`, `api`) are internal layout and may be reorganized without notice —
+import from them at your own risk. If something you legitimately need is not
+re-exported at the top level, that is a bug worth reporting rather than a
+reason to deep-import.
+
 ## Discrepancy with RFC-8
 
 - **`id` is required.** RFC-8 makes `id` optional on every node; this package
