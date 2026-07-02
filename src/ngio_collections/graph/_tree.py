@@ -217,10 +217,21 @@ class NodeTree:
             nodes=self.nodes.set(node_id, replace(rec, attributes=dict(attributes))),
         )
 
-    def set_attrs(self, node_id: NodeId, values: Mapping[str, JsonValue]) -> NodeTree:
-        """Merge `values` into the attribute bag of `node_id`."""
+    def set_attrs(
+        self,
+        node_id: NodeId,
+        values: Mapping[str, JsonValue],
+        drop: tuple[str, ...] = (),
+    ) -> NodeTree:
+        """Merge `values` into the attribute bag of `node_id`, then remove `drop`.
+
+        Drop is applied after the merge, so a key in both `values` and `drop`
+        ends up absent. One record replace either way.
+        """
         rec = self.nodes[node_id]
-        merged = {**rec.attributes, **values}
+        merged = {
+            k: v for k, v in {**rec.attributes, **values}.items() if k not in drop
+        }
         return replace(
             self, nodes=self.nodes.set(node_id, replace(rec, attributes=merged))
         )

@@ -282,14 +282,24 @@ class Node:
         dumped = value.model_dump(mode="json", by_alias=True, exclude_none=True)
         return self._root(self._tree.set_attrs(self._id, {value.key: dumped}))
 
-    def set_attrs(self, values: Mapping[str, JsonValue]) -> Node:
-        """Merge raw `values` into this node's attribute bag."""
-        return self._root(self._tree.set_attrs(self._id, values))
+    def set_attrs(
+        self,
+        values: Mapping[str, JsonValue],
+        *,
+        drop: Sequence[str | builtins.type[AnyAttribute]] = (),
+    ) -> Node:
+        """Merge raw `values` into this node's attribute bag, removing `drop`.
+
+        `drop` (str keys or attribute classes) is applied after the merge, in
+        one edit — so a merge-then-drop needs no re-`find` between two calls.
+        """
+        return self._root(
+            self._tree.set_attrs(self._id, values, drop=_attr_keys(drop))
+        )
 
     def drop_attrs(self, *keys: str | builtins.type[AnyAttribute]) -> Node:
         """Remove `keys` from this node's bag (str keys or attribute classes)."""
-        resolved = tuple(k if isinstance(k, str) else k.key for k in keys)
-        return self._root(self._tree.drop_attrs(self._id, resolved))
+        return self._root(self._tree.drop_attrs(self._id, _attr_keys(keys)))
 
     def rename(self, name: str | None) -> Node:
         """Set this node's display name."""
@@ -314,6 +324,11 @@ class Node:
         if not self._id:
             raise ValueError("cannot remove the root node")
         return self._root(self._tree.remove(self._id))
+
+
+def _attr_keys(keys: Sequence[str | builtins.type[AnyAttribute]]) -> tuple[str, ...]:
+    """Resolve attribute classes to their `key`, passing str keys through."""
+    return tuple(k if isinstance(k, str) else k.key for k in keys)
 
 
 def reference_path(url: str) -> DocPath:

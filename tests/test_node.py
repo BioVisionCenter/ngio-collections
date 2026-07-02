@@ -196,6 +196,28 @@ def test_set_attrs_merge_and_rename_and_remove() -> None:
     assert pruned.find("nuclei") is None and pruned.id == "root"
 
 
+def test_set_attrs_with_drop_is_one_edit() -> None:
+    root = _build_tree()
+    root = root.find("img").set_attrs({"x": 1}, drop=["role"])
+    img = root.find("img")
+    assert img.attributes == {"x": 1}  # merged and dropped in one new tree
+
+
+def test_set_attrs_drop_wins_on_overlapping_key() -> None:
+    root = _build_tree()
+    root = root.find("img").set_attrs({"role": "new", "x": 1}, drop=["role"])
+    assert root.find("img").attributes == {"x": 1}
+
+
+def test_set_attrs_drop_accepts_attribute_classes() -> None:
+    well = WellAttribute(column={"id": "c1"}, row={"id": "r1"})
+    root = _build_tree().find("img").set_attr(well)
+    assert WellAttribute in root.find("img")
+    root = root.find("img").set_attrs({"x": 1}, drop=[WellAttribute])
+    img = root.find("img")
+    assert WellAttribute not in img and img.attributes["x"] == 1
+
+
 # --------------------------------------------------------------------------- #
 # Validation through the handle (composition)
 # --------------------------------------------------------------------------- #
