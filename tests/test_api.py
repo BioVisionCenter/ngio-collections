@@ -228,8 +228,9 @@ async def test_externalize_rejects_invalid_targets() -> None:
         await aio.externalize(opened.find("image"), f"{DATA}/x.zarr", store)
     with pytest.raises(NodeStateError):  # detached
         await aio.externalize(
-            new_node("collection", id="d", children=[new_node("multiscale", id="m")])
-            .find("m"),
+            new_node(
+                "collection", id="d", children=[new_node("multiscale", id="m")]
+            ).find("m"),
             f"{DATA}/x.zarr",
             store,
         )

@@ -214,9 +214,7 @@ class NodeTree:
         """
         _seedable(record)
         self.nodes[node_id]  # KeyError if absent
-        new_rec = replace(
-            record, children=() if record.children is not None else None
-        )
+        new_rec = replace(record, children=() if record.children is not None else None)
         evolver = self.nodes.mutate()
         by_local_id = self.by_local_id
         refs = self.refs

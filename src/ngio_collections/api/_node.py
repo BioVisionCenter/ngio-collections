@@ -294,9 +294,7 @@ class Node:
         `drop` (str keys or attribute classes) is applied after the merge, in
         one edit — so a merge-then-drop needs no re-`find` between two calls.
         """
-        return self._root(
-            self._tree.set_attrs(self._id, values, drop=_attr_keys(drop))
-        )
+        return self._root(self._tree.set_attrs(self._id, values, drop=_attr_keys(drop)))
 
     def drop_attrs(self, *keys: str | builtins.type[AnyAttribute]) -> Node:
         """Remove `keys` from this node's bag (str keys or attribute classes)."""
