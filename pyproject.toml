@@ -22,9 +22,6 @@ platforms = ["osx-arm64", "linux-64"]
 
 [tool.pixi.pypi-dependencies]
 ngio_collections = { path = ".", editable = true }
-sqlalchemy = ">=2.0.51,<3"
-psycopg = ">=3.3.4,<3.4.0"
-
 
 [tool.pixi.tasks]
 
@@ -35,6 +32,8 @@ ruff = ">=0.1"
 pytest = ">=8"
 pytest-asyncio = ">=0.24"
 ty = "*"
+sqlalchemy = ">=2.0.51,<3"
+psycopg = ">=3.3.4,<3.4.0"
 
 [tool.pixi.feature.dev.tasks]
 lint = "ruff check ."
@@ -49,7 +48,6 @@ pytest-asyncio = ">=0.24"
 [tool.pixi.environments]
 dev = ["dev"]
 test = ["test"]
-
 
 
 [tool.pixi.feature.test.tasks]
