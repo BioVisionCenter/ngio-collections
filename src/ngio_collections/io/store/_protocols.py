@@ -18,6 +18,7 @@ from typing import Protocol, runtime_checkable
 class StoreReadOnlyError(PermissionError):
     """Raised by `put()` on a read-only backend. Part of the contract."""
 
+
 class StoreDuplicateValueError(ValueError):
     """Raised by `put(url, data)` when the store already contains an entry at `url`."""
 

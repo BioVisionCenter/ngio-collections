@@ -19,9 +19,11 @@ from ngio_collections._types import JSONValue
 
 class CollectionDBModel:
     """This currently only exists for type hinting."""
+
     dataset_id: int
     url: str
-    document: JSONValue    
+    document: JSONValue
+
 
 class PostgresStore:
     dataset_id: int

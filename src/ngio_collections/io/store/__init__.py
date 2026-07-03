@@ -9,6 +9,7 @@ from ngio_collections.io.store._protocols import (
     WritableStore,
 )
 from ngio_collections.io.store._postgres._store import PostgresStore
+
 __all__ = [
     "FsspecStore",
     "LocalStore",
