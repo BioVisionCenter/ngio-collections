@@ -9,12 +9,11 @@ from __future__ import annotations
 import pytest
 
 import ngio_collections.api._api as aio
-from ngio_collections.api import MemoryStore, new_node
+from ngio_collections.api import new_node
 from ngio_collections.io.store import PostgresStore
 from ngio_collections.io.store._postgres._models import Collection
 from ngio_collections.models._paths import ZarrPath
 from ngio_collections.models._references import ReferenceObj
-from ngio_collections.models.attributes import WellAttribute
 
 from sqlalchemy import URL
 

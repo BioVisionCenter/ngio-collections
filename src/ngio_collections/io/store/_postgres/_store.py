@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine
 from ngio_collections._types import JSONValue
 
 
-class ORMModel:
+class CollectionDBModel:
+    """This currently only exists for type hinting."""
     dataset_id: int
     url: str
     document: JSONValue    
@@ -27,18 +28,18 @@ class PostgresStore:
     engine_sync: Engine
     engine_async: AsyncEngine
 
-    orm_model: ORMModel  # FIXME: Review this type hint
+    orm_model: CollectionDBModel  # FIXME: Review this type hint
 
     def __init__(
         self,
         dataset_id: int,
         engine_sync: Engine,
         engine_async: AsyncEngine,
-        orm_model: ORMModel,  # FIXME: Review this type hint
+        orm_model: CollectionDBModel,  # FIXME: Review this type hint
         *,
         read_only: bool = False,
     ) -> None:
-        """Start from a copy of `initial` (empty by default).
+        """Start with whatever already lives in the database.
 
         Args:
             dataset_id: FIXME
