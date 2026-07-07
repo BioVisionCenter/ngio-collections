@@ -24,12 +24,12 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping
 
-from pydantic import JsonValue
+from ngio_collections._types import JSONValue
 
 from ngio_collections.graph._ids import NodeId
 from ngio_collections.models._paths import DocPath
 
-_EMPTY_ATTRS: Mapping[str, JsonValue] = MappingProxyType({})
+_EMPTY_ATTRS: Mapping[str, JSONValue] = MappingProxyType({})
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +58,7 @@ class EdgeInfo:
     """
 
     ref: Reference
-    attributes: Mapping[str, JsonValue] = field(default=_EMPTY_ATTRS)
+    attributes: Mapping[str, JSONValue] = field(default=_EMPTY_ATTRS)
     name: str | None = None
     origin_url: str | None = None
 
@@ -70,7 +70,7 @@ class NodeRecord:
     type: str
     name: str | None = None
     id: str | None = None
-    attributes: Mapping[str, JsonValue] = field(default=_EMPTY_ATTRS)
+    attributes: Mapping[str, JSONValue] = field(default=_EMPTY_ATTRS)
     children: tuple[NodeId, ...] | None = None
     ref: Reference | None = None
     origin_url: str | None = None
