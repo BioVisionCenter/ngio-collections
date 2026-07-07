@@ -22,7 +22,7 @@ class FsspecStore:
         self, protocol: str, *, read_only: bool = False, **storage_options: Any
     ) -> None:
         try:
-            import fsspec  # noqa: F401  # ty: ignore[unresolved-import]
+            import fsspec  # noqa: F401
         except ImportError as exc:
             raise ImportError(
                 "FsspecStore requires the optional 'fsspec' dependency; "

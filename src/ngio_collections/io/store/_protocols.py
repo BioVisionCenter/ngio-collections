@@ -19,6 +19,10 @@ class StoreReadOnlyError(PermissionError):
     """Raised by `put()` on a read-only backend. Part of the contract."""
 
 
+class StoreDuplicateValueError(ValueError):
+    """Raised by `put(url, data)` when the store already contains an entry at `url`."""
+
+
 @runtime_checkable
 class ReadableStore(Protocol):
     async def get(self, url: str) -> bytes:

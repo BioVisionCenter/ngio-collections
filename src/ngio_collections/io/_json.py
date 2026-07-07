@@ -22,7 +22,7 @@ import json as _stdlib_json
 from typing import Any
 
 try:
-    import orjson  # ty: ignore[unresolved-import]  # optional `speedups` extra
+    import orjson  # optional `speedups` extra
 
     def loads(data: bytes) -> Any:
         """Parse JSON ``data`` (bytes) into Python objects via ``orjson``."""
