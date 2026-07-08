@@ -12,12 +12,12 @@ from __future__ import annotations
 
 from typing import cast
 
-from pydantic import JsonValue
+from ngio_collections._types import JSONValue
 
 from ngio_collections.models._paths import relativize as _relativize_path_str
 
 
-def relativize_attr_refs(value: JsonValue, base_url: str | None) -> JsonValue:
+def relativize_attr_refs(value: JSONValue, base_url: str | None) -> JSONValue:
     """Relativize every embedded `DocPath`-shaped object in an attribute value.
 
     Args:

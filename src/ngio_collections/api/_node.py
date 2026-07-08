@@ -19,8 +19,7 @@ import builtins
 from dataclasses import replace
 from typing import Iterator, Mapping, Sequence, TypeVar
 
-from pydantic import JsonValue
-
+from ngio_collections._types import JSONValue
 from ngio_collections.graph import (
     ROOT,
     NodeTree,
@@ -90,7 +89,7 @@ class Node:
         return self.record.id
 
     @property
-    def attributes(self) -> Mapping[str, JsonValue]:
+    def attributes(self) -> Mapping[str, JSONValue]:
         """The raw attribute bag (validate a capability via `node[Attr]`)."""
         return self.record.attributes
 
@@ -285,7 +284,7 @@ class Node:
 
     def set_attrs(
         self,
-        values: Mapping[str, JsonValue],
+        values: Mapping[str, JSONValue],
         *,
         drop: Sequence[str | builtins.type[AnyAttribute]] = (),
     ) -> Node:
@@ -362,7 +361,7 @@ def new_node(
     *,
     id: str | None = None,
     name: str | None = None,
-    attributes: Mapping[str, JsonValue] | None = None,
+    attributes: Mapping[str, JSONValue] | None = None,
     children: Sequence[Node] | None = None,
     ref: Reference | None = None,
     origin_url: str | None = None,

@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Mapping
 
-from pydantic import JsonValue
+from ngio_collections._types import JSONValue
 
 from ngio_collections.graph import (
     ROOT,
@@ -199,7 +199,7 @@ class _Builder:
         )
 
 
-def _attributes(node_dict: dict) -> Mapping[str, JsonValue]:
+def _attributes(node_dict: dict) -> Mapping[str, JSONValue]:
     """Return a node dict's attributes, defaulting to an empty mapping."""
     return node_dict.get("attributes") or {}
 

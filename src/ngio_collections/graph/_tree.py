@@ -17,8 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Iterator, Literal, Mapping
 
-from pydantic import JsonValue
-
+from ngio_collections._types import JSONValue
 from ngio_collections.graph._ids import ROOT, NodeId
 from ngio_collections.graph._pmap import PersistentMap
 from ngio_collections.graph._record import NodeRecord
@@ -231,7 +230,7 @@ class NodeTree:
     # -- data edits (structure-preserving; indices unchanged) ---------------
 
     def set_attributes(
-        self, node_id: NodeId, attributes: Mapping[str, JsonValue]
+        self, node_id: NodeId, attributes: Mapping[str, JSONValue]
     ) -> NodeTree:
         """Replace the whole attribute bag of `node_id`."""
         rec = self.nodes[node_id]
@@ -243,7 +242,7 @@ class NodeTree:
     def set_attrs(
         self,
         node_id: NodeId,
-        values: Mapping[str, JsonValue],
+        values: Mapping[str, JSONValue],
         drop: tuple[str, ...] = (),
     ) -> NodeTree:
         """Merge `values` into the attribute bag of `node_id`, then remove `drop`.
