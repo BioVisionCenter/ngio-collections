@@ -7,10 +7,10 @@ verbs over them without touching a filesystem.
 
 from __future__ import annotations
 
-from typing import Iterator, Mapping
+from typing import Iterator, Mapping, AsyncIterator, Self
 
 from ngio_collections.io.store._protocols import StoreReadOnlyError
-
+from ngio_collections._types import JSONValue
 
 class MemoryStore:
     """Writable in-memory store over a plain `url -> bytes` mapping."""
@@ -63,14 +63,15 @@ class MemoryStore:
         self._check_writable()
         self._data.pop(url, None)
 
-    def items(self) -> Iterator[tuple[str, bytes]]:
+    async def items(self: Self) -> AsyncIterator[tuple[str, bytes]]:
         """Iterate over a snapshot of the stored `(url, bytes)` pairs."""
-        return iter(tuple(self._data.items()))
+        for url, document in self._data.items():
+            yield (url, document)
 
-    def __contains__(self, url: object) -> bool:
+    async def contains(self, url: object) -> bool:
         """Return whether `url` has stored bytes."""
         return url in self._data
 
-    def __len__(self) -> int:
+    async def size(self) -> int:
         """Return the number of stored documents."""
         return len(self._data)
