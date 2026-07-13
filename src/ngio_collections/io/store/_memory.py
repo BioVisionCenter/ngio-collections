@@ -12,6 +12,7 @@ from typing import Iterator, Mapping, AsyncIterator, Self
 from ngio_collections.io.store._protocols import StoreReadOnlyError
 from ngio_collections._types import JSONValue
 
+
 class MemoryStore:
     """Writable in-memory store over a plain `url -> bytes` mapping."""
 
@@ -67,7 +68,7 @@ class MemoryStore:
         """Iterate over a snapshot of the stored `(url, bytes)` pairs."""
         for url, document in self._data.items():
             yield (url, document)
-    
+
     async def contains(self, url: object) -> bool:
         """Return whether `url` has stored bytes."""
         return url in self._data

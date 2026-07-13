@@ -74,11 +74,10 @@ async def test_hermetic_create_open_save_roundtrip() -> None:
     inlined = await aio.open_inlined("/data/c.json", store)
     assert inlined.find("image").attributes["role"] == "edited"
 
-
     _items = []
     async for item in store.items():
         _items.append(item)
-        
+
     assert {url for url, _ in _items} == {
         "/data/c.json",
         "/data/image.zarr/zarr.json",
