@@ -164,7 +164,7 @@ async def test_delete_removes_document() -> None:
     opened = await aio.open(f"{DATA}/c.json", store)
     affected = await aio.delete(opened, store)
     assert affected == [f"{DATA}/c.json"]
-    assert f"{DATA}/c.json" not in store
+    assert not (await store.contains(f"{DATA}/c.json"))
 
 
 async def test_externalize_splits_node_into_own_document() -> None:

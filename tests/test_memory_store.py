@@ -1,6 +1,7 @@
 """Tests for `MemoryStore`: the store contract plus a hermetic API round-trip."""
 
 from __future__ import annotations
+from pydantic.type_adapter import R
 
 import pytest
 
@@ -24,12 +25,17 @@ async def test_store_contract() -> None:
 
     await store.put("/b.json", b"data")
     assert await store.get("/b.json") == b"data"
-    assert dict(store.items()) == {"/a.json": b"seed", "/b.json": b"data"}
-    assert "/b.json" in store and len(store) == 2
+
+    _items = []
+    async for item in store.items():
+        _items.append(item)
+
+    assert dict(_items) == {"/a.json": b"seed", "/b.json": b"data"}
+    assert (await store.contains("/b.json")) and (await store.size()) == 2
 
     await store.delete("/b.json")
     await store.delete("/b.json")  # idempotent
-    assert "/b.json" not in store
+    assert not (await store.contains("/b.json"))
 
 
 async def test_initial_mapping_is_copied() -> None:
@@ -67,7 +73,13 @@ async def test_hermetic_create_open_save_roundtrip() -> None:
 
     inlined = await aio.open_inlined("/data/c.json", store)
     assert inlined.find("image").attributes["role"] == "edited"
-    assert {url for url, _ in store.items()} == {
+
+
+    _items = []
+    async for item in store.items():
+        _items.append(item)
+        
+    assert {url for url, _ in _items} == {
         "/data/c.json",
         "/data/image.zarr/zarr.json",
     }

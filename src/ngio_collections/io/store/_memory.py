@@ -67,7 +67,7 @@ class MemoryStore:
         """Iterate over a snapshot of the stored `(url, bytes)` pairs."""
         for url, document in self._data.items():
             yield (url, document)
-
+    
     async def contains(self, url: object) -> bool:
         """Return whether `url` has stored bytes."""
         return url in self._data
