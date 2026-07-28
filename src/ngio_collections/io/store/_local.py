@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
+from ngio_collections.io.store._protocols import StoreDuplicateValueError
 from ngio_collections.models._paths import split_scheme
 
 
@@ -49,14 +50,21 @@ class LocalStore:
         """
         return await asyncio.to_thread(_to_path(url).read_bytes)
 
-    async def put(self, url: str, data: bytes) -> None:
+    async def put(self, url: str, data: bytes, *, overwrite: bool = False) -> None:
         """Write `data` to `url`, creating parent directories as needed.
 
         Args:
             url: Destination filesystem path or `file://` URL.
             data: Raw bytes to write.
+            overwrite: Whether to replace an existing file at `url`.
+
+        Raises:
+            StoreDuplicateValueError: If a file already exists at `url` and
+                `overwrite` is `False`.
         """
         path = _to_path(url)
+        if not overwrite and path.exists():
+            raise StoreDuplicateValueError(url)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
 

@@ -47,15 +47,19 @@ class FsspecStore:
         """
         raise NotImplementedError
 
-    async def put(self, url: str, data: bytes) -> None:
+    async def put(self, url: str, data: bytes, *, overwrite: bool = False) -> None:
         """Write `data` at `url`.
 
         Args:
             url: Absolute URL of the destination.
             data: Raw bytes to write.
+            overwrite: Whether to replace an existing entry at `url`.
 
         Raises:
             StoreReadOnlyError: If the store was created with `read_only=True`.
+            StoreDuplicateValueError: If an entry already exists at `url` and
+                `overwrite` is `False`.
+            NotImplementedError: Until the fsspec backend is fully implemented.
         """
         raise NotImplementedError
 

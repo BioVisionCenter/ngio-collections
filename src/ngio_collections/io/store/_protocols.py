@@ -42,12 +42,17 @@ class ReadableStore(Protocol):
 
 @runtime_checkable
 class WritableStore(ReadableStore, Protocol):
-    async def put(self, url: str, data: bytes) -> None:
+    async def put(self, url: str, data: bytes, *, overwrite: bool = False) -> None:
         """Write `data` at `url`, creating parents as needed.
 
         Args:
             url: Absolute URL of the destination.
             data: Raw bytes to write.
+            overwrite: Whether to replace an existing entry at `url`.
+
+        Raises:
+            StoreDuplicateValueError: If an entry already exists at `url` and
+                `overwrite` is `False`.
         """
         ...
 

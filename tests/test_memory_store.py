@@ -9,6 +9,7 @@ import ngio_collections.api._api as aio
 from ngio_collections.api import (
     MemoryStore,
     ReadableStore,
+    StoreDuplicateValueError,
     StoreReadOnlyError,
     WritableStore,
     new_node,
@@ -36,6 +37,16 @@ async def test_store_contract() -> None:
     await store.delete("/b.json")
     await store.delete("/b.json")  # idempotent
     assert not (await store.contains("/b.json"))
+
+
+async def test_put_rejects_duplicate_url_without_overwrite() -> None:
+    store = MemoryStore({"/a.json": b"seed"})
+    with pytest.raises(StoreDuplicateValueError):
+        await store.put("/a.json", b"clobber")
+    assert await store.get("/a.json") == b"seed"
+
+    await store.put("/a.json", b"clobber", overwrite=True)
+    assert await store.get("/a.json") == b"clobber"
 
 
 async def test_initial_mapping_is_copied() -> None:
