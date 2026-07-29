@@ -40,6 +40,7 @@ from ngio_collections.io.store import (
     LocalStore,
     MemoryStore,
     ReadableStore,
+    StoreDuplicateValueError,
     StoreReadOnlyError,
     WritableStore,
 )
@@ -67,6 +68,7 @@ _API = [
     "ReadableStore",
     "Reference",
     "SinglescaleNode",
+    "StoreDuplicateValueError",
     "StoreReadOnlyError",
     "ValidationError",
     "ValidatorType",
