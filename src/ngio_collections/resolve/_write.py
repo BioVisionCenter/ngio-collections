@@ -32,6 +32,7 @@ async def write_document(
     root_id: NodeId = ROOT,
     relativize: bool = True,
     existing: dict | None = None,
+    overwrite: bool = False,
 ) -> str:
     """Serialize the subtree at `root_id` to `url` and write it through `store`.
 
@@ -42,14 +43,19 @@ async def write_document(
         root_id: The node whose subtree becomes the document root.
         relativize: Whether to relativize co-located local reference paths.
         existing: Current on-disk content to preserve sibling keys from.
+        overwrite: Whether to replace a document already at `url`.
 
     Returns:
         The normalised URL written.
+
+    Raises:
+        StoreDuplicateValueError: If a document already exists at `url` and
+            `overwrite` is `False`.
     """
     writable = _require_writable(store)
     url = meta_url(url)
     kind = Document.kind_for(url)
     body = payload(collection, root_id=root_id, base_url=url, relativize=relativize)
     content = wrap_payload(kind, body, existing)
-    await writable.put(url, content)
+    await writable.put(url, content, overwrite=overwrite)
     return url

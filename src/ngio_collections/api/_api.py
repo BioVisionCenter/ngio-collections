@@ -173,7 +173,12 @@ async def create(
             f"a document already exists at {url!r}; open it and save(), or pass overwrite=True"
         )
     await write_document(
-        store, url, root.tree, root_id=root.node_id, relativize=relativize
+        store,
+        url,
+        root.tree,
+        root_id=root.node_id,
+        relativize=relativize,
+        overwrite=overwrite,
     )
     return _reference_stub(root, url)
 
@@ -204,7 +209,13 @@ async def save(
     except FileNotFoundError:
         existing = None
     await write_document(
-        store, url, node.tree, root_id=ROOT, relativize=relativize, existing=existing
+        store,
+        url,
+        node.tree,
+        root_id=ROOT,
+        relativize=relativize,
+        existing=existing,
+        overwrite=True,
     )
     return _reference_stub(node, url)
 
@@ -230,7 +241,12 @@ async def save_inlined(
             f"a document already exists at {url!r}; pass overwrite=True"
         )
     await write_document(
-        store, url, view.tree, root_id=view.node_id, relativize=relativize
+        store,
+        url,
+        view.tree,
+        root_id=view.node_id,
+        relativize=relativize,
+        overwrite=overwrite,
     )
     return _reference_stub(view, url)
 
@@ -279,7 +295,12 @@ async def externalize(
             f"a document already exists at {url!r}; pass overwrite=True"
         )
     await write_document(
-        store, url, node.tree, root_id=node.node_id, relativize=relativize
+        store,
+        url,
+        node.tree,
+        root_id=node.node_id,
+        relativize=relativize,
+        overwrite=overwrite,
     )
     stub = NodeRecord(
         type=node.type,
@@ -321,5 +342,7 @@ async def delete(node: Node, store: ReadableStore | None = None) -> list[str]:
         return [url]
     new = doc_tree.remove(target)
     existing = await store.get(url=url)
-    await write_document(store, url, new, root_id=ROOT, existing=existing)
+    await write_document(
+        store, url, new, root_id=ROOT, existing=existing, overwrite=True
+    )
     return [url]

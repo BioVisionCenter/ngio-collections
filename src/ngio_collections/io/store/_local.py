@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 from ngio_collections.io import _json
+from ngio_collections.io.store._protocols import StoreDuplicateValueError
 from ngio_collections.models._paths import split_scheme
 
 
@@ -52,14 +53,23 @@ class LocalStore:
         raw = await asyncio.to_thread(_to_path(url).read_bytes)
         return _json.loads(raw)
 
-    async def put(self, url: str, data: dict[str, Any]) -> None:
+    async def put(
+        self, url: str, data: dict[str, Any], *, overwrite: bool = False
+    ) -> None:
         """Write `data` to `url`, creating parent directories as needed.
 
         Args:
             url: Destination filesystem path or `file://` URL.
             data: The JSON content to write.
+            overwrite: Whether to replace an existing file at `url`.
+
+        Raises:
+            StoreDuplicateValueError: If a file already exists at `url` and
+                `overwrite` is `False`.
         """
         path = _to_path(url)
+        if not overwrite and path.exists():
+            raise StoreDuplicateValueError(url)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(_json.dumps(data))
 

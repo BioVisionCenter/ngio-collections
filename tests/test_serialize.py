@@ -33,7 +33,7 @@ class _MemoryStore:
         except KeyError as exc:
             raise FileNotFoundError(url) from exc
 
-    async def put(self, url: str, data: dict) -> None:
+    async def put(self, url: str, data: dict, *, overwrite: bool = False) -> None:
         """Store `data` at `url`."""
         self.files[url] = data
 
@@ -125,5 +125,5 @@ async def test_unedited_write_is_byte_identical_on_resave() -> None:
     url = await write_document(store, f"{DATA}/c.json", _sample_collection())
     first = store.files[url]
     reread = build(url, await fetch_all(url, store), inline=False)
-    await write_document(store, url, reread, existing=first)
+    await write_document(store, url, reread, existing=first, overwrite=True)
     assert store.files[url] == first

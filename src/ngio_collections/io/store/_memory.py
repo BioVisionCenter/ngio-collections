@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from typing import Any, Iterator, Mapping, AsyncIterator, Self
 
-from ngio_collections.io.store._protocols import StoreReadOnlyError
+from ngio_collections.io.store._protocols import (
+    StoreDuplicateValueError,
+    StoreReadOnlyError,
+)
 
 
 class MemoryStore:
@@ -45,13 +48,24 @@ class MemoryStore:
         except KeyError as exc:
             raise FileNotFoundError(url) from exc
 
-    async def put(self, url: str, data: dict[str, Any]) -> None:
+    async def put(
+        self, url: str, data: dict[str, Any], *, overwrite: bool = False
+    ) -> None:
         """Store `data` at `url`.
+
+        Args:
+            url: Key to store `data` under.
+            data: The document's JSON content to store.
+            overwrite: Whether to replace an existing entry at `url`.
 
         Raises:
             StoreReadOnlyError: If the store is read-only.
+            StoreDuplicateValueError: If `url` is already stored and
+                `overwrite` is `False`.
         """
         self._check_writable()
+        if not overwrite and url in self._data:
+            raise StoreDuplicateValueError(url)
         self._data[url] = data
 
     async def delete(self, url: str) -> None:

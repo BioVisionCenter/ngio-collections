@@ -42,12 +42,19 @@ class ReadableStore(Protocol):
 
 @runtime_checkable
 class WritableStore(ReadableStore, Protocol):
-    async def put(self, url: str, data: dict[str, Any]) -> None:
+    async def put(
+        self, url: str, data: dict[str, Any], *, overwrite: bool = False
+    ) -> None:
         """Write `data` at `url`, creating parents as needed.
 
         Args:
             url: Absolute URL of the destination.
             data: The document's JSON content to write.
+            overwrite: Whether to replace an existing entry at `url`.
+
+        Raises:
+            StoreDuplicateValueError: If an entry already exists at `url` and
+                `overwrite` is `False`.
         """
         ...
 
