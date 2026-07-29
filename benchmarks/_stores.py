@@ -10,6 +10,7 @@ with `Resolver(prefetch_concurrency=k)` it drops toward ~``ceil(N/k) * delay``.
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from ngio_collections.io.store import ReadableStore, WritableStore
 
@@ -22,12 +23,12 @@ class DelayStore:
         self.inner = inner
         self.delay_s = delay_s
 
-    async def get(self, url: str) -> bytes:
+    async def get(self, url: str) -> dict[str, Any]:
         """Sleep `delay_s`, then delegate the read to the wrapped store."""
         await asyncio.sleep(self.delay_s)
         return await self.inner.get(url)
 
-    async def put(self, url: str, data: bytes) -> None:
+    async def put(self, url: str, data: dict[str, Any]) -> None:
         """Delegate the write to the wrapped store (no injected delay)."""
         await _writable(self.inner).put(url, data)
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
+from ngio_collections.io import _json
 from ngio_collections.models._paths import split_scheme
 
 
@@ -30,8 +32,8 @@ def _to_path(url: str) -> Path:
 class LocalStore:
     """Writable store over plain filesystem paths and `file://` URLs."""
 
-    async def get(self, url: str) -> bytes:
-        """Return the raw bytes of the file at `url`.
+    async def get(self, url: str) -> dict[str, Any]:
+        """Return the parsed JSON content of the file at `url`.
 
         The blocking read runs on a worker thread (`asyncio.to_thread`) so that
         concurrent `get` calls overlap instead of serializing on the event loop —
@@ -42,23 +44,24 @@ class LocalStore:
             url: Filesystem path or `file://` URL to read.
 
         Returns:
-            Raw bytes content of the file.
+            The file's parsed JSON content.
 
         Raises:
             FileNotFoundError: If the file does not exist.
         """
-        return await asyncio.to_thread(_to_path(url).read_bytes)
+        raw = await asyncio.to_thread(_to_path(url).read_bytes)
+        return _json.loads(raw)
 
-    async def put(self, url: str, data: bytes) -> None:
+    async def put(self, url: str, data: dict[str, Any]) -> None:
         """Write `data` to `url`, creating parent directories as needed.
 
         Args:
             url: Destination filesystem path or `file://` URL.
-            data: Raw bytes to write.
+            data: The JSON content to write.
         """
         path = _to_path(url)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        path.write_bytes(_json.dumps(data))
 
     async def delete(self, url: str) -> None:
         """Delete the file at `url`; idempotent (a missing file is fine).

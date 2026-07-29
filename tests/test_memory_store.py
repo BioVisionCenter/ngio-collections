@@ -1,7 +1,6 @@
 """Tests for `MemoryStore`: the store contract plus a hermetic API round-trip."""
 
 from __future__ import annotations
-from pydantic.type_adapter import R
 
 import pytest
 
@@ -16,21 +15,21 @@ from ngio_collections.api import (
 
 
 async def test_store_contract() -> None:
-    store = MemoryStore({"/a.json": b"seed"})
+    store = MemoryStore({"/a.json": {"seed": True}})
     assert isinstance(store, ReadableStore) and isinstance(store, WritableStore)
 
-    assert await store.get("/a.json") == b"seed"
+    assert await store.get("/a.json") == {"seed": True}
     with pytest.raises(FileNotFoundError):
         await store.get("/missing.json")
 
-    await store.put("/b.json", b"data")
-    assert await store.get("/b.json") == b"data"
+    await store.put("/b.json", {"data": True})
+    assert await store.get("/b.json") == {"data": True}
 
     _items = []
     async for item in store.items():
         _items.append(item)
 
-    assert dict(_items) == {"/a.json": b"seed", "/b.json": b"data"}
+    assert dict(_items) == {"/a.json": {"seed": True}, "/b.json": {"data": True}}
     assert (await store.contains("/b.json")) and (await store.size()) == 2
 
     await store.delete("/b.json")
@@ -39,17 +38,17 @@ async def test_store_contract() -> None:
 
 
 async def test_initial_mapping_is_copied() -> None:
-    seed = {"/a.json": b"seed"}
+    seed = {"/a.json": {"seed": True}}
     store = MemoryStore(seed)
-    seed["/a.json"] = b"mutated"
-    assert await store.get("/a.json") == b"seed"
+    seed["/a.json"] = {"seed": False}
+    assert await store.get("/a.json") == {"seed": True}
 
 
 async def test_read_only_rejects_writes() -> None:
-    store = MemoryStore({"/a.json": b"seed"}, read_only=True)
-    assert await store.get("/a.json") == b"seed"
+    store = MemoryStore({"/a.json": {"seed": True}}, read_only=True)
+    assert await store.get("/a.json") == {"seed": True}
     with pytest.raises(StoreReadOnlyError):
-        await store.put("/b.json", b"data")
+        await store.put("/b.json", {"data": True})
     with pytest.raises(StoreReadOnlyError):
         await store.delete("/a.json")
 

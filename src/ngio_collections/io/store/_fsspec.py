@@ -32,14 +32,14 @@ class FsspecStore:
         self.read_only = read_only
         self.storage_options = storage_options
 
-    async def get(self, url: str) -> bytes:
-        """Return the raw bytes stored at `url`.
+    async def get(self, url: str) -> dict[str, Any]:
+        """Return the document stored at `url`.
 
         Args:
             url: Absolute URL of the resource to fetch.
 
         Returns:
-            Raw bytes content of the resource.
+            The document's parsed JSON content.
 
         Raises:
             FileNotFoundError: If no resource exists at `url`.
@@ -47,12 +47,12 @@ class FsspecStore:
         """
         raise NotImplementedError
 
-    async def put(self, url: str, data: bytes) -> None:
+    async def put(self, url: str, data: dict[str, Any]) -> None:
         """Write `data` at `url`.
 
         Args:
             url: Absolute URL of the destination.
-            data: Raw bytes to write.
+            data: The document's JSON content to write.
 
         Raises:
             StoreReadOnlyError: If the store was created with `read_only=True`.

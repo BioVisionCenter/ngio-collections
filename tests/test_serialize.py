@@ -7,7 +7,6 @@ build → write → re-read → build round-trip through a writable in-memory st
 from __future__ import annotations
 
 from ngio_collections.graph import ROOT, NodeTree, NodeRecord, Reference
-from ngio_collections.io import _json
 from ngio_collections.models._paths import ZarrPath
 from ngio_collections.resolve import (
     Document,
@@ -22,19 +21,19 @@ DATA = "/data"
 
 
 class _MemoryStore:
-    """A minimal writable in-memory store (url -> bytes)."""
+    """A minimal writable in-memory store (url -> dict)."""
 
     def __init__(self) -> None:
-        self.files: dict[str, bytes] = {}
+        self.files: dict[str, dict] = {}
 
-    async def get(self, url: str) -> bytes:
-        """Return the bytes at `url`, raising FileNotFoundError if absent."""
+    async def get(self, url: str) -> dict:
+        """Return the document at `url`, raising FileNotFoundError if absent."""
         try:
             return self.files[url]
         except KeyError as exc:
             raise FileNotFoundError(url) from exc
 
-    async def put(self, url: str, data: bytes) -> None:
+    async def put(self, url: str, data: dict) -> None:
         """Store `data` at `url`."""
         self.files[url] = data
 
@@ -126,5 +125,5 @@ async def test_unedited_write_is_byte_identical_on_resave() -> None:
     url = await write_document(store, f"{DATA}/c.json", _sample_collection())
     first = store.files[url]
     reread = build(url, await fetch_all(url, store), inline=False)
-    await write_document(store, url, reread, existing=_json.loads(first))
+    await write_document(store, url, reread, existing=first)
     assert store.files[url] == first

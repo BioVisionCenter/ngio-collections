@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 
 from ngio_collections.graph import ROOT
-from ngio_collections.io import _json
 from ngio_collections.resolve import Document, build, fetch_all, reference_targets
 
 DATA = "/data"
@@ -190,13 +189,13 @@ def test_same_document_inlined_twice_yields_distinct_pristine_nodes() -> None:
 
 
 class _MemoryStore:
-    """A minimal in-memory ReadableStore for tests (url -> bytes)."""
+    """A minimal in-memory ReadableStore for tests (url -> dict)."""
 
-    def __init__(self, files: dict[str, bytes]) -> None:
+    def __init__(self, files: dict[str, dict]) -> None:
         self.files = files
 
-    async def get(self, url: str) -> bytes:
-        """Return the bytes at `url`, raising FileNotFoundError if absent."""
+    async def get(self, url: str) -> dict:
+        """Return the document at `url`, raising FileNotFoundError if absent."""
         try:
             return self.files[url]
         except KeyError as exc:
@@ -204,8 +203,8 @@ class _MemoryStore:
 
 
 def _store(*docs: Document) -> _MemoryStore:
-    """Pack `Document`s into a store as their JSON-enveloped bytes."""
-    return _MemoryStore({d.url: _json.dumps({"ome": d.root}) for d in docs})
+    """Pack `Document`s into a store as their JSON-enveloped content."""
+    return _MemoryStore({d.url: {"ome": d.root} for d in docs})
 
 
 async def test_fetch_all_gathers_transitive_documents() -> None:

@@ -16,7 +16,6 @@ from ngio_collections.api._node import (
     wrap_node,
 )
 from ngio_collections.graph import ROOT, NodeRecord, Reference
-from ngio_collections.io import _json
 from ngio_collections.io.store import (
     LocalStore,
     ReadableStore,
@@ -201,7 +200,7 @@ async def save(
     url = node.document_url
     assert url is not None
     try:
-        existing = _json.loads(await store.get(url=url))
+        existing = await store.get(url=url)
     except FileNotFoundError:
         existing = None
     await write_document(
@@ -321,6 +320,6 @@ async def delete(node: Node, store: ReadableStore | None = None) -> list[str]:
         await _writable(store).delete(url)
         return [url]
     new = doc_tree.remove(target)
-    existing = _json.loads(await store.get(url=url))
+    existing = await store.get(url=url)
     await write_document(store, url, new, root_id=ROOT, existing=existing)
     return [url]

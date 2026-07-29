@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import asyncio
 
-from ngio_collections.io import _json
 from ngio_collections.io.store import LocalStore, ReadableStore
 from ngio_collections.models._paths import DocPath, meta_url
 from ngio_collections.resolve._document import Document
@@ -79,11 +78,11 @@ async def fetch_all(
         seen.add(url)
         async with sem:
             try:
-                raw = await store.get(url=url)
+                content = await store.get(url=url)
             except Exception:
                 return  # unreadable; build leaves the referring stub
         try:
-            doc = Document.from_content(url, _json.loads(raw))
+            doc = Document.from_content(url, content)
         except Exception:
             return  # not an OME document; leave the stub
         docs[url] = doc
