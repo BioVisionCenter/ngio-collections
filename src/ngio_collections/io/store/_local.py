@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
+from ngio_collections._types import JSONValue
 from ngio_collections.io import _json
 from ngio_collections.io.store._protocols import StoreDuplicateValueError
 from ngio_collections.models._paths import split_scheme
@@ -33,7 +33,7 @@ def _to_path(url: str) -> Path:
 class LocalStore:
     """Writable store over plain filesystem paths and `file://` URLs."""
 
-    async def get(self, url: str) -> dict[str, Any]:
+    async def get(self, url: str) -> dict[str, JSONValue]:
         """Return the parsed JSON content of the file at `url`.
 
         The blocking read runs on a worker thread (`asyncio.to_thread`) so that
@@ -54,7 +54,7 @@ class LocalStore:
         return _json.loads(raw)
 
     async def put(
-        self, url: str, data: dict[str, Any], *, overwrite: bool = False
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
     ) -> None:
         """Write `data` to `url`, creating parent directories as needed.
 

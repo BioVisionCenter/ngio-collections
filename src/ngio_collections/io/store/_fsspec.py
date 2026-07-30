@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ngio_collections._types import JSONValue
+
 
 class FsspecStore:
     """Store backed by an fsspec `AsyncFileSystem`.
@@ -32,7 +34,7 @@ class FsspecStore:
         self.read_only = read_only
         self.storage_options = storage_options
 
-    async def get(self, url: str) -> dict[str, Any]:
+    async def get(self, url: str) -> dict[str, JSONValue]:
         """Return the document stored at `url`.
 
         Args:
@@ -48,7 +50,7 @@ class FsspecStore:
         raise NotImplementedError
 
     async def put(
-        self, url: str, data: dict[str, Any], *, overwrite: bool = False
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
     ) -> None:
         """Write `data` at `url`.
 

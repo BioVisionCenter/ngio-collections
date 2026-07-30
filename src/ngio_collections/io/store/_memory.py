@@ -7,8 +7,9 @@ verbs over them without touching a filesystem.
 
 from __future__ import annotations
 
-from typing import Any, Iterator, Mapping, AsyncIterator, Self
+from typing import Iterator, Mapping, AsyncIterator, Self
 
+from ngio_collections._types import JSONValue
 from ngio_collections.io.store._protocols import (
     StoreDuplicateValueError,
     StoreReadOnlyError,
@@ -20,7 +21,7 @@ class MemoryStore:
 
     def __init__(
         self,
-        initial: Mapping[str, dict[str, Any]] | None = None,
+        initial: Mapping[str, dict[str, JSONValue]] | None = None,
         *,
         read_only: bool = False,
     ) -> None:
@@ -30,14 +31,14 @@ class MemoryStore:
             initial: Seed documents, keyed by their full metadata-file URL.
             read_only: Whether `put` / `delete` raise `StoreReadOnlyError`.
         """
-        self._data: dict[str, dict[str, Any]] = dict(initial) if initial else {}
+        self._data: dict[str, dict[str, JSONValue]] = dict(initial) if initial else {}
         self.read_only = read_only
 
     def _check_writable(self) -> None:
         if self.read_only:
             raise StoreReadOnlyError("MemoryStore is read-only")
 
-    async def get(self, url: str) -> dict[str, Any]:
+    async def get(self, url: str) -> dict[str, JSONValue]:
         """Return the document stored at `url`.
 
         Raises:
@@ -49,7 +50,7 @@ class MemoryStore:
             raise FileNotFoundError(url) from exc
 
     async def put(
-        self, url: str, data: dict[str, Any], *, overwrite: bool = False
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
     ) -> None:
         """Store `data` at `url`.
 
@@ -77,7 +78,7 @@ class MemoryStore:
         self._check_writable()
         self._data.pop(url, None)
 
-    async def items(self: Self) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+    async def items(self: Self) -> AsyncIterator[tuple[str, dict[str, JSONValue]]]:
         """Iterate over a snapshot of the stored `(url, dict)` pairs."""
         for url, document in self._data.items():
             yield (url, document)

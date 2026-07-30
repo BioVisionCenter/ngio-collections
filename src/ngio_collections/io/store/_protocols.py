@@ -12,7 +12,9 @@ other via `models/_paths.meta_url`.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
+
+from ngio_collections._types import JSONValue
 
 
 class StoreReadOnlyError(PermissionError):
@@ -25,7 +27,7 @@ class StoreDuplicateValueError(ValueError):
 
 @runtime_checkable
 class ReadableStore(Protocol):
-    async def get(self, url: str) -> dict[str, Any]:
+    async def get(self, url: str) -> dict[str, JSONValue]:
         """Return the document stored at `url`.
 
         Args:
@@ -43,7 +45,7 @@ class ReadableStore(Protocol):
 @runtime_checkable
 class WritableStore(ReadableStore, Protocol):
     async def put(
-        self, url: str, data: dict[str, Any], *, overwrite: bool = False
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
     ) -> None:
         """Write `data` at `url`, creating parents as needed.
 
