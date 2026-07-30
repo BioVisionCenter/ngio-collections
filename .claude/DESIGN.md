@@ -79,7 +79,7 @@ listed in §10 and in ROADMAP.md's future-work section.
 ### Non-goals (for the first iteration)
 
 - Reading or writing array data. This package handles *metadata documents
-  only*; the Store moves bytes of JSON, nothing else.
+  only*; the Store moves parsed JSON documents, nothing else.
 - A fully typed RFC-5 coordinate-transformation union. Coordinate models stay
   minimal and permissive while the spec is moving.
 - Whole-tree dirty tracking / `save_tree()`. Saves are explicit and
@@ -421,11 +421,11 @@ running loop (Jupyter) where `asyncio.run()` would fail. A shared
 
 ```python
 class ReadableStore(Protocol):
-    async def get(self, url: str) -> bytes:
+    async def get(self, url: str) -> dict[str, Any]:
         """MUST raise FileNotFoundError if absent."""
 
 class WritableStore(ReadableStore, Protocol):
-    async def put(self, url: str, data: bytes) -> None: ...
+    async def put(self, url: str, data: dict[str, Any]) -> None: ...
 
 class StoreReadOnlyError(PermissionError):
     """Raised by put() on a read-only backend. Part of the contract."""

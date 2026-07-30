@@ -7,6 +7,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
+from ngio_collections._types import JSONValue
+from ngio_collections.io import _json
 from ngio_collections.io.store._protocols import StoreDuplicateValueError
 from ngio_collections.models._paths import split_scheme
 
@@ -31,8 +33,8 @@ def _to_path(url: str) -> Path:
 class LocalStore:
     """Writable store over plain filesystem paths and `file://` URLs."""
 
-    async def get(self, url: str) -> bytes:
-        """Return the raw bytes of the file at `url`.
+    async def get(self, url: str) -> dict[str, JSONValue]:
+        """Return the parsed JSON content of the file at `url`.
 
         The blocking read runs on a worker thread (`asyncio.to_thread`) so that
         concurrent `get` calls overlap instead of serializing on the event loop —
@@ -43,19 +45,22 @@ class LocalStore:
             url: Filesystem path or `file://` URL to read.
 
         Returns:
-            Raw bytes content of the file.
+            The file's parsed JSON content.
 
         Raises:
             FileNotFoundError: If the file does not exist.
         """
-        return await asyncio.to_thread(_to_path(url).read_bytes)
+        raw = await asyncio.to_thread(_to_path(url).read_bytes)
+        return _json.loads(raw)
 
-    async def put(self, url: str, data: bytes, *, overwrite: bool = False) -> None:
+    async def put(
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
+    ) -> None:
         """Write `data` to `url`, creating parent directories as needed.
 
         Args:
             url: Destination filesystem path or `file://` URL.
-            data: Raw bytes to write.
+            data: The JSON content to write.
             overwrite: Whether to replace an existing file at `url`.
 
         Raises:
@@ -66,7 +71,7 @@ class LocalStore:
         if not overwrite and path.exists():
             raise StoreDuplicateValueError(url)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        path.write_bytes(_json.dumps(data))
 
     async def delete(self, url: str) -> None:
         """Delete the file at `url`; idempotent (a missing file is fine).

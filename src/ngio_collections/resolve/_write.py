@@ -11,7 +11,6 @@ on this primitive.
 from __future__ import annotations
 
 from ngio_collections.graph import ROOT, NodeTree, NodeId
-from ngio_collections.io import _json
 from ngio_collections.io.store import StoreReadOnlyError, WritableStore
 from ngio_collections.models._paths import meta_url
 from ngio_collections.resolve._document import Document, wrap_payload
@@ -58,5 +57,5 @@ async def write_document(
     kind = Document.kind_for(url)
     body = payload(collection, root_id=root_id, base_url=url, relativize=relativize)
     content = wrap_payload(kind, body, existing)
-    await writable.put(url, _json.dumps(content), overwrite=overwrite)
+    await writable.put(url, content, overwrite=overwrite)
     return url

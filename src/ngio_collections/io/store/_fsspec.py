@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ngio_collections._types import JSONValue
+
 
 class FsspecStore:
     """Store backed by an fsspec `AsyncFileSystem`.
@@ -32,14 +34,14 @@ class FsspecStore:
         self.read_only = read_only
         self.storage_options = storage_options
 
-    async def get(self, url: str) -> bytes:
-        """Return the raw bytes stored at `url`.
+    async def get(self, url: str) -> dict[str, JSONValue]:
+        """Return the document stored at `url`.
 
         Args:
             url: Absolute URL of the resource to fetch.
 
         Returns:
-            Raw bytes content of the resource.
+            The document's parsed JSON content.
 
         Raises:
             FileNotFoundError: If no resource exists at `url`.
@@ -47,12 +49,14 @@ class FsspecStore:
         """
         raise NotImplementedError
 
-    async def put(self, url: str, data: bytes, *, overwrite: bool = False) -> None:
+    async def put(
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
+    ) -> None:
         """Write `data` at `url`.
 
         Args:
             url: Absolute URL of the destination.
-            data: Raw bytes to write.
+            data: The document's JSON content to write.
             overwrite: Whether to replace an existing entry at `url`.
 
         Raises:

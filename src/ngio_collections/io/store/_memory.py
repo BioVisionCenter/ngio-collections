@@ -1,4 +1,4 @@
-"""In-memory store: a `url -> bytes` dict behind the store protocols.
+"""In-memory store: a `url -> dict` dict behind the store protocols.
 
 For hermetic tests and for consumers that hold documents in memory (a cache, a
 mirror, a database of documents) and want the ordinary `open`/`create`/`save`
@@ -9,19 +9,19 @@ from __future__ import annotations
 
 from typing import Iterator, Mapping, AsyncIterator, Self
 
+from ngio_collections._types import JSONValue
 from ngio_collections.io.store._protocols import (
     StoreDuplicateValueError,
     StoreReadOnlyError,
 )
-from ngio_collections._types import JSONValue
 
 
 class MemoryStore:
-    """Writable in-memory store over a plain `url -> bytes` mapping."""
+    """Writable in-memory store over a plain `url -> dict` mapping."""
 
     def __init__(
         self,
-        initial: Mapping[str, bytes] | None = None,
+        initial: Mapping[str, dict[str, JSONValue]] | None = None,
         *,
         read_only: bool = False,
     ) -> None:
@@ -31,15 +31,15 @@ class MemoryStore:
             initial: Seed documents, keyed by their full metadata-file URL.
             read_only: Whether `put` / `delete` raise `StoreReadOnlyError`.
         """
-        self._data: dict[str, bytes] = dict(initial) if initial else {}
+        self._data: dict[str, dict[str, JSONValue]] = dict(initial) if initial else {}
         self.read_only = read_only
 
     def _check_writable(self) -> None:
         if self.read_only:
             raise StoreReadOnlyError("MemoryStore is read-only")
 
-    async def get(self, url: str) -> bytes:
-        """Return the bytes stored at `url`.
+    async def get(self, url: str) -> dict[str, JSONValue]:
+        """Return the document stored at `url`.
 
         Raises:
             FileNotFoundError: If nothing is stored at `url`.
@@ -49,12 +49,14 @@ class MemoryStore:
         except KeyError as exc:
             raise FileNotFoundError(url) from exc
 
-    async def put(self, url: str, data: bytes, *, overwrite: bool = False) -> None:
+    async def put(
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
+    ) -> None:
         """Store `data` at `url`.
 
         Args:
             url: Key to store `data` under.
-            data: Raw bytes to store.
+            data: The document's JSON content to store.
             overwrite: Whether to replace an existing entry at `url`.
 
         Raises:
@@ -76,13 +78,13 @@ class MemoryStore:
         self._check_writable()
         self._data.pop(url, None)
 
-    async def items(self: Self) -> AsyncIterator[tuple[str, bytes]]:
-        """Iterate over a snapshot of the stored `(url, bytes)` pairs."""
+    async def items(self: Self) -> AsyncIterator[tuple[str, dict[str, JSONValue]]]:
+        """Iterate over a snapshot of the stored `(url, dict)` pairs."""
         for url, document in self._data.items():
             yield (url, document)
 
     async def contains(self, url: object) -> bool:
-        """Return whether `url` has stored bytes."""
+        """Return whether `url` has a stored document."""
         return url in self._data
 
     async def size(self) -> int:

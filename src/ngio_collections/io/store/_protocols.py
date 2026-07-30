@@ -4,7 +4,7 @@ Stores are URL-addressed, not rooted: `get(url)` takes a full URL. This makes
 mixed-store routing pure composition and keeps the resolver's document cache
 globally coherent.
 
-The `url` here is the document's *bytes address* (the metadata file, e.g.
+The `url` here is the document's *address* (the metadata file, e.g.
 `.../group.zarr/zarr.json`) — distinct from the `ref_url` a reference stores to
 locate that document (the group directory). The resolver derives one from the
 other via `models/_paths.meta_url`.
@@ -13,6 +13,8 @@ other via `models/_paths.meta_url`.
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
+
+from ngio_collections._types import JSONValue
 
 
 class StoreReadOnlyError(PermissionError):
@@ -25,14 +27,14 @@ class StoreDuplicateValueError(ValueError):
 
 @runtime_checkable
 class ReadableStore(Protocol):
-    async def get(self, url: str) -> bytes:
-        """Return the raw bytes stored at `url`.
+    async def get(self, url: str) -> dict[str, JSONValue]:
+        """Return the document stored at `url`.
 
         Args:
             url: Absolute URL of the resource to fetch.
 
         Returns:
-            Raw bytes content of the resource.
+            The document's parsed JSON content.
 
         Raises:
             FileNotFoundError: If no resource exists at `url`.
@@ -42,12 +44,14 @@ class ReadableStore(Protocol):
 
 @runtime_checkable
 class WritableStore(ReadableStore, Protocol):
-    async def put(self, url: str, data: bytes, *, overwrite: bool = False) -> None:
+    async def put(
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
+    ) -> None:
         """Write `data` at `url`, creating parents as needed.
 
         Args:
             url: Absolute URL of the destination.
-            data: Raw bytes to write.
+            data: The document's JSON content to write.
             overwrite: Whether to replace an existing entry at `url`.
 
         Raises:
