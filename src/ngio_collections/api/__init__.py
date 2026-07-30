@@ -39,10 +39,10 @@ from ngio_collections.io.store import (
     FsspecStore,
     LocalStore,
     MemoryStore,
-    ReadableStore,
+    AsyncReadableStore,
     StoreDuplicateValueError,
     StoreReadOnlyError,
-    WritableStore,
+    AsyncWritableStore,
 )
 from ngio_collections.models import *  # noqa: F403  (value models: attributes, paths, refs)
 from ngio_collections.validate import (

@@ -39,7 +39,7 @@ from ngio_collections.graph import (
     Reference,
     TreeBuilder,
 )
-from ngio_collections.io.store import LocalStore, WritableStore
+from ngio_collections.io.store import LocalStore, AsyncWritableStore
 from ngio_collections.resolve import write_document
 
 # --- fixed layout (per the spec) --------------------------------------------
@@ -195,8 +195,8 @@ def build_monolithic(scenes_per_well: int) -> NodeTree:
 # --- on-disk sharding --------------------------------------------------------
 
 
-def _writable(store: object) -> WritableStore:
-    if not isinstance(store, WritableStore):
+def _writable(store: object) -> AsyncWritableStore:
+    if not isinstance(store, AsyncWritableStore):
         raise TypeError(f"{type(store).__name__} is not writable")
     return store
 

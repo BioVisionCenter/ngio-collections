@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 
-from ngio_collections.io.store import LocalStore, ReadableStore
+from ngio_collections.io.store import LocalStore, AsyncReadableStore
 from ngio_collections.models._paths import DocPath, meta_url
 from ngio_collections.resolve._document import Document
 
@@ -49,7 +49,7 @@ def _walk(node_dict: dict):  # -> Iterator[dict]
 
 async def fetch_all(
     entry_url: str,
-    store: ReadableStore | None = None,
+    store: AsyncReadableStore | None = None,
     *,
     depth: int | None = None,
     concurrency: int = 16,

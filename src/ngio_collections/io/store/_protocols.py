@@ -26,7 +26,7 @@ class StoreDuplicateValueError(ValueError):
 
 
 @runtime_checkable
-class ReadableStore(Protocol):
+class AsyncReadableStore(Protocol):
     async def get(self, url: str) -> dict[str, JSONValue]:
         """Return the document stored at `url`.
 
@@ -43,7 +43,7 @@ class ReadableStore(Protocol):
 
 
 @runtime_checkable
-class WritableStore(ReadableStore, Protocol):
+class AsyncWritableStore(AsyncReadableStore, Protocol):
     async def put(
         self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
     ) -> None:

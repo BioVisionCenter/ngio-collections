@@ -12,13 +12,13 @@ from __future__ import annotations
 import asyncio
 
 from ngio_collections._types import JSONValue
-from ngio_collections.io.store import ReadableStore, WritableStore
+from ngio_collections.io.store import AsyncReadableStore, AsyncWritableStore
 
 
 class DelayStore:
     """Wrap a store, sleeping `delay_s` before each `get` (simulated read latency)."""
 
-    def __init__(self, inner: ReadableStore, delay_s: float) -> None:
+    def __init__(self, inner: AsyncReadableStore, delay_s: float) -> None:
         """Wrap `inner`, adding `delay_s` seconds of latency to every `get`."""
         self.inner = inner
         self.delay_s = delay_s
@@ -37,8 +37,8 @@ class DelayStore:
         await _writable(self.inner).delete(url)
 
 
-def _writable(store: ReadableStore) -> WritableStore:
+def _writable(store: AsyncReadableStore) -> AsyncWritableStore:
     """Narrow `store` to a `WritableStore`, raising if it is read-only."""
-    if not isinstance(store, WritableStore):
+    if not isinstance(store, AsyncWritableStore):
         raise TypeError(f"{type(store).__name__} is not writable")
     return store
