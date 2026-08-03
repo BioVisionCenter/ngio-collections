@@ -27,8 +27,8 @@ def test_facade_covers_the_downstream_essentials() -> None:
         "delete",
         "LocalStore",
         "MemoryStore",
-        "ReadableStore",
-        "WritableStore",
+        "AsyncReadableStore",
+        "AsyncWritableStore",
         "StoreReadOnlyError",
     ]
     for name in essentials:

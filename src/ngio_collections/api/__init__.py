@@ -58,6 +58,8 @@ from ngio_collections.validate import (
 register_node_types()
 
 _API = [
+    "AsyncReadableStore",
+    "AsyncWritableStore",
     "CollectionNode",
     "FsspecStore",
     "LocalStore",
@@ -65,14 +67,12 @@ _API = [
     "MultiscaleNode",
     "Node",
     "NodeTypeRegistry",
-    "ReadableStore",
     "Reference",
     "SinglescaleNode",
     "StoreDuplicateValueError",
     "StoreReadOnlyError",
     "ValidationError",
     "ValidatorType",
-    "WritableStore",
     "create",
     "delete",
     "externalize",
