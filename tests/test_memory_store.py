@@ -17,7 +17,9 @@ from ngio_collections.api import (
 
 async def test_store_contract() -> None:
     store = MemoryStore({"/a.json": {"seed": True}})
-    assert isinstance(store, AsyncReadableStore) and isinstance(store, AsyncWritableStore)
+    assert isinstance(store, AsyncReadableStore) and isinstance(
+        store, AsyncWritableStore
+    )
 
     assert await store.get("/a.json") == {"seed": True}
     with pytest.raises(FileNotFoundError):
