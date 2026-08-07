@@ -67,3 +67,47 @@ class AsyncWritableStore(AsyncReadableStore, Protocol):
             url: Absolute URL of the resource to delete.
         """
         ...
+
+
+@runtime_checkable
+class SyncReadableStore(Protocol):
+    def get(self, url: str) -> dict[str, JSONValue]:
+        """Return the document stored at `url`.
+
+        Args:
+            url: Absolute URL of the resource to fetch.
+
+        Returns:
+            The document's parsed JSON content.
+
+        Raises:
+            FileNotFoundError: If no resource exists at `url`.
+        """
+        ...
+
+
+@runtime_checkable
+class SyncWritableStore(SyncReadableStore, Protocol):
+    def put(
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
+    ) -> None:
+        """Write `data` at `url`, creating parents as needed.
+
+        Args:
+            url: Absolute URL of the destination.
+            data: The document's JSON content to write.
+            overwrite: Whether to replace an existing entry at `url`.
+
+        Raises:
+            StoreDuplicateValueError: If an entry already exists at `url` and
+                `overwrite` is `False`.
+        """
+        ...
+
+    def delete(self, url: str) -> None:
+        """Delete the object at `url`; idempotent (missing URL is not an error).
+
+        Args:
+            url: Absolute URL of the resource to delete.
+        """
+        ...

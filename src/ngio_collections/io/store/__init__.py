@@ -8,6 +8,8 @@ from ngio_collections.io.store._protocols import (
     StoreDuplicateValueError,
     StoreReadOnlyError,
     AsyncWritableStore,
+    SyncReadableStore,
+    SyncWritableStore
 )
 
 __all__ = [
@@ -18,4 +20,6 @@ __all__ = [
     "StoreDuplicateValueError",
     "StoreReadOnlyError",
     "AsyncWritableStore",
+    "SyncReadableStore",
+    "SyncWritableStore"
 ]
