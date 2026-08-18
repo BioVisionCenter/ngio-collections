@@ -111,3 +111,7 @@ class SyncWritableStore(SyncReadableStore, Protocol):
             url: Absolute URL of the resource to delete.
         """
         ...
+
+
+AnyReadableStore = AsyncReadableStore | SyncReadableStore
+"""Either protocol's flavor of a readable store; see `store._adapt.as_async`."""

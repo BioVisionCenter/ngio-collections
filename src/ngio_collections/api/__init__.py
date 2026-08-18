@@ -39,10 +39,13 @@ from ngio_collections.io.store import (
     FsspecStore,
     LocalStore,
     MemoryStore,
+    AnyReadableStore,
     AsyncReadableStore,
     StoreDuplicateValueError,
     StoreReadOnlyError,
     AsyncWritableStore,
+    SyncReadableStore,
+    SyncWritableStore,
 )
 from ngio_collections.models import *  # noqa: F403  (value models: attributes, paths, refs)
 from ngio_collections.validate import (
@@ -58,6 +61,7 @@ from ngio_collections.validate import (
 register_node_types()
 
 _API = [
+    "AnyReadableStore",
     "AsyncReadableStore",
     "AsyncWritableStore",
     "CollectionNode",
@@ -71,6 +75,8 @@ _API = [
     "SinglescaleNode",
     "StoreDuplicateValueError",
     "StoreReadOnlyError",
+    "SyncReadableStore",
+    "SyncWritableStore",
     "ValidationError",
     "ValidatorType",
     "create",

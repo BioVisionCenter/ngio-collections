@@ -4,6 +4,7 @@ from ngio_collections.io.store._fsspec import FsspecStore
 from ngio_collections.io.store._local import LocalStore
 from ngio_collections.io.store._memory import MemoryStore
 from ngio_collections.io.store._protocols import (
+    AnyReadableStore,
     AsyncReadableStore,
     StoreDuplicateValueError,
     StoreReadOnlyError,
@@ -16,6 +17,7 @@ __all__ = [
     "FsspecStore",
     "LocalStore",
     "MemoryStore",
+    "AnyReadableStore",
     "AsyncReadableStore",
     "StoreDuplicateValueError",
     "StoreReadOnlyError",

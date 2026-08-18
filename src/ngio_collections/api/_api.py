@@ -18,19 +18,26 @@ from ngio_collections.api._node import (
 from ngio_collections.graph import ROOT, NodeRecord, Reference
 from ngio_collections.io.store import (
     LocalStore,
+    AnyReadableStore,
     AsyncReadableStore,
     StoreReadOnlyError,
     AsyncWritableStore,
 )
+from ngio_collections.io.store._adapt import as_async
 from ngio_collections.models._config import NodeStateError
 from ngio_collections.models._paths import meta_url
 from ngio_collections.models._references import ReferenceObj
 from ngio_collections.resolve import OnError, build, fetch_all, write_document
 
 
-def _store(store: AsyncReadableStore | None) -> AsyncReadableStore:
-    """Return `store` or a default `LocalStore`."""
-    return store if store is not None else LocalStore()
+def _store(store: AnyReadableStore | None) -> AsyncReadableStore:
+    """Return `store` adapted to the async protocol, or a default `LocalStore`.
+
+    A sync store (`SyncReadableStore`/`SyncWritableStore`) is wrapped so its
+    calls run on a worker thread — see `store._adapt.as_async` — letting every
+    verb below stay async-only regardless of which protocol `store` implements.
+    """
+    return as_async(store) if store is not None else LocalStore()
 
 
 def _writable(store: AsyncReadableStore) -> AsyncWritableStore:
@@ -49,7 +56,7 @@ async def _exists(store: AsyncReadableStore, url: str) -> bool:
     return True
 
 
-async def open(source: str, store: AsyncReadableStore | None = None) -> Node:
+async def open(source: str, store: AnyReadableStore | None = None) -> Node:
     """Open one document as an editable tree, cross-document stubs left in place."""
     store = _store(store)
     url = meta_url(source)
@@ -61,7 +68,7 @@ async def open(source: str, store: AsyncReadableStore | None = None) -> Node:
 
 async def open_inlined(
     source: str,
-    store: AsyncReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     depth: int | None = None,
     on_error: OnError = "skip",
@@ -103,7 +110,7 @@ def _locate(root: Node, ref: ReferenceObj, url: str) -> Node:
 async def open_ref(
     ref: ReferenceObj,
     base_url: str | None = None,
-    store: AsyncReadableStore | None = None,
+    store: AnyReadableStore | None = None,
 ) -> Node:
     """Open the node subtree a `ReferenceObj` points at, as an editable tree.
 
@@ -126,7 +133,7 @@ async def open_ref(
 async def open_inlined_ref(
     ref: ReferenceObj,
     base_url: str | None = None,
-    store: AsyncReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     depth: int | None = None,
     on_error: OnError = "skip",
@@ -151,7 +158,7 @@ async def open_inlined_ref(
 async def create(
     destination: str,
     root: Node,
-    store: AsyncReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     overwrite: bool = False,
     relativize: bool = True,
@@ -184,7 +191,7 @@ async def create(
 
 
 async def save(
-    node: Node, store: AsyncReadableStore | None = None, *, relativize: bool = True
+    node: Node, store: AnyReadableStore | None = None, *, relativize: bool = True
 ) -> Node:
     """Write an opened tree back into its own document; return a reference stub.
 
@@ -223,7 +230,7 @@ async def save(
 async def save_inlined(
     view: Node,
     destination: str,
-    store: AsyncReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     overwrite: bool = False,
     relativize: bool = True,
@@ -254,7 +261,7 @@ async def save_inlined(
 async def externalize(
     node: Node,
     destination: str,
-    store: AsyncReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     overwrite: bool = False,
     relativize: bool = True,
@@ -314,7 +321,7 @@ async def externalize(
     return root
 
 
-async def delete(node: Node, store: AsyncReadableStore | None = None) -> list[str]:
+async def delete(node: Node, store: AnyReadableStore | None = None) -> list[str]:
     """Remove `node` from its on-disk document, unlinking the file if left empty.
 
     Operates on the node's *origin* document (re-read fresh), locating the node by
