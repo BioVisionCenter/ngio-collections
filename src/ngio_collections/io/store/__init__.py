@@ -10,7 +10,7 @@ from ngio_collections.io.store._protocols import (
     StoreReadOnlyError,
     AsyncWritableStore,
     SyncReadableStore,
-    SyncWritableStore
+    SyncWritableStore,
 )
 
 __all__ = [
@@ -23,5 +23,5 @@ __all__ = [
     "StoreReadOnlyError",
     "AsyncWritableStore",
     "SyncReadableStore",
-    "SyncWritableStore"
+    "SyncWritableStore",
 ]
