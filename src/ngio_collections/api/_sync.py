@@ -14,7 +14,7 @@ from typing import Any, Coroutine, TypeVar
 
 from ngio_collections.api import _api
 from ngio_collections.api._node import Node
-from ngio_collections.io.store import ReadableStore
+from ngio_collections.io.store import AnyReadableStore
 from ngio_collections.models._references import ReferenceObj
 from ngio_collections.resolve import OnError
 
@@ -42,14 +42,14 @@ def _run(coro: Coroutine[Any, Any, T]) -> T:
     return asyncio.run_coroutine_threadsafe(coro, _get_loop()).result()
 
 
-def open(source: str, store: ReadableStore | None = None) -> Node:
+def open(source: str, store: AnyReadableStore | None = None) -> Node:
     """Synchronous `open`."""
     return _run(_api.open(source, store))
 
 
 def open_inlined(
     source: str,
-    store: ReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     depth: int | None = None,
     on_error: OnError = "skip",
@@ -61,7 +61,7 @@ def open_inlined(
 def open_ref(
     ref: ReferenceObj,
     base_url: str | None = None,
-    store: ReadableStore | None = None,
+    store: AnyReadableStore | None = None,
 ) -> Node:
     """Synchronous `open_ref`."""
     return _run(_api.open_ref(ref, base_url, store))
@@ -70,7 +70,7 @@ def open_ref(
 def open_inlined_ref(
     ref: ReferenceObj,
     base_url: str | None = None,
-    store: ReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     depth: int | None = None,
     on_error: OnError = "skip",
@@ -84,7 +84,7 @@ def open_inlined_ref(
 def create(
     destination: str,
     root: Node,
-    store: ReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     overwrite: bool = False,
     relativize: bool = True,
@@ -98,7 +98,7 @@ def create(
 
 
 def save(
-    node: Node, store: ReadableStore | None = None, *, relativize: bool = True
+    node: Node, store: AnyReadableStore | None = None, *, relativize: bool = True
 ) -> Node:
     """Synchronous `save`."""
     return _run(_api.save(node, store, relativize=relativize))
@@ -107,7 +107,7 @@ def save(
 def save_inlined(
     view: Node,
     destination: str,
-    store: ReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     overwrite: bool = False,
     relativize: bool = True,
@@ -123,7 +123,7 @@ def save_inlined(
 def externalize(
     node: Node,
     destination: str,
-    store: ReadableStore | None = None,
+    store: AnyReadableStore | None = None,
     *,
     overwrite: bool = False,
     relativize: bool = True,
@@ -136,6 +136,6 @@ def externalize(
     )
 
 
-def delete(node: Node, store: ReadableStore | None = None) -> list[str]:
+def delete(node: Node, store: AnyReadableStore | None = None) -> list[str]:
     """Synchronous `delete`."""
     return _run(_api.delete(node, store))

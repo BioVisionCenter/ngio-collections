@@ -9,17 +9,17 @@ from ngio_collections.io.store import (
     FsspecStore,
     LocalStore,
     MemoryStore,
-    ReadableStore,
+    AsyncReadableStore,
     StoreReadOnlyError,
-    WritableStore,
+    AsyncWritableStore,
 )
 
 __all__ = [
     "FsspecStore",
     "LocalStore",
     "MemoryStore",
-    "ReadableStore",
+    "AsyncReadableStore",
     "StoreReadOnlyError",
-    "WritableStore",
+    "AsyncWritableStore",
     "fingerprint",
 ]

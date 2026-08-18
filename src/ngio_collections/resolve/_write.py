@@ -11,15 +11,15 @@ on this primitive.
 from __future__ import annotations
 
 from ngio_collections.graph import ROOT, NodeTree, NodeId
-from ngio_collections.io.store import StoreReadOnlyError, WritableStore
+from ngio_collections.io.store import StoreReadOnlyError, AsyncWritableStore
 from ngio_collections.models._paths import meta_url
 from ngio_collections.resolve._document import Document, wrap_payload
 from ngio_collections.resolve._serialize import payload
 
 
-def _require_writable(store: object) -> WritableStore:
+def _require_writable(store: object) -> AsyncWritableStore:
     """Return `store` as a `WritableStore`, or raise if it cannot write."""
-    if not isinstance(store, WritableStore) or getattr(store, "read_only", False):
+    if not isinstance(store, AsyncWritableStore) or getattr(store, "read_only", False):
         raise StoreReadOnlyError(f"store {type(store).__name__!r} cannot write")
     return store
 
