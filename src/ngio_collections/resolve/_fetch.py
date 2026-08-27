@@ -8,9 +8,11 @@ points at); the build that follows is pure and reads everything from the returne
 `docs` map. Discovery and reading are interleaved because a document's references
 are only known once it is parsed — but no resolution *logic* lives here.
 
-Reads are best-effort: a document that cannot be fetched or is not an OME document
-is simply absent from `docs`, and `build` then leaves the referring stub in place
-(or raises, per its `on_error`).
+Reads are best-effort: a document that cannot be fetched is simply absent from
+`docs`, and `build` then leaves the referring stub in place (or raises, per its
+`on_error`). A document that *was* read but carries no OME payload is kept, marked
+`has_payload=False` — `build` needs that distinction, since such a stub points at
+data rather than at a broken reference.
 """
 
 from __future__ import annotations

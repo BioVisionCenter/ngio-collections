@@ -31,11 +31,19 @@ def _kind_for(url: str) -> Kind:
 
 @dataclass(frozen=True, slots=True)
 class Document:
-    """One parsed document: its metadata-file `url`, `kind`, and `root` node dict."""
+    """One parsed document: its metadata-file `url`, `kind`, and `root` node dict.
+
+    `has_payload` is `False` for a document that was read successfully but carries
+    no `ome` key at all — a plain Zarr array, say. That is a *different* fact from
+    the document being absent (unreadable), and resolution needs both: a stub whose
+    target is data is already complete, while a stub whose target is missing is an
+    error. `root` is `{}` in that case.
+    """
 
     url: str
     kind: Kind
     root: dict
+    has_payload: bool = True
 
     @property
     def ref_url(self) -> str:
@@ -64,15 +72,16 @@ class Document:
 
         Returns:
             A `Document` whose `root` is the OME payload's root node dict with the
-            envelope `version` removed.
-
-        Raises:
-            KeyError: If `content` carries no OME payload (e.g. a plain data
-                array); `fetch_all` treats this as "not an OME document".
+            envelope `version` removed. A document carrying no `ome` key at all
+            (e.g. a plain data array) is not an error: it comes back with
+            `has_payload=False` and an empty `root`.
         """
         url = meta_url(url)
         kind = _kind_for(url)
-        ome = content["attributes"]["ome"] if kind == "zarr" else content["ome"]
+        container = content if kind == "json" else content.get("attributes") or {}
+        ome = container.get("ome")
+        if ome is None:
+            return cls(url=url, kind=kind, root={}, has_payload=False)
         root = {k: v for k, v in ome.items() if k != "version"}
         return cls(url=url, kind=kind, root=root)
 

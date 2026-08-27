@@ -13,10 +13,12 @@ of its own — every document it might need is supplied up front in `docs` (the
 
 Resolution degrades gracefully and deterministically: a stub is left unresolved
 (a reference record) when the hop budget is exhausted (`depth`), a cycle is hit,
-the target was not fetched, or its root type does not match the stub. `on_error`
-chooses between leaving the stub (`"skip"`) and raising (`"raise"`). Identity is
-the structural `NodeId` path, so the same document inlined twice yields distinct
-nodes with no id rewriting.
+the target was not fetched, or its root type does not match the stub — `on_error`
+chooses between leaving the stub (`"skip"`) and raising (`"raise"`). A stub whose
+target carries no OME metadata is left in place under *either* `on_error`: its
+`path` locates plain data (a Zarr array), so the stub is already complete and
+there is nothing to inline. Identity is the structural `NodeId` path, so the same
+document inlined twice yields distinct nodes with no id rewriting.
 """
 
 from __future__ import annotations
@@ -68,9 +70,12 @@ def build(
 
     Raises:
         KeyError: If `entry_url` is not present in `docs`.
+        ValueError: If the entry document carries no OME metadata.
     """
     entry_url = meta_url(entry_url)
     doc = docs[entry_url]
+    if not doc.has_payload:
+        raise ValueError(f"document at {entry_url!r} carries no `ome` metadata")
     mode = "resolved" if inline else "editable"
     tree = TreeBuilder(_materialized_record(doc.root, doc.url), mode=mode)
     builder = _Builder(docs, inline, on_error)
@@ -184,6 +189,10 @@ class _Builder:
                 raise FileNotFoundError(
                     f"reference target {target_url!r} was not fetched"
                 )
+            return leave
+        if not target.has_payload:
+            # The target is data, not a document: the stub's `path` locates a plain
+            # Zarr array. Nothing to inline, and nothing wrong — the stub is whole.
             return leave
         if node_dict.get("type") != target.root.get("type"):
             if self.on_error == "raise":
