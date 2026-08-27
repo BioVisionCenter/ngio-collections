@@ -132,6 +132,44 @@ def test_type_mismatch_skips_or_raises() -> None:
         build(entry.url, docs, inline=True, on_error="raise")
 
 
+def test_payload_free_target_is_a_terminal_leaf() -> None:
+    # RFC-8's inlined singlescale: the stub carries its own attributes and its
+    # `path` locates a plain Zarr array, so there is nothing to inline and nothing
+    # wrong. Contrast test_missing_target_skips_or_raises: absent != payload-free.
+    attrs = {"coordinateTransformations": [1]}
+    stub = _stub("s0", "s0", type="singlescale", attributes=attrs)
+    entry = _doc("collection", _collection_with(stub))
+    target = Document(url=f"{DATA}/s0.json", kind="json", root={}, has_payload=False)
+    docs = {entry.url: entry, target.url: target}
+    for on_error in ("skip", "raise"):
+        c = build(entry.url, docs, inline=True, on_error=on_error)
+        (key,) = c.children_ids(ROOT)
+        record = c.record(key)
+        assert record.is_reference
+        assert record.ref is not None and record.ref.path.path == "./s0.json"
+        assert record.attributes == attrs
+
+
+def test_present_but_typeless_payload_still_raises() -> None:
+    # An `ome` key that is present but carries no `type` is malformed, not data:
+    # it must keep reaching the type check rather than being silently skipped.
+    entry = _doc("collection", _collection_with(_stub("img", "image")))
+    target = _doc("image", {})  # `ome` present, `version` stripped, no `type`
+    docs = {entry.url: entry, target.url: target}
+    with pytest.raises(TypeError):
+        build(entry.url, docs, inline=True, on_error="raise")
+
+
+def test_payload_free_entry_document_raises() -> None:
+    content = {"zarr_format": 3, "node_type": "array"}  # a plain Zarr array
+    doc = Document.from_content("/data/s0.zarr", content)
+    assert doc.has_payload is False
+    assert doc.root == {}
+    assert list(reference_targets(doc)) == []
+    with pytest.raises(ValueError):
+        build(doc.url, {doc.url: doc}, inline=False)
+
+
 def test_cycle_terminates_and_leaves_stub() -> None:
     entry = _doc(
         "collection",

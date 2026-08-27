@@ -95,7 +95,12 @@ class Node:
 
     @property
     def is_reference(self) -> bool:
-        """Whether this node is an unresolved cross-document reference."""
+        """Whether this node carries a `path` rather than embedded children.
+
+        True for an unresolved cross-document reference, and also for a node whose
+        `path` locates plain data (a Zarr array) — that one is fully resolved, it
+        just has nothing to inline.
+        """
         return self.record.is_reference
 
     @property
