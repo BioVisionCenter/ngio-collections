@@ -3,16 +3,19 @@ import subprocess, shlex
 import ngio_collections as ngc
 
 
-VALIDATORS = (ngc.well_under_plate, ngc.scale_matches_axes)
-
-
 def validate_collection(root_url: str) -> None:
     root_node = ngc.open(root_url)
     print(root_node)
-    # Relational validation
-    ngc.validate(root_node, validators=VALIDATORS, raise_on_error=True)
-    # Per-object validation
-    # TODO
+
+    # (1) Run validators from `ngc`
+    ngc.validate(
+        root_node,
+        validators=(ngc.well_under_plate, ngc.scale_matches_axes),
+        raise_on_error=True,
+    )
+
+    # (2) Validate each node against JSON Schemas
+    # ... (TODO)
 
 
 for script in sorted(Path(__file__).parent.glob("*.py")):
