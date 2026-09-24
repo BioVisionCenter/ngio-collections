@@ -89,7 +89,7 @@ def build_collection() -> ngc.Node:
     )
     labels = ngc.new_node("collection", id="labels", name="labels").add(nuclei)
     return (
-        ngc.new_node("collection", id="root", name="root")
+        ngc.new_node("collection", id="root", name="labels")
         .add(build_multiscale("image"))
         .add(labels)
     )

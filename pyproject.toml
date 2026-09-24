@@ -33,7 +33,6 @@ pytest = ">=8"
 pytest-asyncio = ">=0.24"
 ty = "*"
 
-
 [tool.pixi.feature.dev.tasks]
 lint = "ruff check ."
 format = "ruff format ."
@@ -43,9 +42,6 @@ type-check = "ty check"
 [tool.pixi.feature.test.dependencies]
 pytest = ">=8"
 pytest-asyncio = ">=0.24"
-
-[tool.pixi.feature.test.pypi-dependencies]
-ngff-rfc8 = { git = "https://github.com/fractal-analytics-platform/ngff-rfc8-validator" }
 
 [tool.pixi.environments]
 dev = ["dev"]

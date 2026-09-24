@@ -2,7 +2,6 @@
   "ome": {
     "version": "0.x",
     "type": "collection",
-    "name": "root",
     "id": "root",
     "nodes": [
       {

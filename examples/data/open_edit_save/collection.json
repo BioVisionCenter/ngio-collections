@@ -7,7 +7,6 @@
     "nodes": [
       {
         "type": "multiscale",
-        "name": "image",
         "id": "image",
         "attributes": {
           "role": "raw",
