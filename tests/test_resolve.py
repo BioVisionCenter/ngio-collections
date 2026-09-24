@@ -37,7 +37,7 @@ def _collection_with(*children: dict, id: str = "root") -> dict:
 
 def _image(id: str = "image", **attrs: object) -> dict:
     """A materialized multiscale node dict (the usual reference target)."""
-    return {"type": "multiscale", "id": id, "name": id, "attributes": dict(attrs)}
+    return {"type": "multiscale", "id": id, "attributes": dict(attrs)}
 
 
 # --------------------------------------------------------------------------- #
@@ -75,6 +75,7 @@ def test_open_inlined_merges_target_root() -> None:
     c = build(f"{DATA}/collection.json", docs, inline=True)
     (key,) = c.children_ids(ROOT)
     rec = c.record(key)
+    assert rec.name == "img"  # target has no name -> falls back to the stub
     assert not rec.is_reference
     assert rec.type == "multiscale" and rec.id == "image"
     assert dict(rec.attributes) == {"role": "raw", "extra": 1}  # stub wins
