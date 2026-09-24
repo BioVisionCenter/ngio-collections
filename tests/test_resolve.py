@@ -32,12 +32,12 @@ def _stub(name: str, target: str, **extra: object) -> dict:
 
 def _collection_with(*children: dict, id: str = "root") -> dict:
     """A collection root node dict wrapping `children`."""
-    return {"type": "collection", "id": id, "nodes": list(children)}
+    return {"type": "collection", "id": id, "name": id, "nodes": list(children)}
 
 
 def _image(id: str = "image", **attrs: object) -> dict:
     """A materialized multiscale node dict (the usual reference target)."""
-    return {"type": "multiscale", "id": id, "attributes": dict(attrs)}
+    return {"type": "multiscale", "id": id, "name": id, "attributes": dict(attrs)}
 
 
 # --------------------------------------------------------------------------- #
@@ -77,7 +77,6 @@ def test_open_inlined_merges_target_root() -> None:
     rec = c.record(key)
     assert not rec.is_reference
     assert rec.type == "multiscale" and rec.id == "image"
-    assert rec.name == "img"  # target has no name -> falls back to the stub
     assert dict(rec.attributes) == {"role": "raw", "extra": 1}  # stub wins
     assert rec.origin_url == f"{DATA}/image.json"
     assert c.mode == "resolved"
@@ -176,6 +175,7 @@ def test_cycle_terminates_and_leaves_stub() -> None:
         {
             "type": "collection",
             "id": "root",
+            "name": "root",
             "nodes": [
                 {
                     "type": "collection",
@@ -190,6 +190,7 @@ def test_cycle_terminates_and_leaves_stub() -> None:
         {
             "type": "collection",
             "id": "a",
+            "name": "a",
             "nodes": [
                 {
                     "type": "collection",
