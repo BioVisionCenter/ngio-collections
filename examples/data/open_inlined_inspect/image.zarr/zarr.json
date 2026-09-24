@@ -3,6 +3,7 @@
     "ome": {
       "version": "0.x",
       "type": "multiscale",
+      "name": "image",
       "id": "image",
       "attributes": {
         "role": "raw"
