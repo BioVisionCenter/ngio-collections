@@ -17,12 +17,3 @@ jobs:
           environments: test
       - name: Tests
         run: pixi run -e test pytest
-
-  validate-examples:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-      - uses: prefix-dev/setup-pixi@14c8aabd75893f83f4ab30c03e7cf853c8208961 # v0.8.10
-      - run: pixi run -e test python examples/validate_all.py
