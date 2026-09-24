@@ -79,7 +79,7 @@ class Node:
         return self.record.type
 
     @property
-    def name(self) -> str | None:
+    def name(self) -> str:
         """The optional display name."""
         return self.record.name
 
