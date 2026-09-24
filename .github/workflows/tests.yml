@@ -25,4 +25,4 @@ jobs:
         with:
           persist-credentials: false
       - uses: prefix-dev/setup-pixi@14c8aabd75893f83f4ab30c03e7cf853c8208961 # v0.8.10
-      - run: pixi run python examples/validate_all.py
+      - run: pixi run -e test python examples/validate_all.py
