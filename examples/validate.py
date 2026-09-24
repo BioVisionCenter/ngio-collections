@@ -27,14 +27,14 @@ def main() -> None:
     well_attrs = {"well": {"column": {"id": "1"}, "row": {"id": "A"}}}
 
     # A well placed correctly under a plate: no issues.
-    plate = ngc.new_node("collection", id="plate", attributes=plate_attrs).add(
-        ngc.new_node("collection", id="A1", attributes=well_attrs)
-    )
+    plate = ngc.new_node(
+        "collection", id="plate", name="plate", attributes=plate_attrs
+    ).add(ngc.new_node("collection", id="A1", name="A1", attributes=well_attrs))
     print("well under plate :", ngc.validate(plate.find("A1"), validators=validators))
 
     # An orphan well (parent is not a plate): one issue.
-    orphan = ngc.new_node("collection", id="root").add(
-        ngc.new_node("collection", id="A1", attributes=well_attrs)
+    orphan = ngc.new_node("collection", id="root", name="root").add(
+        ngc.new_node("collection", id="A1", name="A1", attributes=well_attrs)
     )
     for error in ngc.validate(orphan.find("A1"), validators=validators):
         print("orphan well      :", error.validator, "—", error)
@@ -43,6 +43,7 @@ def main() -> None:
     bad = ngc.new_node(
         "multiscale",
         id="img",
+        name="img",
         attributes={
             "coordinateSystems": [
                 {"id": "space", "axes": [{"name": "z"}, {"name": "y"}, {"name": "x"}]}
@@ -52,6 +53,7 @@ def main() -> None:
         ngc.new_node(
             "singlescale",
             id="0",
+            name="0",
             attributes={
                 "coordinateTransformations": [
                     {"type": "scale", "output": {"id": "space"}, "scale": [2.0, 2.0]}
@@ -70,7 +72,7 @@ def main() -> None:
 
     try:
         ngc.validate(
-            ngc.new_node("multiscale", id="empty"),
+            ngc.new_node("multiscale", id="empty", name="empty"),
             validators=(*validators, multiscale_has_scales),
             raise_on_error=True,
         )
