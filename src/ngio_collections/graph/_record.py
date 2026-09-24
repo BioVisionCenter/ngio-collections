@@ -68,7 +68,7 @@ class NodeRecord:
     """One immutable node row; see the module docstring for the shape invariant."""
 
     type: str
-    name: str
+    name: str | None = None
     id: str | None = None
     attributes: Mapping[str, JSONValue] = field(default=_EMPTY_ATTRS)
     children: tuple[NodeId, ...] | None = None

@@ -217,7 +217,7 @@ def _materialized_record(node_dict: dict, origin_url: str) -> NodeRecord:
     """Build the record for an embedded node (branch when it has `nodes`)."""
     return NodeRecord(
         type=node_dict["type"],
-        name=node_dict["name"],
+        name=node_dict.get("name"),
         id=node_dict.get("id"),
         attributes=_attributes(node_dict),
         children=() if "nodes" in node_dict else None,
@@ -230,7 +230,7 @@ def _reference_record(node_dict: dict, origin_url: str) -> NodeRecord:
     path = DocPath.model_validate(node_dict["path"])
     return NodeRecord(
         type=node_dict["type"],
-        name=node_dict["name"],
+        name=node_dict.get("name"),
         id=node_dict.get("id"),
         attributes=_attributes(node_dict),
         ref=Reference(path=path, id=node_dict.get("id")),

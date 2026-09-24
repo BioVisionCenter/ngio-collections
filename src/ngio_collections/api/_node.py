@@ -79,7 +79,7 @@ class Node:
         return self.record.type
 
     @property
-    def name(self) -> str:
+    def name(self) -> str | None:
         """The optional display name."""
         return self.record.name
 
@@ -364,8 +364,8 @@ def _graft(
 def new_node(
     node_type: str,
     *,
-    name: str,
     id: str | None = None,
+    name: str | None = None,
     attributes: Mapping[str, JSONValue] | None = None,
     children: Sequence[Node] | None = None,
     ref: Reference | None = None,
