@@ -61,16 +61,19 @@ def test_record_rejects_branch_and_ref_together() -> None:
     with pytest.raises(ValueError):
         NodeRecord(
             type="collection",
+            name="test",
             children=(),
             ref=Reference(path=ZarrPath(path="../x.zarr")),
         )
 
 
 def test_record_shapes() -> None:
-    branch = NodeRecord(type="collection", children=())
-    leaf = NodeRecord(type="singlescale")
+    branch = NodeRecord(type="collection", name="test", children=())
+    leaf = NodeRecord(type="singlescale", name="test")
     reference = NodeRecord(
-        type="multiscale", ref=Reference(path=ZarrPath(path="../image.zarr"))
+        type="multiscale",
+        name="test",
+        ref=Reference(path=ZarrPath(path="../image.zarr")),
     )
     assert branch.is_branch and not branch.is_reference
     assert leaf.is_leaf
@@ -84,13 +87,17 @@ def test_record_shapes() -> None:
 
 def _sample() -> tuple[NodeTree, dict[str, tuple[str, ...]]]:
     """root → {img → 0, labels → nuclei}; returns the collection and key map."""
-    c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
-    c, img = c.add_child(ROOT, NodeRecord(type="multiscale", id="img", children=()))
-    c, zero = c.add_child(img, NodeRecord(type="singlescale", id="0"))
-    c, labels = c.add_child(
-        ROOT, NodeRecord(type="collection", id="labels", children=())
+    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
+    c, img = c.add_child(
+        ROOT, NodeRecord(type="multiscale", id="img", name="test", children=())
     )
-    c, nuclei = c.add_child(labels, NodeRecord(type="multiscale", id="nuclei"))
+    c, zero = c.add_child(img, NodeRecord(type="singlescale", id="0", name="test"))
+    c, labels = c.add_child(
+        ROOT, NodeRecord(type="collection", id="labels", name="test", children=())
+    )
+    c, nuclei = c.add_child(
+        labels, NodeRecord(type="multiscale", id="nuclei", name="test")
+    )
     keys = {"root": ROOT, "img": img, "0": zero, "labels": labels, "nuclei": nuclei}
     return c, keys
 
@@ -152,17 +159,26 @@ def test_rename() -> None:
 
 def test_same_local_id_under_two_parents_yields_distinct_keys() -> None:
     c, k = _sample()
-    c, a = c.add_child(k["img"], NodeRecord(type="singlescale", id="shared"))
-    c, b = c.add_child(k["labels"], NodeRecord(type="singlescale", id="shared"))
+    c, a = c.add_child(
+        k["img"], NodeRecord(type="singlescale", id="shared", name="test")
+    )
+    c, b = c.add_child(
+        k["labels"],
+        NodeRecord(
+            type="singlescale",
+            id="shared",
+            name="test",
+        ),
+    )
     assert a != b
     assert set(c.find("shared")) == {a, b}
     assert c.record(a).id == c.record(b).id == "shared"  # pristine, not rewritten
 
 
 def test_duplicate_id_among_siblings_falls_back_to_positional_segment() -> None:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
-    c, first = c.add_child(ROOT, NodeRecord(type="singlescale", id="dup"))
-    c, second = c.add_child(ROOT, NodeRecord(type="singlescale", id="dup"))
+    c = NodeTree.of(NodeRecord(type="collection", id="root", children=(), name="test"))
+    c, first = c.add_child(ROOT, NodeRecord(type="singlescale", id="dup", name="test"))
+    c, second = c.add_child(ROOT, NodeRecord(type="singlescale", id="dup", name="test"))
     assert first == ("dup",) and second != first
     assert set(c.find("dup")) == {first, second}
 
@@ -192,7 +208,10 @@ def test_remove_root_raises_and_missing_is_idempotent() -> None:
 def test_replace_swaps_subtree_keeping_key_and_position() -> None:
     c, k = _sample()
     stub = NodeRecord(
-        type="multiscale", id="img", ref=Reference(path=ZarrPath(path="/img.zarr"))
+        type="multiscale",
+        id="img",
+        name="test",
+        ref=Reference(path=ZarrPath(path="/img.zarr")),
     )
     c2 = c.replace(k["img"], stub)
     # same key, same sibling position, descendants gone
@@ -208,7 +227,9 @@ def test_replace_swaps_subtree_keeping_key_and_position() -> None:
 
 def test_replace_updates_indices_on_id_change() -> None:
     c, k = _sample()
-    c2 = c.replace(k["labels"], NodeRecord(type="collection", id="annotations"))
+    c2 = c.replace(
+        k["labels"], NodeRecord(type="collection", id="annotations", name="test")
+    )
     assert c2.find("labels") == () and c2.find("nuclei") == ()
     assert c2.find("annotations") == (k["labels"],)  # key is structural, kept
 
@@ -216,7 +237,7 @@ def test_replace_updates_indices_on_id_change() -> None:
 def test_replace_missing_raises() -> None:
     c, _ = _sample()
     with pytest.raises(KeyError):
-        c.replace(("absent",), NodeRecord(type="collection", id="x"))
+        c.replace(("absent",), NodeRecord(type="collection", id="x", name="test"))
 
 
 # --------------------------------------------------------------------------- #
@@ -226,14 +247,17 @@ def test_replace_missing_raises() -> None:
 
 def test_tree_builder_matches_incremental_add_child() -> None:
     # Build the same tree two ways: incremental add_child vs the bulk TreeBuilder.
-    tb = TreeBuilder(NodeRecord(type="collection", id="root", children=()))
+    tb = TreeBuilder(NodeRecord(type="collection", id="root", children=(), name="test"))
     img = tb.add_child(
-        ROOT, NodeRecord(type="multiscale", id="img", attributes={"r": 1}, children=())
+        ROOT,
+        NodeRecord(
+            type="multiscale", id="img", attributes={"r": 1}, children=(), name="test"
+        ),
     )
-    tb.add_child(img, NodeRecord(type="singlescale", id="0"))
-    tb.add_child(ROOT, NodeRecord(type="collection", id="dup"))
+    tb.add_child(img, NodeRecord(type="singlescale", id="0", name="test"))
+    tb.add_child(ROOT, NodeRecord(type="collection", id="dup", name="test"))
     tb.add_child(
-        ROOT, NodeRecord(type="collection", id="dup")
+        ROOT, NodeRecord(type="collection", id="dup", name="test")
     )  # duplicate -> positional
     built = tb.finish()
 
@@ -246,30 +270,41 @@ def test_tree_builder_matches_incremental_add_child() -> None:
 
 
 def _sample_like_builder() -> tuple[NodeTree, None]:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
+    c = NodeTree.of(NodeRecord(type="collection", id="root", children=(), name="test"))
     c, img = c.add_child(
-        ROOT, NodeRecord(type="multiscale", id="img", attributes={"r": 1}, children=())
+        ROOT,
+        NodeRecord(
+            type="multiscale", id="img", attributes={"r": 1}, children=(), name="test"
+        ),
     )
-    c, _ = c.add_child(img, NodeRecord(type="singlescale", id="0"))
-    c, _ = c.add_child(ROOT, NodeRecord(type="collection", id="dup"))
-    c, _ = c.add_child(ROOT, NodeRecord(type="collection", id="dup"))
+    c, _ = c.add_child(img, NodeRecord(type="singlescale", id="0", name="test"))
+    c, _ = c.add_child(ROOT, NodeRecord(type="collection", id="dup", name="test"))
+    c, _ = c.add_child(
+        ROOT,
+        NodeRecord(
+            type="collection",
+            id="dup",
+            name="test",
+        ),
+    )
     return c, None
 
 
 def test_tree_builder_is_single_use() -> None:
-    tb = TreeBuilder(NodeRecord(type="collection", id="root", children=()))
+    tb = TreeBuilder(NodeRecord(type="collection", id="root", children=(), name="test"))
     tb.finish()
     with pytest.raises(RuntimeError):
-        tb.add_child(ROOT, NodeRecord(type="multiscale", id="x"))
+        tb.add_child(ROOT, NodeRecord(type="multiscale", id="x", name="test"))
     with pytest.raises(RuntimeError):
         tb.finish()
 
 
 def test_refs_index_tracks_reference_targets() -> None:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
+    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
     stub = NodeRecord(
         type="multiscale",
         id="image",
+        name="test",
         ref=Reference(path=ZarrPath(path="../image.zarr"), id="image"),
     )
     c, ref_key = c.add_child(ROOT, stub)

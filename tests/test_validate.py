@@ -53,7 +53,9 @@ def _scale(system_id: str, *factors: float) -> dict:
 
 
 def test_lenses_compose_on_one_node() -> None:
-    record = NodeRecord(type="collection", attributes={**_plate(), **_well()})
+    record = NodeRecord(
+        type="collection", name="test", attributes={**_plate(), **_well()}
+    )
     assert has_attribute(record, PlateAttribute)
     assert has_attribute(record, WellAttribute)
     well = get_attribute(record, WellAttribute)
