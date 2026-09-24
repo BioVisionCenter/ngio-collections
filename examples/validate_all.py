@@ -1,9 +1,11 @@
+import json
 from pathlib import Path
 import subprocess, shlex
 import ngio_collections as ngc
+from ngff_rfc8.validate import validate_collection
 
 
-def validate_collection(root_url: str) -> None:
+def _validate_collection(root_url: str) -> None:
     root_node = ngc.open(root_url)
     print(root_node)
 
@@ -15,7 +17,7 @@ def validate_collection(root_url: str) -> None:
     )
 
     # (2) Validate each node against JSON Schemas
-    # ... (TODO)
+    validate_collection(json.loads(Path(root_url).read_text()))
 
 
 for script in sorted(Path(__file__).parent.glob("*.py")):
@@ -28,5 +30,5 @@ print()
 
 for root_url in sorted((Path(__file__).parent / "data").glob("*/*.json")):
     print(root_url)
-    validate_collection(root_url.as_posix())
+    _validate_collection(root_url.as_posix())
     print()
