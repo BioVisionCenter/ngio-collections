@@ -222,9 +222,9 @@ attributes), but access goes through a small view that validates on read and
 writes back on assignment:
 
 ```python
-plate = node.attrs[PlateAttribute]        # typed, validated view
-node.attrs[PlateAttribute] = plate        # explicit write-back
-PlateAttribute in node.attrs              # membership
+plate = node.attrs[PlateAttribute]  # typed, validated view
+node.attrs[PlateAttribute] = plate  # explicit write-back
+PlateAttribute in node.attrs  # membership
 ```
 
 ### 3.6 One serialization path
@@ -278,14 +278,14 @@ import ngio_collections as ngc
 resolver = ngc.Resolver(ngc.LocalStore())
 
 doc = await resolver.open("/data/segmentations/experiment-1/collection.json")
-root = doc.root                                  # CollectionNode
+root = doc.root  # CollectionNode
 
-for child in await resolver.children(root):      # stubs resolved on demand
+for child in await resolver.children(root):  # stubs resolved on demand
     print(child.type, child.name)
 
 seg = root.nodes[1]
-seg.attrs[LabelsAttribute] = labels              # typed write-back
-await resolver.save(seg._document or doc)        # rewrites ONE document
+seg.attrs[LabelsAttribute] = labels  # typed write-back
+await resolver.save(seg._document or doc)  # rewrites ONE document
 ```
 
 Once remote/mixed-store support lands (§10), the only change is the store
@@ -294,8 +294,8 @@ passed to the Resolver:
 ```python
 store = ngc.RouterStore(
     routes={
-        "https://idr.example.org/": ngc.FsspecStore("https"),   # read-only
-        "/data/segmentations/":     ngc.LocalStore(),           # writable
+        "https://idr.example.org/": ngc.FsspecStore("https"),  # read-only
+        "/data/segmentations/": ngc.LocalStore(),  # writable
     },
 )
 ```
@@ -424,8 +424,10 @@ class ReadableStore(Protocol):
     async def get(self, url: str) -> dict[str, Any]:
         """MUST raise FileNotFoundError if absent."""
 
+
 class WritableStore(ReadableStore, Protocol):
     async def put(self, url: str, data: dict[str, Any]) -> None: ...
+
 
 class StoreReadOnlyError(PermissionError):
     """Raised by put() on a read-only backend. Part of the contract."""

@@ -27,11 +27,13 @@ def single_scales(prefix: str) -> tuple[ngc.Node, ...]:
         ngc.new_node(
             "singlescale",
             id=f"{prefix}_0",
+            name=f"{prefix}_0",
             ref=ngc.Reference(path=ngc.ZarrPath(path="./0")),
         ),
         ngc.new_node(
             "singlescale",
             id=f"{prefix}_1",
+            name=f"{prefix}_1",
             ref=ngc.Reference(path=ngc.ZarrPath(path="./1")),
         ),
     )
@@ -85,9 +87,11 @@ def build_collection() -> ngc.Node:
             source=[ngc.ReferenceObj(id="image")],
         )
     )
-    labels = ngc.new_node("collection", id="labels").add(nuclei)
+    labels = ngc.new_node("collection", id="labels", name="labels").add(nuclei)
     return (
-        ngc.new_node("collection", id="root").add(build_multiscale("image")).add(labels)
+        ngc.new_node("collection", id="root", name="labels")
+        .add(build_multiscale("image"))
+        .add(labels)
     )
 
 

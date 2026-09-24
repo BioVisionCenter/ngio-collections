@@ -18,8 +18,8 @@ DATA = "/data"
 
 async def test_create_open_edit_save_roundtrip() -> None:
     store = MemoryStore()
-    root = new_node("collection", id="root").add(
-        new_node("multiscale", id="img", attributes={"role": "raw"})
+    root = new_node("collection", id="root", name="test").add(
+        new_node("multiscale", id="img", name="test", attributes={"role": "raw"})
     )
     await aio.create(f"{DATA}/c.json", root, store)
 
@@ -37,13 +37,15 @@ async def test_create_open_edit_save_roundtrip() -> None:
 async def test_compose_via_reference_then_open_and_inline() -> None:
     store = MemoryStore()
     # child document
-    image = new_node("multiscale", id="image", attributes={"role": "target"})
+    image = new_node(
+        "multiscale", id="image", name="test", attributes={"role": "target"}
+    )
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
     assert stub.is_reference
 
     # parent references the child, decorating the stub
     stub = stub.set_attrs({"role": "raw"})
-    parent = new_node("collection", id="root").add_ref(stub)
+    parent = new_node("collection", id="root", name="test").add_ref(stub)
     await aio.create(f"{DATA}/c.json", parent, store)
 
     # open: the cross-document child stays a reference
@@ -72,7 +74,7 @@ async def test_ref_stub_matches_create_stub() -> None:
     assert stub.type == "multiscale" and stub.name == "Image"
 
     # and it composes into a parent exactly like create()'s stub does
-    parent = new_node("collection", id="root").add_ref(stub)
+    parent = new_node("collection", id="root", name="test").add_ref(stub)
     await aio.create(f"{DATA}/c.json", parent, store)
     inlined = await aio.open_inlined(f"{DATA}/c.json", store)
     image_node = inlined.find("image")
@@ -85,7 +87,7 @@ async def test_minted_stubs_carry_id_and_are_findable_after_reopen() -> None:
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
     assert stub.id == "image" and stub.record.ref.id == "image"
 
-    parent = new_node("collection", id="root").add_ref(stub)
+    parent = new_node("collection", id="root", name="test").add_ref(stub)
     assert parent.find("image") is not None  # findable in-memory
     await aio.create(f"{DATA}/c.json", parent, store)
 
@@ -104,7 +106,7 @@ async def test_id_less_doc_root_stub_opens_and_resolves() -> None:
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
     assert stub.id is None and stub.record.ref.id is None
 
-    parent = new_node("collection", id="root").add_ref(stub)
+    parent = new_node("collection", id="root", name="test").add_ref(stub)
     await aio.create(f"{DATA}/c.json", parent, store)
 
     (child,) = (await aio.open(f"{DATA}/c.json", store)).children()
@@ -117,10 +119,14 @@ async def test_id_less_doc_root_stub_opens_and_resolves() -> None:
 
 async def test_children_literal_mixes_stub_and_embedded() -> None:
     store = MemoryStore()
-    image = new_node("multiscale", id="image", attributes={"role": "target"})
+    image = new_node(
+        "multiscale", id="image", name="test", attributes={"role": "target"}
+    )
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
-    table = new_node("multiscale", id="table", attributes={"role": "table"})
-    scene = new_node("collection", id="scene", children=[stub, table])
+    table = new_node(
+        "multiscale", id="table", name="test", attributes={"role": "table"}
+    )
+    scene = new_node("collection", id="scene", name="test", children=[stub, table])
     await aio.create(f"{DATA}/scene.json", scene, store)
 
     inlined = await aio.open_inlined(f"{DATA}/scene.json", store)
@@ -131,9 +137,9 @@ async def test_children_literal_mixes_stub_and_embedded() -> None:
 
 async def test_save_inlined_snapshots_to_one_document() -> None:
     store = MemoryStore()
-    image = new_node("multiscale", id="image", attributes={"role": "x"})
+    image = new_node("multiscale", id="image", name="test", attributes={"role": "x"})
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
-    parent = new_node("collection", id="root").add_ref(stub)
+    parent = new_node("collection", id="root", name="test").add_ref(stub)
     await aio.create(f"{DATA}/c.json", parent, store)
 
     view = await aio.open_inlined(f"{DATA}/c.json", store)
@@ -146,9 +152,11 @@ async def test_save_inlined_snapshots_to_one_document() -> None:
 
 async def test_subtree_of_inlined_node_is_fully_detached() -> None:
     store = MemoryStore()
-    image = new_node("multiscale", id="image", attributes={"role": "x"})
+    image = new_node("multiscale", id="image", name="test", attributes={"role": "x"})
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
-    parent = new_node("collection", id="root").add_ref(stub.set_attrs({"role": "raw"}))
+    parent = new_node("collection", id="root", name="test").add_ref(
+        stub.set_attrs({"role": "raw"})
+    )
     await aio.create(f"{DATA}/c.json", parent, store)
 
     view = await aio.open_inlined(f"{DATA}/c.json", store)
@@ -159,7 +167,9 @@ async def test_subtree_of_inlined_node_is_fully_detached() -> None:
 
 async def test_delete_removes_document() -> None:
     store = MemoryStore()
-    root = new_node("collection", id="root").add(new_node("multiscale", id="img"))
+    root = new_node("collection", id="root", name="test").add(
+        new_node("multiscale", id="img", name="test")
+    )
     await aio.create(f"{DATA}/c.json", root, store)
     opened = await aio.open(f"{DATA}/c.json", store)
     affected = await aio.delete(opened, store)
@@ -172,14 +182,16 @@ async def test_externalize_splits_node_into_own_document() -> None:
     root = new_node(
         "collection",
         id="root",
+        name="test",
         children=[
             new_node(
                 "multiscale",
                 id="img",
+                name="test",
                 attributes={"role": "raw"},
-                children=[new_node("singlescale", id="0")],
+                children=[new_node("singlescale", id="0", name="test")],
             ),
-            new_node("multiscale", id="table"),
+            new_node("multiscale", id="table", name="test"),
         ],
     )
     await aio.create(f"{DATA}/c.json", root, store)
@@ -214,10 +226,13 @@ async def test_externalize_rejects_invalid_targets() -> None:
     from ngio_collections.models._config import NodeStateError
 
     store = MemoryStore()
-    image = new_node("multiscale", id="image")
+    image = new_node("multiscale", id="image", name="test")
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
     root = new_node(
-        "collection", id="root", children=[new_node("multiscale", id="img")]
+        "collection",
+        id="root",
+        name="test",
+        children=[new_node("multiscale", id="img", name="test")],
     ).add_ref(stub)
     await aio.create(f"{DATA}/c.json", root, store)
     opened = await aio.open(f"{DATA}/c.json", store)
@@ -229,7 +244,10 @@ async def test_externalize_rejects_invalid_targets() -> None:
     with pytest.raises(NodeStateError):  # detached
         await aio.externalize(
             new_node(
-                "collection", id="d", children=[new_node("multiscale", id="m")]
+                "collection",
+                id="d",
+                name="test",
+                children=[new_node("multiscale", id="m", name="test")],
             ).find("m"),
             f"{DATA}/x.zarr",
             store,
@@ -252,9 +270,13 @@ def test_externalize_sync_on_local_store(tmp_path) -> None:
     root = ngc.new_node(
         "collection",
         id="root",
+        name="test",
         children=[
             ngc.new_node(
-                "multiscale", id="img", children=[ngc.new_node("singlescale", id="0")]
+                "multiscale",
+                id="img",
+                name="test",
+                children=[ngc.new_node("singlescale", id="0", name="test")],
             )
         ],
     )
@@ -268,9 +290,11 @@ def test_externalize_sync_on_local_store(tmp_path) -> None:
 
 async def test_open_ref_resolves_subtree_across_documents() -> None:
     store = MemoryStore()
-    image = new_node("multiscale", id="image", attributes={"role": "target"})
+    image = new_node(
+        "multiscale", id="image", name="test", attributes={"role": "target"}
+    )
     stub = await aio.create(f"{DATA}/image.zarr", image, store)
-    parent = new_node("collection", id="root").add_ref(stub)
+    parent = new_node("collection", id="root", name="test").add_ref(stub)
     await aio.create(f"{DATA}/c.json", parent, store)
 
     # Take a reference the way a user would: from the unresolved stub on disk.
@@ -287,15 +311,15 @@ async def test_open_ref_resolves_subtree_across_documents() -> None:
 async def test_open_inlined_ref_resolves_nested_references() -> None:
     store = MemoryStore()
     # leaf -> mid -> entry chain of single-child documents
-    leaf = new_node("multiscale", id="leaf", attributes={"role": "deep"})
+    leaf = new_node("multiscale", id="leaf", name="test", attributes={"role": "deep"})
     leaf_stub = await aio.create(f"{DATA}/leaf.zarr", leaf, store)
-    mid = new_node("collection", id="mid").add_ref(leaf_stub)
+    mid = new_node("collection", id="mid", name="test").add_ref(leaf_stub)
     mid_stub = await aio.create(f"{DATA}/mid.json", mid, store)
-    entry = new_node("collection", id="root").add_ref(mid_stub)
+    entry = new_node("collection", id="root", name="test").add_ref(mid_stub)
     await aio.create(f"{DATA}/entry.json", entry, store)
 
     opened = await aio.open(f"{DATA}/entry.json", store)
-    ref = ReferenceObj(id="mid", path=opened.children()[0].record.ref.path)
+    ref = ReferenceObj(id="mid", name="test", path=opened.children()[0].record.ref.path)
 
     view = await aio.open_inlined_ref(ref, opened.document_url, store)
     assert view.id == "mid" and view.tree.mode == "resolved"
@@ -309,7 +333,7 @@ async def test_open_ref_missing_id_raises_lookup_error() -> None:
     import pytest
 
     store = MemoryStore()
-    image = new_node("multiscale", id="image")
+    image = new_node("multiscale", id="image", name="test")
     await aio.create(f"{DATA}/image.zarr", image, store)
     ref = ReferenceObj(id="absent", path=ZarrPath(path=f"{DATA}/image.zarr"))
     with pytest.raises(LookupError):
@@ -331,7 +355,9 @@ async def test_create_rejects_a_tree_built_with_origin_url() -> None:
     from ngio_collections.models._config import NodeStateError
 
     store = MemoryStore()
-    node = new_node("multiscale", id="img", origin_url=f"{DATA}/image.zarr")
+    node = new_node(
+        "multiscale", id="img", name="test", origin_url=f"{DATA}/image.zarr"
+    )
     with pytest.raises(NodeStateError):
         await aio.create(f"{DATA}/other.zarr", node, store)
 
@@ -342,7 +368,9 @@ async def test_create_refuses_existing_without_overwrite() -> None:
     from ngio_collections.models._config import NodeStateError
 
     store = MemoryStore()
-    root = new_node("collection", id="root")
+    root = new_node("collection", id="root", name="test")
     await aio.create(f"{DATA}/c.json", root, store)
     with pytest.raises(NodeStateError):
-        await aio.create(f"{DATA}/c.json", new_node("collection", id="other"), store)
+        await aio.create(
+            f"{DATA}/c.json", new_node("collection", id="other", name="test"), store
+        )

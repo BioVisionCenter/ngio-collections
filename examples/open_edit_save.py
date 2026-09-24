@@ -16,8 +16,16 @@ def _setup(url: str) -> None:
     """Write a small starting collection to disk (so the example is standalone)."""
     root = (
         ngc.new_node("collection", id="root", name="experiment")
-        .add(ngc.new_node("multiscale", id="image", attributes={"role": "raw"}))
-        .add(ngc.new_node("multiscale", id="nuclei", attributes={"role": "label"}))
+        .add(
+            ngc.new_node(
+                "multiscale", id="image", name="image", attributes={"role": "raw"}
+            )
+        )
+        .add(
+            ngc.new_node(
+                "multiscale", id="nuclei", name="nuclei", attributes={"role": "label"}
+            )
+        )
     )
     ngc.create(url, root, overwrite=True)
 

@@ -41,6 +41,7 @@ def main() -> None:
     image = ngc.new_node(
         "multiscale",
         id="image",
+        name="image",
         attributes={"channels": ["DAPI"], "display": "target-default"},
     )
     stub = ngc.create(child_url, image, overwrite=True)
@@ -48,7 +49,7 @@ def main() -> None:
     # Decorate the STUB: an overlay stored on the reference in the parent. It
     # overrides "display" and adds "in_collection" — the child file is untouched.
     stub = stub.set_attrs({"display": "stub-override", "in_collection": True})
-    root = ngc.new_node("collection", id="root").add_ref(stub)
+    root = ngc.new_node("collection", id="root", name="root").add_ref(stub)
     ngc.create(parent_url, root, overwrite=True)
 
     # Resolve: stub overlay wins on "display"; target-only "channels" survives.
@@ -87,12 +88,15 @@ def main() -> None:
     stub = ngc.new_node(
         "multiscale",
         id="image",
+        name="image",
         ref=ngc.Reference(path=ngc.ZarrPath(path=child_url), id="image"),
         attributes={"display": "in-memory-stub"},  # overlay set at construction
     )
     other_url = str(base / "collection-readonly-child.json")
     ngc.create(
-        other_url, ngc.new_node("collection", id="root").add_ref(stub), overwrite=True
+        other_url,
+        ngc.new_node("collection", id="root", name="root").add_ref(stub),
+        overwrite=True,
     )
 
     view = ngc.open_inlined(other_url)

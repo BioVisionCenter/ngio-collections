@@ -29,10 +29,12 @@ from ngio_collections.models.attributes import (
 
 def _build_tree() -> Node:
     """root[collection] → {img[multiscale], labels[collection] → nuclei}."""
-    root = new_node("collection", id="root")
-    root = root.add(new_node("multiscale", id="img", attributes={"role": "raw"}))
-    labels = new_node("collection", id="labels")
-    labels = labels.add(new_node("multiscale", id="nuclei"))
+    root = new_node("collection", id="root", name="test")
+    root = root.add(
+        new_node("multiscale", id="img", name="test", attributes={"role": "raw"})
+    )
+    labels = new_node("collection", id="labels", name="test")
+    labels = labels.add(new_node("multiscale", id="nuclei", name="test"))
     return root.add(labels)
 
 
@@ -59,7 +61,7 @@ def test_detached_state() -> None:
 
 
 def test_new_node_with_origin_url_is_document_backed() -> None:
-    node = new_node("multiscale", id="img", origin_url="/data/image.zarr")
+    node = new_node("multiscale", id="img", name="test", origin_url="/data/image.zarr")
     assert not node.is_detached
     assert node.document_url == "/data/image.zarr/zarr.json"  # normalized
 
@@ -72,8 +74,10 @@ def test_new_node_with_origin_url_is_document_backed() -> None:
 
 
 def test_grafting_preserves_origin_url() -> None:
-    backed = new_node("multiscale", id="img", origin_url="/data/image.zarr")
-    root = new_node("collection", id="root").add(backed)
+    backed = new_node(
+        "multiscale", id="img", name="test", origin_url="/data/image.zarr"
+    )
+    root = new_node("collection", id="root", name="root").add(backed)
     grafted = root.find("img")
     assert grafted.document_url == "/data/image.zarr/zarr.json"
     assert root.is_detached  # the root itself carries no origin
@@ -83,9 +87,15 @@ def test_new_node_with_children() -> None:
     root = new_node(
         "collection",
         id="root",
+        name="test",
         children=[
-            new_node("multiscale", id="a"),
-            new_node("collection", id="b", children=[new_node("multiscale", id="c")]),
+            new_node("multiscale", id="a", name="test"),
+            new_node(
+                "collection",
+                id="b",
+                name="test",
+                children=[new_node("multiscale", id="c", name="test")],
+            ),
         ],
     )
     assert [n.id for n in root.walk()] == ["root", "a", "b", "c"]
@@ -95,40 +105,47 @@ def test_new_node_rejects_children_on_a_reference_stub() -> None:
     with pytest.raises(ValueError):
         new_node(
             "multiscale",
+            name="test",
             ref=Reference(path=ZarrPath(path="/img.zarr")),
-            children=[new_node("multiscale", id="a")],
+            children=[new_node("multiscale", id="a", name="test")],
         )
 
 
 def test_add_variadic_matches_chained_adds() -> None:
-    a, b, c = (new_node("multiscale", id=i) for i in "abc")
-    fanned = new_node("collection", id="root").add(a, b, c)
-    chained = new_node("collection", id="root").add(a).add(b).add(c)
+    a, b, c = (new_node("multiscale", id=i, name="test") for i in "abc")
+    fanned = new_node("collection", id="root", name="root").add(a, b, c)
+    chained = new_node("collection", id="root", name="root").add(a).add(b).add(c)
     assert [n.id for n in fanned.walk()] == [n.id for n in chained.walk()]
     assert [n.id for n in fanned.add().walk()] == [n.id for n in fanned.walk()]
 
 
 def test_add_ref_variadic_and_validates_all_stubs() -> None:
-    s1 = new_node("multiscale", id="a", ref=Reference(path=ZarrPath(path="/a.zarr")))
-    s2 = new_node("multiscale", id="b", ref=Reference(path=ZarrPath(path="/b.zarr")))
-    root = new_node("collection", id="root").add_ref(s1, s2)
+    s1 = new_node(
+        "multiscale", id="a", name="test", ref=Reference(path=ZarrPath(path="/a.zarr"))
+    )
+    s2 = new_node(
+        "multiscale", id="b", name="test", ref=Reference(path=ZarrPath(path="/b.zarr"))
+    )
+    root = new_node("collection", id="root", name="root").add_ref(s1, s2)
     assert [c.id for c in root.children()] == ["a", "b"]
     assert all(c.is_reference for c in root.children())
     with pytest.raises(ValueError):
-        root.add_ref(s1, new_node("multiscale", id="plain"))
+        root.add_ref(s1, new_node("multiscale", id="plain", name="test"))
 
 
 def test_ref_path_shortcut() -> None:
-    stub = new_node("multiscale", ref=Reference(path=ZarrPath(path="/data/img.zarr")))
+    stub = new_node(
+        "multiscale", name="test", ref=Reference(path=ZarrPath(path="/data/img.zarr"))
+    )
     assert stub.ref_path == "/data/img.zarr"
-    assert new_node("collection", id="root").ref_path is None
+    assert new_node("collection", id="root", name="root").ref_path is None
 
 
 def test_require_id_and_document_url_narrow_or_raise() -> None:
     root = _build_tree()
     assert root.find("img").require_id() == "img"
     with pytest.raises(NodeStateError):
-        new_node("multiscale").require_id()
+        new_node("multiscale", name="test").require_id()
     with pytest.raises(NodeStateError):
         root.require_document_url()  # detached
     with pytest.raises(NodeStateError):
@@ -227,23 +244,26 @@ def test_validate_through_handle() -> None:
     plate = new_node(
         "collection",
         id="plate",
+        name="test",
         attributes={"plate": {"columns": [{"id": "c1"}], "rows": [{"id": "r1"}]}},
     )
     plate = plate.add(
         new_node(
             "collection",
             id="A1",
+            name="test",
             attributes={"well": {"column": {"id": "c1"}, "row": {"id": "r1"}}},
         )
     )
     validators = (ngc.well_under_plate, ngc.scale_matches_axes)
     assert plate.find("A1").validate(validators) == []  # well under plate -> ok
 
-    orphan = new_node("collection", id="root")
+    orphan = new_node("collection", id="root", name="root")
     orphan = orphan.add(
         new_node(
             "collection",
             id="A1",
+            name="test",
             attributes={"well": {"column": {"id": "c1"}, "row": {"id": "r1"}}},
         )
     )

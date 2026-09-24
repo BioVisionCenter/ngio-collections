@@ -69,14 +69,16 @@ async def test_read_only_rejects_writes() -> None:
 async def test_read_only_fails_early_through_the_api() -> None:
     store = MemoryStore(read_only=True)
     with pytest.raises(StoreReadOnlyError):
-        await aio.create("/c.json", new_node("collection", id="root"), store)
+        await aio.create(
+            "/c.json", new_node("collection", id="root", name="test"), store
+        )
 
 
 async def test_hermetic_create_open_save_roundtrip() -> None:
     store = MemoryStore()
-    image = new_node("multiscale", id="image", attributes={"role": "raw"})
+    image = new_node("multiscale", id="image", name="test", attributes={"role": "raw"})
     stub = await aio.create("/data/image.zarr", image, store)
-    root = new_node("collection", id="root", children=[stub])
+    root = new_node("collection", id="root", name="test", children=[stub])
     await aio.create("/data/c.json", root, store)
 
     opened = await aio.open("/data/c.json", store)
