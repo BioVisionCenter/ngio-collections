@@ -27,6 +27,7 @@
       "nodes": [
         {
           "type": "singlescale",
+          "name": "image_0",
           "id": "image_0",
           "attributes": {
             "coordinateTransformations": [
@@ -52,6 +53,7 @@
         },
         {
           "type": "singlescale",
+          "name": "image_1",
           "id": "image_1",
           "attributes": {
             "coordinateTransformations": [
