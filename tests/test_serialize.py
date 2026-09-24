@@ -54,7 +54,6 @@ def _sample_collection() -> NodeTree:
         NodeRecord(
             type="multiscale",
             id="img",
-            name="test",
             attributes={"role": "raw"},
             children=(),
         ),
@@ -71,7 +70,7 @@ def test_payload_rebuilds_nesting_and_drops_empties() -> None:
     assert body["type"] == "collection" and body["id"] == "root"
     (img,) = body["nodes"]
     assert img["id"] == "img" and img["attributes"] == {"role": "raw"}
-    assert "origin_url" not in img  # None dropped
+    assert "name" not in img  # None dropped
     (zero,) = img["nodes"]
     assert zero["id"] == "0" and "attributes" not in zero  # empty bag dropped
 
