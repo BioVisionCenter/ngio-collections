@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 import subprocess, shlex
 import ngio_collections as ngc
@@ -25,7 +26,15 @@ for script in sorted(Path(__file__).parent.glob("*.py")):
         continue
     cmd = f"pixi run python examples/{script.name}"
     print(f"Now re-running {cmd=}")
-    subprocess.run(shlex.split(cmd), capture_output=True, check=True)
+    res = subprocess.run(
+        shlex.split(cmd),
+        capture_output=True,
+        encoding="utf-8",
+    )
+    if not res.returncode == 0:
+        print(f"Running {cmd=} failed.")
+        print(res.stderr)
+        sys.exit()
 print()
 
 for root_url in sorted((Path(__file__).parent / "data").glob("*/*.json")):
