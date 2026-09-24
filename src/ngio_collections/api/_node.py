@@ -364,8 +364,8 @@ def _graft(
 def new_node(
     node_type: str,
     *,
-    name: str,
     id: str | None = None,
+    name: str | None = None,
     attributes: Mapping[str, JSONValue] | None = None,
     children: Sequence[Node] | None = None,
     ref: Reference | None = None,
