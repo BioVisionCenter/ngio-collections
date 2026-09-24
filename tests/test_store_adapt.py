@@ -66,14 +66,16 @@ async def test_as_async_leaves_an_already_async_store_untouched() -> None:
 async def test_as_async_forwards_read_only() -> None:
     wrapped = as_async(SyncDictStore(read_only=True))
     with pytest.raises(StoreReadOnlyError):
-        await aio.create("/c.json", new_node("collection", id="root"), wrapped)
+        await aio.create(
+            "/c.json", new_node("collection", id="root", name="root"), wrapped
+        )
 
 
 async def test_sync_store_roundtrips_through_the_async_api() -> None:
     store = SyncDictStore()
-    image = new_node("multiscale", id="image", attributes={"role": "raw"})
+    image = new_node("multiscale", id="image", name="test", attributes={"role": "raw"})
     stub = await aio.create("/data/image.zarr", image, store)
-    root = new_node("collection", id="root", children=[stub])
+    root = new_node("collection", id="root", name="test", children=[stub])
     await aio.create("/data/c.json", root, store)
 
     opened = await aio.open("/data/c.json", store)

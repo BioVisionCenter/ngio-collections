@@ -48,14 +48,19 @@ class _MemoryStore:
 
 
 def _sample_collection() -> NodeTree:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
+    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
     c, img = c.add_child(
         ROOT,
         NodeRecord(
-            type="multiscale", id="img", attributes={"role": "raw"}, children=()
+            type="multiscale",
+            id="img",
+            attributes={"role": "raw"},
+            children=(),
         ),
     )
-    c, _ = c.add_child(img, NodeRecord(type="singlescale", id="0", children=()))
+    c, _ = c.add_child(
+        img, NodeRecord(type="singlescale", id="0", name="test", children=())
+    )
     return c
 
 
@@ -71,7 +76,7 @@ def test_payload_rebuilds_nesting_and_drops_empties() -> None:
 
 
 def test_reference_record_serializes_as_path_stub() -> None:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
+    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
     c, _ = c.add_child(
         ROOT,
         NodeRecord(
@@ -87,11 +92,12 @@ def test_reference_record_serializes_as_path_stub() -> None:
 
 
 def test_relativize_rewrites_absolute_stub_path() -> None:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", children=()))
+    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
     c, _ = c.add_child(
         ROOT,
         NodeRecord(
             type="multiscale",
+            name="test",
             ref=Reference(path=ZarrPath(path="/data/image.zarr")),
         ),
     )

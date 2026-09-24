@@ -34,7 +34,7 @@ def main() -> None:
     # Decorate the stub with an overlay the parent layers onto the child on read,
     # then attach it to a detached parent. Paths are relativized when written.
     rf_image = rf_image.set_attrs({"in_collection": True})
-    root = ngc.new_node("collection", id="root").add_ref(rf_image)
+    root = ngc.new_node("collection", id="root", name="root").add_ref(rf_image)
     ngc.create(url, root, overwrite=True)
 
     # open(): cross-document children stay references.

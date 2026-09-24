@@ -15,7 +15,7 @@ def main() -> None:
     root = build_collection()
 
     # add() on the root inserts a top-level child; it returns the new tree root.
-    edited = root.add(ngc.new_node("collection", id="analysis"))
+    edited = root.add(ngc.new_node("collection", id="analysis", name="analysis"))
     print("after add:  ", [n.id for n in edited.walk()])
 
     # add() on any located node nests under it.

@@ -18,17 +18,25 @@ def _setup(base: Path) -> str:
     """Write a parent collection referencing two child image documents."""
     rf_img = ngc.create(
         str(base / "image.zarr"),
-        ngc.new_node("multiscale", id="image", attributes={"role": "raw"}),
+        ngc.new_node(
+            "multiscale", id="image", name="image", attributes={"role": "raw"}
+        ),
         overwrite=True,
     )
     rf_lbl = ngc.create(
         str(base / "nuclei.zarr"),
-        ngc.new_node("multiscale", id="nuclei", attributes={"role": "label"}),
+        ngc.new_node(
+            "multiscale", id="nuclei", name="nuclei", attributes={"role": "label"}
+        ),
         overwrite=True,
     )
     # Decorate the image stub: this overlay wins when read inlined.
     rf_img = rf_img.set_attrs({"display": "grayscale"})
-    root = ngc.new_node("collection", id="root").add_ref(rf_img).add_ref(rf_lbl)
+    root = (
+        ngc.new_node("collection", id="root", name="root")
+        .add_ref(rf_img)
+        .add_ref(rf_lbl)
+    )
     url = str(base / "collection.json")
     ngc.create(url, root, overwrite=True)
     return url

@@ -53,7 +53,9 @@ def _scale(system_id: str, *factors: float) -> dict:
 
 
 def test_lenses_compose_on_one_node() -> None:
-    record = NodeRecord(type="collection", attributes={**_plate(), **_well()})
+    record = NodeRecord(
+        type="collection", name="test", attributes={**_plate(), **_well()}
+    )
     assert has_attribute(record, PlateAttribute)
     assert has_attribute(record, WellAttribute)
     well = get_attribute(record, WellAttribute)
@@ -66,15 +68,15 @@ def test_lenses_compose_on_one_node() -> None:
 
 
 def test_well_under_plate_passes() -> None:
-    plate = ngc.new_node("collection", id="plate", attributes=_plate()).add(
-        ngc.new_node("collection", id="A1", attributes=_well())
-    )
+    plate = ngc.new_node(
+        "collection", id="plate", name="test", attributes=_plate()
+    ).add(ngc.new_node("collection", id="A1", name="test", attributes=_well()))
     assert ngc.validate(plate.find("A1"), validators=VALIDATORS) == []
 
 
 def test_well_without_plate_parent_is_flagged() -> None:
-    orphan = ngc.new_node("collection", id="root").add(
-        ngc.new_node("collection", id="A1", attributes=_well())
+    orphan = ngc.new_node("collection", id="root", name="root").add(
+        ngc.new_node("collection", id="A1", name="test", attributes=_well())
     )
     errors = ngc.validate(orphan.find("A1"), validators=VALIDATORS)
     assert [e.validator for e in errors] == ["well_under_plate"]
@@ -88,8 +90,15 @@ def test_well_without_plate_parent_is_flagged() -> None:
 def _multiscale_with_scale(*factors: float) -> ngc.Node:
     """multiscale (defines `space` with 3 axes) → singlescale (scale=factors)."""
     return ngc.new_node(
-        "multiscale", id="img", attributes=_coordinate_systems("space", "z", "y", "x")
-    ).add(ngc.new_node("singlescale", id="0", attributes=_scale("space", *factors)))
+        "multiscale",
+        id="img",
+        name="test",
+        attributes=_coordinate_systems("space", "z", "y", "x"),
+    ).add(
+        ngc.new_node(
+            "singlescale", id="0", name="test", attributes=_scale("space", *factors)
+        )
+    )
 
 
 def test_scale_matching_axes_passes() -> None:
@@ -126,7 +135,7 @@ def test_node_with_two_capabilities_runs_both_validators() -> None:
         **_coordinate_systems("space", "z", "y", "x"),
         **_scale("space", 2.0, 2.0),
     }
-    node = ngc.new_node("multiscale", id="x", attributes=bad)
+    node = ngc.new_node("multiscale", id="x", name="test", attributes=bad)
     found = {e.validator for e in ngc.validate(node, validators=VALIDATORS)}
     assert found == {well_under_plate.__name__, scale_matches_axes.__name__}
 
@@ -137,8 +146,8 @@ def test_node_with_two_capabilities_runs_both_validators() -> None:
 
 
 def test_raise_on_error_reraises_first_failure() -> None:
-    orphan = ngc.new_node("collection", id="root").add(
-        ngc.new_node("collection", id="A1", attributes=_well())
+    orphan = ngc.new_node("collection", id="root", name="root").add(
+        ngc.new_node("collection", id="A1", name="test", attributes=_well())
     )
     with pytest.raises(ngc.ValidationError) as exc_info:
         ngc.validate(orphan.find("A1"), validators=VALIDATORS, raise_on_error=True)
