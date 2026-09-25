@@ -2,10 +2,12 @@
   "ome": {
     "version": "0.x",
     "type": "collection",
+    "name": "root",
     "id": "root",
     "nodes": [
       {
         "type": "multiscale",
+        "name": "image",
         "id": "image",
         "attributes": {
           "role": "raw",
@@ -15,6 +17,7 @@
       },
       {
         "type": "multiscale",
+        "name": "nuclei",
         "id": "nuclei",
         "attributes": {
           "role": "label"

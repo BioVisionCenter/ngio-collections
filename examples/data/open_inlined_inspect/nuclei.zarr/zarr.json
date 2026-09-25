@@ -3,6 +3,7 @@
     "ome": {
       "version": "0.x",
       "type": "multiscale",
+      "name": "nuclei",
       "id": "nuclei",
       "attributes": {
         "role": "label"

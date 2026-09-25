@@ -39,6 +39,7 @@
       "nodes": [
         {
           "type": "singlescale",
+          "name": "labels_0",
           "id": "labels_0",
           "attributes": {
             "coordinateTransformations": [
@@ -64,6 +65,7 @@
         },
         {
           "type": "singlescale",
+          "name": "labels_1",
           "id": "labels_1",
           "attributes": {
             "coordinateTransformations": [
