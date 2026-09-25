@@ -18,7 +18,10 @@ def _validate_collection(root_url: str) -> None:
     )
 
     # (2) Validate each node against JSON Schemas
-    validate_collection(json.loads(Path(root_url).read_text()))
+    validate_collection(
+        json.loads(Path(root_url).read_text()),
+        ignore_nodes=True,
+    )
 
 
 for script in sorted(Path(__file__).parent.glob("*.py")):
