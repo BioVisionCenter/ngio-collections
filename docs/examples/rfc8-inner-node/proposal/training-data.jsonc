@@ -1,0 +1,36 @@
+// training-data.jsonc — stands for `training-data/zarr.json` (the `ome` block
+// only), in the shapes of the 2026-09-30 revision proposal. A collection that
+// wants the inner "crop" collection from scene-a AND the one from scene-b as
+// its children, plus scene A's image directly.
+//
+// Compared with ../training-data.jsonc (current RFC-8):
+//   - The entries are references (`ref`), not declarations (`id`). Nothing is
+//     declared twice, so there is no duplicate-id problem to begin with.
+//   - A `ref` with a `path` resolves inside the document at `path`, so an
+//     inner node (…a1, …b1) is reachable, not only the document root.
+//   - A root (…a2) is referenced by the same mechanism; no "root stub" case.
+//   - No `name` or `traits` on a reference: the referenced node brings its
+//     own. training-data cannot rename "crop" locally (open point 3 in
+//     ../../../rfc8-inner-node-issue.md).
+//   - The entry `type` repeats the target's type; a mismatch is an error
+//     (open point 5).
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "0192f3a0-c000-7000-8000-0000000000c0",
+    "name": "Training data",
+    "traits": [],
+    "nodes": [
+      { "type": "collection",
+        "ref": "0192f3a0-a000-7000-8000-0000000000a1",          // inner node of scene-a
+        "path": { "type": "zarr", "format": "relative", "href": "./scene-a" } },
+      { "type": "collection",
+        "ref": "0192f3a0-b000-7000-8000-0000000000b1",          // inner node of scene-b
+        "path": { "type": "zarr", "format": "relative", "href": "./scene-b" } },
+      { "type": "multiscale",
+        "ref": "0192f3a0-a000-7000-8000-0000000000a2",          // root of image-a, same mechanism
+        "path": { "type": "zarr", "format": "relative", "href": "./image-a" } }
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+// training-data.jsonc — a collection that wants the multiscale "image" from
+// scene-a.jsonc AND the one from scene-b.jsonc as its two children.
+//
+// (1) RFC-8 as written: a stub's `id` names the stub itself and MUST be unique
+//     in this document, so two "image" ids make this file INVALID. Renaming
+//     them ("scene-a-image" / "scene-b-image") makes it valid but changes
+//     nothing: each `path` still means a scene ROOT (a collection), so neither
+//     multiscale is reachable.
+// (2) "id selects inside the target" reading: each stub MUST say "image" to
+//     reach its multiscale, so the duplicate is forced and the file is still
+//     INVALID. The Node schema has no field for a distinct local name.
+// (3) (2) + globally unique ids (UUIDs) on every node: the two multiscales
+//     carry different ids, the stubs copy them, no duplicate, both resolve.
+//     The selector reading only works together with that convention.
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "training-data",
+    "name": "Training data",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "image",                                          // duplicate, see (1) (2)
+        "name": "scene A image",
+        "path": { "type": "json", "path": "./scene-a.jsonc" }   // = root of scene-a.jsonc
+      },
+      {
+        "type": "multiscale",
+        "id": "image",                                          // duplicate, see (1) (2)
+        "name": "scene B image",
+        "path": { "type": "json", "path": "./scene-b.jsonc" }   // = root of scene-b.jsonc
+      }
+    ]
+  }
+}

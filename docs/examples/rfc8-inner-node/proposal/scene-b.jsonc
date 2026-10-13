@@ -1,0 +1,26 @@
+// scene-b.jsonc — stands for `scene-b/zarr.json` (the `ome` block only), in
+// the shapes of the 2026-09-30 revision proposal. Same structure as
+// scene-a.jsonc, written independently: same names ("crop"), different UUIDs.
+// image-b.jsonc is image-a.jsonc with "a" -> "b" and is not repeated here.
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "0192f3a0-b000-7000-8000-0000000000b0",
+    "name": "Scene B",
+    "traits": [],
+    "nodes": [
+      {
+        "type": "collection",                                 // inline, below the root
+        "id": "0192f3a0-b000-7000-8000-0000000000b1",         // <- the inner node training-data wants
+        "name": "crop",                                       // same name as in scene-a: legal, names are free-form
+        "traits": [],
+        "nodes": [
+          { "type": "multiscale",
+            "ref": "0192f3a0-b000-7000-8000-0000000000b2",    // = image-b.jsonc root
+            "path": { "type": "zarr", "format": "relative", "href": "./image-b" } }
+        ]
+      }
+    ]
+  }
+}

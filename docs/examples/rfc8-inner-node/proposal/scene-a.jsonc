@@ -1,0 +1,30 @@
+// scene-a.jsonc — stands for `scene-a/zarr.json` (the `ome` block only), in
+// the shapes of the 2026-09-30 revision proposal. One scene, written on its
+// own. It holds an inline child collection "crop" (allowed: a declaration may
+// carry child nodes) which references the scene's multiscale by path.
+// scene-b.jsonc is this file with "a" -> "b" and different UUIDs.
+//
+// Every `id` is a UUID declared exactly once. Nothing here depends on what
+// training-data.jsonc will call these nodes.
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "0192f3a0-a000-7000-8000-0000000000a0",
+    "name": "Scene A",
+    "traits": [],
+    "nodes": [
+      {
+        "type": "collection",                                 // inline, below the root
+        "id": "0192f3a0-a000-7000-8000-0000000000a1",         // <- the inner node training-data wants
+        "name": "crop",
+        "traits": [],
+        "nodes": [
+          { "type": "multiscale",                             // a reference: no id, no name, no traits
+            "ref": "0192f3a0-a000-7000-8000-0000000000a2",    // = image-a.jsonc root
+            "path": { "type": "zarr", "format": "relative", "href": "./image-a" } }
+        ]
+      }
+    ]
+  }
+}

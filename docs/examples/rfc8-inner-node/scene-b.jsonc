@@ -1,0 +1,30 @@
+// scene-b.jsonc — one scene, written on its own. Its multiscale is defined
+// inline (no document of its own) and uses the natural id "image".
+// scene-b.jsonc is this file with "a" -> "b": it also calls its multiscale
+// "image", legal because RFC-8 ids are only unique within a document.
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "scene-b",
+    "name": "Scene B",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "image",                                    // <- same id in scene-a and scene-b
+        "name": "image",
+        "attributes": {                                   // required on a multiscale
+          "coordinateSystems": [ { "id": "image-space",
+            "axes": [ { "name": "y", "type": "space" }, { "name": "x", "type": "space" } ] } ]
+        },
+        "nodes": [
+          { "type": "singlescale", "id": "s0", "name": "s0",
+            "path": { "type": "zarr", "path": "./scene-b/image.zarr/0" },   // bare pixel array
+            "attributes": { "coordinateTransformations": [                 // required on a singlescale
+              { "type": "scale", "scale": [ 1.0, 1.0 ],
+                "input": { "id": "s0" }, "output": { "id": "image-space" } } ] } }
+        ]
+      }
+    ]
+  }
+}

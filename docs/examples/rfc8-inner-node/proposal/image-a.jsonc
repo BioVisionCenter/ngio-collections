@@ -1,0 +1,32 @@
+// image-a.jsonc — stands for `image-a/zarr.json` (the `ome` block only), in
+// the shapes of the 2026-09-30 revision proposal (slide 7). A multiscale is
+// always its own document, never inlined in a collection. Scales replace 0.6
+// datasets; there is no `singlescale` node type.
+//
+// Declarations: the multiscale, its coordinate system and each scale carry an
+// `id`. References: `input` / `output` carry `type` + `ref`.
+{
+  "ome": {
+    "version": "0.x",
+    "type": "multiscale",
+    "id": "0192f3a0-a000-7000-8000-0000000000a2",
+    "name": "image",
+    "coordinate_systems": [
+      { "id": "0192f3a0-a000-7000-8000-0000000000a3",
+        "name": "physical",
+        "axes": [ { "name": "y", "type": "space" }, { "name": "x", "type": "space" } ] }
+    ],
+    "scales": [
+      { "id": "0192f3a0-a000-7000-8000-0000000000a4",
+        "path": { "type": "zarr", "format": "relative", "href": "./s0" },
+        "coordinate_transformations": [
+          { "type": "scale", "scale": [ 1.0, 1.0 ],
+            "input":  { "type": "scale",             // slide 7 writes the scale itself as input;
+                        "ref": "0192f3a0-a000-7000-8000-0000000000a4" },   // see the "scale self-reference" remark
+            "output": { "type": "coordinate_system",
+                        "ref": "0192f3a0-a000-7000-8000-0000000000a3" } }
+        ] }
+    ],
+    "traits": []
+  }
+}
