@@ -2,23 +2,27 @@
 
 `build` walks an entry document's payload and produces a `NodeTree`, with no IO
 of its own — every document it might need is supplied up front in `docs` (the
-`fetch_all` shell gathers them). Two modes:
+`fetch_all` shell gathers them). A `nodes` entry is either a *declaration*
+(carries `id`; its body is every non-structural key) or a *reference* (carries
+`ref` and usually a document `path`); both or neither is a document error. Two
+modes:
 
-- `inline=False` (open): each cross-document stub becomes a *reference* record;
-  the tree spans one document and stays editable.
-- `inline=True` (open_inlined): each resolvable stub is spliced into the tree in
-  place — the target's root replaces the stub, the stub's attributes overlay the
-  target (stub wins), the name falls back to the stub, and the target keeps its
-  own children, type, and pristine id. The result is a `resolved` collection.
+- `inline=False` (open): each reference becomes a *reference* record; the tree
+  spans one document and stays editable.
+- `inline=True` (open_inlined): each resolvable reference is replaced in place
+  by the declaration it points at — the node whose `id` equals `ref`, looked up
+  inside the document at `path` (its root and inline children, not through
+  further references). The spliced node keeps its own id, name, body and
+  children; nothing from the reference overlays it. The result is a `resolved`
+  collection.
 
-Resolution degrades gracefully and deterministically: a stub is left unresolved
-(a reference record) when the hop budget is exhausted (`depth`), a cycle is hit,
-the target was not fetched, or its root type does not match the stub — `on_error`
-chooses between leaving the stub (`"skip"`) and raising (`"raise"`). A stub whose
-target carries no OME metadata is left in place under *either* `on_error`: its
-`path` locates plain data (a Zarr array), so the stub is already complete and
-there is nothing to inline. Identity is the structural `NodeId` path, so the same
-document inlined twice yields distinct nodes with no id rewriting.
+Resolution degrades gracefully and deterministically: a reference is left in
+place when the hop budget is exhausted (`depth`), a cycle is hit, the target
+document was not fetched, no node declares `ref` in it, or its type does not
+match — `on_error` chooses between leaving the reference (`"skip"`) and raising
+(`"raise"`). A bare `ref` (no `path`) is always left in place. Identity is the
+structural `NodeId` path, so the same document inlined twice yields distinct
+nodes with no id rewriting.
 """
 
 from __future__ import annotations
@@ -30,7 +34,6 @@ from ngio_collections._types import JSONValue
 
 from ngio_collections.graph import (
     ROOT,
-    EdgeInfo,
     NodeId,
     NodeRecord,
     NodeTree,
@@ -43,6 +46,9 @@ from ngio_collections.resolve._document import Document
 OnError = Literal["skip", "raise"]
 
 Docs = Mapping[str, Document]
+
+STRUCTURAL_KEYS = frozenset({"type", "id", "name", "nodes", "ref", "path"})
+"""Wire keys that shape a node; every other key is the node's body."""
 
 
 def build(
@@ -59,10 +65,10 @@ def build(
         entry_url: The entry document's location (normalised internally).
         docs: A mapping of normalised document URL → parsed `Document`; must
             contain at least `entry_url`.
-        inline: Whether to splice resolvable cross-document stubs in place.
+        inline: Whether to splice resolvable references in place.
         depth: Max boundary hops to follow when inlining (`None` unlimited,
             `0` = entry document only).
-        on_error: `"skip"` leaves unresolvable stubs as reference records;
+        on_error: `"skip"` leaves unresolvable references as reference records;
             `"raise"` propagates the failure.
 
     Returns:
@@ -70,12 +76,15 @@ def build(
 
     Raises:
         KeyError: If `entry_url` is not present in `docs`.
-        ValueError: If the entry document carries no OME metadata.
+        ValueError: If the entry document carries no OME metadata, or a node
+            carries both `id` and `ref` or neither (regardless of `on_error`).
     """
     entry_url = meta_url(entry_url)
     doc = docs[entry_url]
     if not doc.has_payload:
         raise ValueError(f"document at {entry_url!r} carries no `ome` metadata")
+    if "id" not in doc.root:
+        raise ValueError(f"document root at {entry_url!r} declares no `id`")
     mode = "resolved" if inline else "editable"
     tree = TreeBuilder(_materialized_record(doc.root, doc.url), mode=mode)
     builder = _Builder(docs, inline, on_error)
@@ -88,8 +97,8 @@ class _Resolved:
     """How one payload dict materialises: the record plus how to recurse into it.
 
     `children_source` is the node dict whose `nodes` should be recursed (the dict
-    itself for a materialized node, the target root for an inlined stub), or
-    `None` to stop (a leaf, or a stub left unresolved). `doc`, `depth`, and
+    itself for a declaration, the found declaration for an inlined reference), or
+    `None` to stop (a leaf, or a reference left in place). `doc`, `depth`, and
     `ancestors` are the context that recursion continues under.
     """
 
@@ -151,32 +160,37 @@ class _Builder:
         depth: int | None,
         ancestors: frozenset[str],
     ) -> _Resolved:
-        """Decide whether `node_dict` is materialized, a reference, or inlined."""
-        if node_dict.get("path") is None:
+        """Decide whether `node_dict` is a declaration, a reference, or inlined."""
+        has_ref, has_id = "ref" in node_dict, "id" in node_dict
+        if has_ref == has_id:
+            raise ValueError(
+                f"node {node_dict.get('type')!r} in {doc.url!r} must carry exactly "
+                "one of `id` (a declaration) or `ref` (a reference)"
+            )
+        if has_id:
             record = _materialized_record(node_dict, doc.url)
             return _Resolved(record, node_dict, doc, depth, ancestors)
-        if not self.inline:
+        if not self.inline or "path" not in node_dict:
             return _Resolved(
                 _reference_record(node_dict, doc.url), None, doc, depth, ancestors
             )
-        return self._inline_stub(node_dict, doc, depth, ancestors)
+        return self._inline_reference(node_dict, doc, depth, ancestors)
 
-    def _inline_stub(
+    def _inline_reference(
         self,
         node_dict: dict,
         doc: Document,
         depth: int | None,
         ancestors: frozenset[str],
     ) -> _Resolved:
-        """Try to splice the stub `node_dict`'s target in; else leave a reference."""
+        """Try to splice the declaration `node_dict` points at; else leave it."""
         stub = _reference_record(node_dict, doc.url)
         leave = _Resolved(stub, None, doc, depth, ancestors)
         if depth == 0:
             return leave  # hop budget exhausted
+        assert stub.ref is not None and stub.ref.path is not None
         try:
-            target_url = meta_url(
-                DocPath.model_validate(node_dict["path"]).resolve(doc.url)
-            )
+            target_url = meta_url(stub.ref.path.resolve(doc.url))
         except Exception:
             if self.on_error == "raise":
                 raise
@@ -190,78 +204,73 @@ class _Builder:
                     f"reference target {target_url!r} was not fetched"
                 )
             return leave
-        if not target.has_payload:
-            # The target is data, not a document: the stub's `path` locates a plain
-            # Zarr array. Nothing to inline, and nothing wrong — the stub is whole.
-            return leave
-        if node_dict.get("type") != target.root.get("type"):
+        found = _find_declared(target.root, stub.ref.ref)
+        if found is None:
             if self.on_error == "raise":
-                raise TypeError(
-                    f"stub type {node_dict.get('type')!r} does not match target "
-                    f"root type {target.root.get('type')!r} at {target_url!r}"
+                raise LookupError(
+                    f"no node declares id {stub.ref.ref!r} in {target_url!r}"
                 )
             return leave
-        merged = _merge_record(stub, target.root, target.url)
+        if node_dict.get("type") != found.get("type"):
+            if self.on_error == "raise":
+                raise TypeError(
+                    f"reference type {node_dict.get('type')!r} does not match "
+                    f"node {stub.ref.ref!r} of type {found.get('type')!r} "
+                    f"in {target_url!r}"
+                )
+            return leave
         next_depth = None if depth is None else depth - 1
         return _Resolved(
-            merged, target.root, target, next_depth, ancestors | {target_url}
+            _materialized_record(found, target.url),
+            found,
+            target,
+            next_depth,
+            ancestors | {target_url},
         )
 
 
-def _attributes(node_dict: dict) -> Mapping[str, JSONValue]:
-    """Return a node dict's attributes, defaulting to an empty mapping."""
-    return node_dict.get("attributes") or {}
+def _body(node_dict: dict) -> Mapping[str, JSONValue]:
+    """Return a node dict's body: every key that is not structural, in order."""
+    return {k: v for k, v in node_dict.items() if k not in STRUCTURAL_KEYS}
 
 
 def _materialized_record(node_dict: dict, origin_url: str) -> NodeRecord:
-    """Build the record for an embedded node (branch when it has `nodes`)."""
+    """Build the record for a declaration (branch when it has `nodes`)."""
     return NodeRecord(
         type=node_dict["type"],
         name=node_dict.get("name"),
-        id=node_dict.get("id"),
-        attributes=_attributes(node_dict),
+        id=node_dict["id"],
+        attributes=_body(node_dict),
         children=() if "nodes" in node_dict else None,
         origin_url=origin_url,
     )
 
 
 def _reference_record(node_dict: dict, origin_url: str) -> NodeRecord:
-    """Build a reference record (a left-in-place cross-document stub)."""
-    path = DocPath.model_validate(node_dict["path"])
+    """Build a reference record (a left-in-place `{type, ref, path?}` entry)."""
+    path = node_dict.get("path")
     return NodeRecord(
         type=node_dict["type"],
-        name=node_dict.get("name"),
-        id=node_dict.get("id"),
-        attributes=_attributes(node_dict),
-        ref=Reference(path=path, id=node_dict.get("id")),
+        ref=Reference(
+            ref=node_dict["ref"],
+            path=None if path is None else DocPath.model_validate(path),
+        ),
         origin_url=origin_url,
     )
 
 
-def _merge_record(stub: NodeRecord, target_root: dict, target_url: str) -> NodeRecord:
-    """Merge an inlined stub into its target root (stub attrs win, name falls back).
+def _find_declared(root: dict, ref: str) -> dict | None:
+    """Return the node dict declaring `id == ref` in `root`'s inline tree, if any.
 
-    The collapsed edge is retained on `edge` — the stub's own pre-merge values —
-    so the merge stays invertible (write-back can split edited keys by origin).
+    Walks the root and the `nodes` of declarations only; entries that are
+    themselves references are not followed (lookup is not transitive).
     """
-    assert stub.ref is not None
-    target_attrs = _attributes(target_root)
-    stub_attrs = stub.attributes
-    attributes = {**target_attrs, **stub_attrs} if stub_attrs else target_attrs
-    name = target_root.get("name")
-    if name is None:
-        name = stub.name
-    return NodeRecord(
-        type=target_root["type"],
-        name=name,
-        id=target_root.get("id"),
-        attributes=attributes,
-        children=() if "nodes" in target_root else None,
-        origin_url=target_url,
-        edge=EdgeInfo(
-            ref=stub.ref,
-            attributes=stub.attributes,
-            name=stub.name,
-            origin_url=stub.origin_url,
-        ),
-    )
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if "ref" in node:
+            continue
+        if node.get("id") == ref:
+            return node
+        stack.extend(reversed(node.get("nodes") or ()))
+    return None

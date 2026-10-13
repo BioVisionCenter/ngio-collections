@@ -1,10 +1,11 @@
 """Open a multi-document collection inlined, inspect across boundaries, snapshot.
 
 A parent collection that *references* two child image documents is opened two
-ways: `open()` leaves the cross-document children as references, while
-`open_inlined()` resolves them into one read-only tree (a stub's attributes
-overlay its target, stub wins). We walk the resolved tree, read each node's
-on-disk origin via `ref()`, validate it, and `save_inlined()` a flat copy.
+ways: `open()` leaves the cross-document children as `{type, ref, path}`
+references, while `open_inlined()` resolves them into one read-only tree, each
+reference replaced by the node it points at (verbatim: a reference carries no
+name or body of its own). We walk the resolved tree, read each node's on-disk
+origin via `ref()`, validate it, and `save_inlined()` a flat copy.
 
 Run with: pixi run python examples/open_inlined_inspect.py
 """
@@ -13,30 +14,26 @@ from pathlib import Path
 
 import ngio_collections as ngc
 
+ROOT = "0192f3a0-e000-7000-8000-000000000051"
+IMAGE = "0192f3a0-e000-7000-8000-000000000052"
+NUCLEI = "0192f3a0-e000-7000-8000-000000000053"
+
 
 def _setup(base: Path) -> str:
     """Write a parent collection referencing two child image documents."""
     rf_img = ngc.create(
         str(base / "image.zarr"),
-        ngc.new_node(
-            "multiscale", id="image", name="image", attributes={"role": "raw"}
-        ),
+        ngc.new_node("multiscale", id=IMAGE, name="image", attributes={"role": "raw"}),
         overwrite=True,
     )
     rf_lbl = ngc.create(
         str(base / "nuclei.zarr"),
         ngc.new_node(
-            "multiscale", id="nuclei", name="nuclei", attributes={"role": "label"}
+            "multiscale", id=NUCLEI, name="nuclei", attributes={"role": "label"}
         ),
         overwrite=True,
     )
-    # Decorate the image stub: this overlay wins when read inlined.
-    rf_img = rf_img.set_attrs({"display": "grayscale"})
-    root = (
-        ngc.new_node("collection", id="root", name="root")
-        .add_ref(rf_img)
-        .add_ref(rf_lbl)
-    )
+    root = ngc.new_node("collection", id=ROOT, name="root").add_ref(rf_img).add_ref(rf_lbl)
     url = str(base / "collection.json")
     ngc.create(url, root, overwrite=True)
     return url
@@ -47,22 +44,21 @@ def main() -> None:
     url = _setup(base)
 
     # open(): cross-document children stay references (not resolved).
-    unresolved = [n.type for n in ngc.open(url).walk() if n.is_reference]
+    unresolved = [n.ref().model_dump(exclude_none=True) for n in ngc.open(url).walk() if n.is_reference]
     print("open() unresolved refs :", unresolved)
 
     # open_inlined(): references resolved across boundaries into one tree.
     view = ngc.open_inlined(url)
-    print("inlined ref            :", view.ref())
+    print("inlined ref            :", view.ref().model_dump(exclude_none=True))
     print("inlined nodes:")
     for n in view.walk():
-        origin = None if n.is_detached else n.ref().path.path
-        print(f"  {n.id!s:<7} {dict(n.attributes)}  origin={origin}")
+        print(f"  {n.name:<7} {dict(n.attributes)}  origin={n.ref().path.href}")
 
-    # The image stub's 'display' overlay is merged on top of its target.
-    print("image attributes       :", dict(view.find("image").attributes))
+    print("image attributes       :", dict(view.find(IMAGE).attributes))
     print(
         "validate               :",
-        ngc.validate(view, validators=(ngc.well_under_plate, ngc.scale_matches_axes)),
+        ngc.validate(view, validators=(ngc.id_is_uuid, ngc.well_under_plate)),
+        ngc.unique_ids(view),
     )
 
     # Snapshot the resolved tree into one self-contained document.

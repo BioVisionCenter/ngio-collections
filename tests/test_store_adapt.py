@@ -78,9 +78,9 @@ async def test_sync_store_roundtrips_through_the_async_api() -> None:
     root = new_node("collection", id="root", name="test", children=[stub])
     await aio.create("/data/c.json", root, store)
 
-    opened = await aio.open("/data/c.json", store)
-    edited = opened.find("image").set_attrs({"role": "edited"})
-    await aio.save(edited, store)
+    # edit the image in its own document; the parent only points at it
+    opened = await aio.open("/data/image.zarr", store)
+    await aio.save(opened.set_attrs({"role": "edited"}), store)
 
     inlined = await aio.open_inlined("/data/c.json", store)
     assert inlined.find("image").attributes["role"] == "edited"

@@ -8,10 +8,13 @@ must agree for both a JSON base (the document file) and a Zarr base (the
 
 import pytest
 
+from pydantic import ValidationError
+
 from ngio_collections.models._paths import (
     DocPath,
     JsonPath,
     ZarrPath,
+    format_for,
     meta_url,
     relativize,
     resolve,
@@ -95,10 +98,42 @@ def test_split_scheme():
 
 
 def test_docpath_methods_and_subclasses():
-    p = ZarrPath(path="/p/mdc/image.zarr")
-    assert p.type == "zarr"
+    p = ZarrPath(href="/p/mdc/image.zarr")
+    assert (p.type, p.format) == ("zarr", "absolute")
     rel = p.relativize(ZARR_BASE)
-    assert (rel.type, rel.path) == ("zarr", "../image.zarr")
+    assert (rel.type, rel.format, rel.href) == ("zarr", "relative", "../image.zarr")
     assert rel.resolve(ZARR_BASE) == "/p/mdc/image.zarr"
-    assert JsonPath(path="./c.json").type == "json"
-    assert DocPath(type="json", path="./c.json").type == "json"
+    assert JsonPath(href="./c.json").type == "json"
+    assert DocPath(type="json", href="./c.json").type == "json"
+
+
+@pytest.mark.parametrize(
+    "href, expected",
+    [
+        ("./image.zarr", "relative"),
+        ("../image.zarr", "relative"),
+        ("image.zarr", "relative"),
+        ("/abs/image.zarr", "absolute"),
+        ("file:///abs/image.zarr", "absolute"),
+        ("s3://bucket/image.zarr", "absolute"),
+        ("http://h.org/image.zarr", "http"),
+        ("https://h.org/image.zarr", "http"),
+    ],
+)
+def test_format_is_derived_from_href(href, expected):
+    assert format_for(href) == expected
+    assert ZarrPath(href=href).format == expected  # filled when omitted
+    assert DocPath.model_validate({"type": "zarr", "href": href}).format == expected
+
+
+def test_format_mismatch_is_an_error():
+    with pytest.raises(ValidationError):
+        DocPath.model_validate({"type": "zarr", "format": "absolute", "href": "./x"})
+    with pytest.raises(ValidationError):
+        ZarrPath(format="relative", href="http://h.org/x")
+
+
+def test_docpath_round_trips_the_wire_shape():
+    wire = {"type": "zarr", "format": "relative", "href": "./scene-a"}
+    p = DocPath.model_validate(wire)
+    assert p.model_dump(mode="json") == wire

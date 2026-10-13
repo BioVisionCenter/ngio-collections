@@ -9,8 +9,8 @@ is inert data — the handle is exactly the v5 "node you hold and call methods o
 
 Construction is handle-rooted and fluent: `new_node(...)` seeds a detached root,
 `add` grafts a child subtree, and positioned edits return the updated handle.
-Typed subclasses (`CollectionNode` / `MultiscaleNode` / `SinglescaleNode` plus a
-generic `Node` fallback) come from the registry by `record.type`.
+Typed subclasses (`CollectionNode` / `MultiscaleNode` plus a generic `Node`
+fallback) come from the registry by `record.type`.
 """
 
 from __future__ import annotations
@@ -30,9 +30,15 @@ from ngio_collections.graph import (
     is_ancestor,
 )
 from ngio_collections.models._config import NodeStateError
-from ngio_collections.models._paths import DocPath, JsonPath, ZarrPath, meta_url
+from ngio_collections.models._paths import (
+    DocPath,
+    JsonPath,
+    ZarrPath,
+    format_for,
+    meta_url,
+)
 from ngio_collections.models._paths import ZARR_METADATA_FILE
-from ngio_collections.models._references import ReferenceObj
+from ngio_collections.models._references import ReferenceObj, new_id
 from ngio_collections.models.attributes import AnyAttribute
 from ngio_collections.validate import (
     ValidationError,
@@ -85,21 +91,21 @@ class Node:
 
     @property
     def id(self) -> str | None:
-        """The pristine local id."""
+        """The declared id (a UUID), or `None` for a reference node."""
         return self.record.id
 
     @property
     def attributes(self) -> Mapping[str, JSONValue]:
-        """The raw attribute bag (validate a capability via `node[Attr]`)."""
+        """The raw body (every non-structural key; validate via `node[Attr]`)."""
         return self.record.attributes
 
     @property
     def is_reference(self) -> bool:
-        """Whether this node carries a `path` rather than embedded children.
+        """Whether this node is a `{type, ref, path?}` pointer, not a declaration.
 
-        True for an unresolved cross-document reference, and also for a node whose
-        `path` locates plain data (a Zarr array) — that one is fully resolved, it
-        just has nothing to inline.
+        A reference has no id, name or body of its own; the node it points at
+        (inside the document at `ref_path`, or this document for a bare ref)
+        brings those. `open_inlined` replaces resolvable references in place.
         """
         return self.record.is_reference
 
@@ -115,20 +121,31 @@ class Node:
 
     @property
     def ref_path(self) -> str | None:
-        """The document path this reference stores, or `None` if not a reference."""
+        """The `href` this reference stores, or `None` (not a reference / bare ref)."""
         ref = self.record.ref
-        return None if ref is None else ref.path.path
+        return None if ref is None or ref.path is None else ref.path.href
 
     def require_id(self) -> str:
-        """Return this node's local id, narrowing it to `str`.
+        """Return this node's declared id, narrowing it to `str`.
 
         Raises:
-            NodeStateError: If the node carries no id.
+            NodeStateError: If the node is a reference (it declares no id).
         """
-        id = self.record.id
-        if id is None:
-            raise NodeStateError("node has no id; it cannot be referenced")
-        return id
+        record = self.record
+        if record.id is None:
+            target = None if record.ref is None else record.ref.ref
+            raise NodeStateError(
+                f"node is a reference and declares no id; it points at {target!r}"
+            )
+        return record.id
+
+    def _require_declaration(self, what: str) -> None:
+        """Reject `what` on a reference node (it has no name or body to edit)."""
+        if self.record.ref is not None:
+            raise NodeStateError(
+                f"cannot {what} a reference node: it carries only type, ref and "
+                "path; edit the referenced node in its own document instead"
+            )
 
     def require_document_url(self) -> str:
         """Return the URL of this node's backing document, narrowing it to `str`.
@@ -144,13 +161,22 @@ class Node:
         return url
 
     def ref(self) -> ReferenceObj:
-        """Return a portable `{id, path}` locator for this node on disk.
+        """Return a portable `{type, ref, path}` locator for this node on disk.
+
+        For a declaration this points at the node inside its origin document.
+        For a reference node it is the pointer the node already carries (its
+        `path`, if any, is as stored — relative to `document_url`).
 
         Raises:
-            NodeStateError: If the node is detached or carries no id.
+            NodeStateError: If a declaration is detached (no backing document).
         """
+        record = self.record
+        if record.ref is not None:
+            return ReferenceObj(type=record.type, ref=record.ref.ref, path=record.ref.path)
         return ReferenceObj(
-            id=self.require_id(), path=reference_path(self.require_document_url())
+            type=record.type,
+            ref=self.require_id(),
+            path=reference_path(self.require_document_url()),
         )
 
     def ref_stub(self) -> Node:
@@ -158,13 +184,12 @@ class Node:
 
         The stub is the same shape `create`/`save` return: attach it under a
         parent with `add_ref` to link this node's document rather than embed its
-        subtree. It carries this node's local id, so it serializes with an `id`
-        and stays findable by `find(id)` wherever it lands. Unlike `ref()`, no
-        local id is required — a stub whose `id` is `None` points at the
-        document root (and is only structurally addressable).
+        subtree. It carries only `type`, `ref` (this node's id) and `path`; it
+        declares no id of its own, so reach it structurally (`children()`,
+        `walk()`) rather than by `find`.
 
         Raises:
-            NodeStateError: If the node is detached (no backing document).
+            NodeStateError: If the node is detached or is itself a reference.
         """
         return _reference_stub(self, self.require_document_url())
 
@@ -195,14 +220,13 @@ class Node:
             yield wrap_node(self._tree, node_id)
 
     def find(self, id: str) -> Node | None:
-        """Return the first node in this subtree whose local id is `id`.
+        """Return the first node in this subtree that *declares* `id`.
 
-        This covers unresolved reference stubs too: a stub minted by `create` /
-        `save` / `ref_stub` carries its target root's local id, so a
-        cross-document child is findable by id in a single-document `open` and
-        can be handled uniformly (e.g. `remove()`d). The exception is an
-        id-less stub — a plain doc-root reference, legal on disk — which is not
-        id-addressable; reach it structurally via `children()` / `walk()`.
+        Reference nodes declare nothing, so a cross-document child left in
+        place by `open` is not found here even though it points at `id`; reach
+        it structurally via `children()` / `walk()` (or `tree.referrers(id)`).
+        After `open_inlined` the declaration it pointed at is in its place and
+        findable.
         """
         for key in self._tree.find(id):
             if key == self._id or is_ancestor(self._id, key):
@@ -225,7 +249,6 @@ class Node:
             replace(
                 root,
                 origin_url=None,
-                edge=None,
                 children=() if root.children is not None else None,
             )
         )
@@ -235,7 +258,7 @@ class Node:
                 continue
             record = src.record(node_id)
             remap[node_id] = builder.add_child(
-                remap[node_id[:-1]], replace(record, origin_url=None, edge=None)
+                remap[node_id[:-1]], replace(record, origin_url=None)
             )
         return wrap_node(builder.finish(), ROOT)
 
@@ -284,6 +307,7 @@ class Node:
 
     def set_attr(self, value: AnyAttribute) -> Node:
         """Set the typed attribute `value` (keyed by its model's `key`)."""
+        self._require_declaration("set attributes on")
         dumped = value.model_dump(mode="json", by_alias=True, exclude_none=True)
         return self._root(self._tree.set_attrs(self._id, {value.key: dumped}))
 
@@ -298,14 +322,17 @@ class Node:
         `drop` (str keys or attribute classes) is applied after the merge, in
         one edit — so a merge-then-drop needs no re-`find` between two calls.
         """
+        self._require_declaration("set attributes on")
         return self._root(self._tree.set_attrs(self._id, values, drop=_attr_keys(drop)))
 
     def drop_attrs(self, *keys: str | builtins.type[AnyAttribute]) -> Node:
         """Remove `keys` from this node's bag (str keys or attribute classes)."""
+        self._require_declaration("drop attributes from")
         return self._root(self._tree.drop_attrs(self._id, _attr_keys(keys)))
 
     def rename(self, name: str | None) -> Node:
         """Set this node's display name."""
+        self._require_declaration("rename")
         return self._root(self._tree.rename(self._id, name))
 
     def add(self, *children: Node) -> Node:
@@ -343,10 +370,11 @@ def reference_path(url: str) -> DocPath:
     url = meta_url(url)
     suffix = "/" + ZARR_METADATA_FILE
     if url.endswith(suffix):
-        return ZarrPath(path=url[: -len(suffix)])
+        href = url[: -len(suffix)]
+        return ZarrPath(format=format_for(href), href=href)
     if url.endswith(".json"):
-        return JsonPath(path=url)
-    return ZarrPath(path=url)
+        return JsonPath(format=format_for(url), href=url)
+    return ZarrPath(format=format_for(url), href=url)
 
 
 def _graft(
@@ -373,8 +401,10 @@ def new_node(
 ) -> Node:
     """Create a detached collection rooted at a new node and return its handle.
 
-    A node with a `ref` is a leaf reference stub; otherwise it is a branch whose
-    `children` subtrees are grafted in order (and can keep growing via `add`).
+    A node with a `ref` is a reference stub (`type` + `ref` + `path` only: no
+    `id`, `name` or `attributes`). Otherwise it is a declaration — a branch
+    whose `children` subtrees are grafted in order (and can keep growing via
+    `add`) — whose `id` is minted with `new_id()` when not given.
 
     `origin_url` is provenance: pass it to reconstruct a node known to live in
     the document at that URL without reading it (a cache, a mirror, a serialized
@@ -385,6 +415,8 @@ def new_node(
     """
     if children is not None and ref is not None:
         raise ValueError("a reference stub is a leaf; it cannot take children")
+    if ref is None and id is None:
+        id = new_id()
     record = NodeRecord(
         type=node_type,
         id=id,
@@ -401,16 +433,11 @@ def new_node(
 def _reference_stub(node: Node, url: str) -> Node:
     """Build a detached reference stub locating `node` in the document at `url`.
 
-    The stub carries `node`'s local id both as its own `id` (so it serializes
-    with one and stays addressable via `find` wherever it is grafted) and as the
-    `Reference.id` to locate inside the target document. A node without an id
-    yields an id-less doc-root stub.
+    The stub is `{type, ref, path}`: `node`'s type, its declared id as `ref`,
+    and the path to `url`. It declares nothing of its own.
     """
     return new_node(
-        node.type,
-        id=node.id,
-        name=node.name,
-        ref=Reference(path=reference_path(url), id=node.id),
+        node.type, ref=Reference(ref=node.require_id(), path=reference_path(url))
     )
 
 
@@ -422,11 +449,7 @@ class CollectionNode(Node):
 
 
 class MultiscaleNode(Node):
-    """Handle for a `multiscale` node."""
-
-
-class SinglescaleNode(Node):
-    """Handle for a `singlescale` node."""
+    """Handle for a `multiscale` node (a leaf: `scales` live in its body)."""
 
 
 class NodeTypeRegistry:
@@ -463,7 +486,6 @@ def register_node_types(registry: NodeTypeRegistry = NODE_TYPES) -> NodeTypeRegi
     """Register the built-in typed handles on `registry` (the default registry)."""
     registry.register("collection", CollectionNode)
     registry.register("multiscale", MultiscaleNode)
-    registry.register("singlescale", SinglescaleNode)
     return registry
 
 

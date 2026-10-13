@@ -6,6 +6,12 @@ of the package relies on: :func:`resolve` and :func:`relativize` are inverses
 keyed off the *same* base URL (a document's ``url``), so a path written relative
 round-trips to the same absolute URL when read.
 
+The wire shape is the Fall 2026 proposal's ``{type, format, href}``: ``href`` is
+the locator, ``format`` says how to read it (``relative`` to the owning
+document, ``absolute`` local path or non-http URL, ``http`` URL). ``format`` is
+always derivable from ``href`` (:func:`format_for`); it is filled in when
+absent and checked when present, so a disagreement is a validation error.
+
 Scheme handling is deliberately small: bare local filesystem paths, ``file://``,
 and ``http(s)://`` work today. :func:`split_scheme` is the one seam to extend for
 ``s3`` / ``gcs`` / other fsspec protocols — resolution already flows through
@@ -16,12 +22,14 @@ co-located *local* paths (remote / cross-store targets stay absolute locators).
 from __future__ import annotations
 
 import posixpath
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urljoin
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 ZARR_METADATA_FILE = "zarr.json"
+
+Format = Literal["relative", "absolute", "http"]
 
 
 def split_scheme(url: str) -> tuple[str, str]:
@@ -41,6 +49,27 @@ def split_scheme(url: str) -> tuple[str, str]:
 def _is_local_abs(url: str) -> bool:
     """True iff `url` is a bare absolute local filesystem path (`/...`)."""
     return url.startswith("/")
+
+
+def format_for(href: str) -> Format:
+    """Return the `format` implied by `href`.
+
+    `http` / `https` URLs are `"http"`; a bare absolute local path or any other
+    scheme (`file://`, `s3://`, …) is `"absolute"`; everything else is
+    `"relative"` to the owning document.
+
+    Args:
+        href: The raw locator string.
+
+    Returns:
+        The matching `Format` literal.
+    """
+    scheme, _ = split_scheme(href)
+    if scheme in ("http", "https"):
+        return "http"
+    if scheme or _is_local_abs(href):
+        return "absolute"
+    return "relative"
 
 
 def meta_url(location: str) -> str:
@@ -117,26 +146,46 @@ def relativize(path: str, base_url: str | None) -> str:
 
 
 class DocPath(BaseModel):
-    """A `{type, path}` reference to an external document (Zarr or JSON).
+    """A `{type, format, href}` reference to an external document (Zarr or JSON).
 
     The single wire/value type for reference paths. `resolve` / `relativize`
     delegate to the module functions so the inverse-pair invariant lives in one
-    place. Frozen and `extra="allow"` so unknown keys round-trip; constructed
-    directly or via the `ZarrPath` / `JsonPath` convenience subclasses.
+    place. `format` is derived from `href` when omitted and must agree with it
+    when given. Frozen and `extra="allow"` so unknown keys round-trip;
+    constructed directly or via the `ZarrPath` / `JsonPath` subclasses.
     """
 
     model_config = ConfigDict(extra="allow", frozen=True)
 
     type: Literal["zarr", "json"]
-    path: str
+    format: Format
+    href: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fill_or_check_format(cls, data: Any) -> Any:
+        """Fill `format` from `href` when absent; reject a disagreeing one."""
+        if not isinstance(data, dict) or not isinstance(data.get("href"), str):
+            return data
+        expected = format_for(data["href"])
+        given = data.get("format")
+        if given is None:
+            return {**data, "format": expected}
+        if given != expected:
+            raise ValueError(
+                f"path format {given!r} does not match href {data['href']!r} "
+                f"(expected {expected!r})"
+            )
+        return data
 
     def resolve(self, base_url: str | None) -> str:
         """Return the absolute URL for this path (see :func:`resolve`)."""
-        return resolve(self.path, base_url)
+        return resolve(self.href, base_url)
 
     def relativize(self, base_url: str | None) -> DocPath:
-        """Return a copy with `path` relativized (see :func:`relativize`)."""
-        return self.model_copy(update={"path": relativize(self.path, base_url)})
+        """Return a copy with `href` relativized and `format` recomputed."""
+        href = relativize(self.href, base_url)
+        return self.model_copy(update={"href": href, "format": format_for(href)})
 
 
 class ZarrPath(DocPath):

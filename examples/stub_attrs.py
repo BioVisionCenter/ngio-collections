@@ -1,28 +1,17 @@
-"""Update attributes on a *stub* (the reference) vs. on the *target node* itself.
+"""Reference a child document without writing it; edit the target, not the ref.
 
-A parent collection references a child document through a stub. Attributes can
-live in two places:
+A parent references a child through a `{type, ref, path}` entry and nothing
+else: no name, no body. The referenced node brings its own, and `open_inlined()`
+splices it in verbatim. So to change what a consumer sees of a child, edit the
+**target node** in its own document (`open()` the child, `set_attrs`, `save()`);
+trying to decorate the reference itself raises `NodeStateError`.
 
-* on the **stub** — carried by the reference in the parent; an *overlay* the
-  parent layers onto the child when it reads it (`set_attrs` on the stub `Node`
-  returned by `create()`);
-* on the **target node** — the child document's own attributes (`open()` the
-  child, `set_attrs`, `save()`).
-
-On `open_inlined()` the two are merged with the **stub winning** on conflicts,
-while keys that exist only on the target survive (see
-`resolve/_build.py::_merge_record`). This example writes both and prints the
-resolved result so you can see which value wins.
-
-Key point: a stub's overlay attributes are written into the **parent** document,
-never into the child — so you never need write access to the child to attach
-attributes to it. The child can be read-only or remote (e.g. on http): you only
-ever write the local parent. And you don't even need to write the child to
-*reference* it — `create(child)` is just a convenience that returns a stub; when
-the child already exists you mint the reference in memory with
-`new_node(ref=Reference(...))` + `add_ref`, or `node.ref_stub()` on an opened
-child (both shown at the end). `open_inlined`
-still has to *read* the child to merge attributes, but never writes it.
+You never need to write the child to reference it. `create(child)` returns a
+stub as a convenience; when the child already exists — or is read-only or
+remote (e.g. `ZarrPath(href="http://host/image.zarr")`) — mint the reference in
+memory with `new_node(ref=Reference(...))` + `add_ref`, or `node.ref_stub()` on
+an opened child. `open_inlined` still has to *read* the child, but never writes
+it; `create` below writes only the local parent.
 
 Run with: pixi run python examples/stub_attrs.py
 """
@@ -31,81 +20,60 @@ from pathlib import Path
 
 import ngio_collections as ngc
 
+ROOT = "0192f3a0-e000-7000-8000-000000000061"
+IMAGE = "0192f3a0-e000-7000-8000-000000000062"
+OTHER = "0192f3a0-e000-7000-8000-000000000063"
+
 
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
     child_url = str(base / "image.zarr")
     parent_url = str(base / "collection.json")
 
-    # The child document carries its own attributes ("channels" + "display").
+    # The child document carries its own attributes.
     image = ngc.new_node(
-        "multiscale",
-        id="image",
-        name="image",
-        attributes={"channels": ["DAPI"], "display": "target-default"},
+        "multiscale", id=IMAGE, name="image", attributes={"channels": ["DAPI"]}
     )
     stub = ngc.create(child_url, image, overwrite=True)
+    print("stub               :", stub.ref().model_dump(exclude_none=True))
 
-    # Decorate the STUB: an overlay stored on the reference in the parent. It
-    # overrides "display" and adds "in_collection" — the child file is untouched.
-    stub = stub.set_attrs({"display": "stub-override", "in_collection": True})
-    root = ngc.new_node("collection", id="root", name="root").add_ref(stub)
+    # A reference cannot be decorated: it has no body of its own.
+    try:
+        stub.set_attrs({"display": "overlay"})
+    except ngc.NodeStateError as error:
+        print("set_attrs on a ref :", error)
+
+    root = ngc.new_node("collection", id=ROOT, name="root").add_ref(stub)
     ngc.create(parent_url, root, overwrite=True)
-
-    # Resolve: stub overlay wins on "display"; target-only "channels" survives.
     view = ngc.open_inlined(parent_url)
-    print("after stub overlay :", dict(view.find("image").attributes))
+    print("inlined            :", dict(view.find(IMAGE).attributes))
 
-    # Now edit the TARGET NODE itself: open the child, change its own attribute,
-    # and save it back to its own document.
+    # Edit the TARGET NODE itself: open the child, change its own attribute,
+    # and save it back to its own document. The parent is untouched.
     edited = ngc.open(child_url).set_attrs({"channels": ["DAPI", "GFP"]})
     ngc.save(edited)
-
-    # Resolve again: the target edit shows through ("channels"), but the stub
-    # overlay still wins on "display".
     view = ngc.open_inlined(parent_url)
-    print("after target edit  :", dict(view.find("image").attributes))
+    print("after target edit  :", dict(view.find(IMAGE).attributes))
 
-    # Re-open the collection and change the STUB overlay again. `open_inlined`
-    # gives a read-only resolved tree, so to edit the stub we `open()` the parent
-    # (non-inlined: the child stays a reference whose overlay we can update). An
-    # unresolved stub has no local id of its own, so we locate it as the
-    # reference child rather than by id, `set_attrs` on it, and `save()` the parent.
-    collection = ngc.open(parent_url)
-    stub = next(n for n in collection.walk() if n.is_reference)
-    collection = stub.set_attrs({"display": "stub-override-v2"})
-    ngc.save(collection)
-
-    # Resolve once more: the new overlay wins, the target's "channels" persists.
-    view = ngc.open_inlined(parent_url)
-    print("after stub re-edit :", dict(view.find("image").attributes))
-
-    # Referencing a child you must NOT (or cannot) write. `create(child)` above
-    # was only a convenience to get a stub; when the child already exists — or is
-    # read-only / remote (e.g. `ZarrPath(path="http://host/image.zarr")`) — mint
-    # the reference in memory with `new_node(ref=...)` and attach it. No write
-    # ever touches the child; `create` below writes only the local parent.
+    # Reference a child you must NOT (or cannot) write: mint the reference in
+    # memory and attach it. No write ever touches the child.
     stub = ngc.new_node(
         "multiscale",
-        id="image",
-        name="image",
-        ref=ngc.Reference(path=ngc.ZarrPath(path=child_url), id="image"),
-        attributes={"display": "in-memory-stub"},  # overlay set at construction
+        ref=ngc.Reference(ref=IMAGE, path=ngc.ZarrPath(href=child_url)),
     )
     other_url = str(base / "collection-readonly-child.json")
     ngc.create(
         other_url,
-        ngc.new_node("collection", id="root", name="root").add_ref(stub),
+        ngc.new_node("collection", id=OTHER, name="root").add_ref(stub),
         overwrite=True,
     )
-
     view = ngc.open_inlined(other_url)
-    print("ref without writing:", dict(view.find("image").attributes))
+    print("ref without writing:", dict(view.find(IMAGE).attributes))
 
     # When the child *is* readable, skip the hand-built Reference: `ref_stub()`
     # mints the same stub from an opened node (still never writing the child).
     stub = ngc.open(child_url).ref_stub()
-    print("ref_stub shortcut  :", stub.type, stub.ref_path)
+    print("ref_stub shortcut  :", stub.type, stub.record.ref.ref, stub.ref_path)
 
 
 if __name__ == "__main__":

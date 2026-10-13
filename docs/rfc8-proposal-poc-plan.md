@@ -1,6 +1,9 @@
 # PoC of the Fall 2026 RFC-8 revision (ids, refs, paths)
 
-**2026-10-13 · plan, not yet implemented.** Target shapes: deck
+**2026-10-13 · implemented on this branch** (`rfc8-new-proposal`; the
+relative hrefs in the proposal examples were corrected to `../` while doing
+so, since they resolve against the group directory).
+Original plan follows. Target shapes: deck
 `2026-09-30 rfc8_revisions`, slides 5-7, with the slide 7 typo corrected
 (`ref`, not `id`, on the collection side). Background and open RFC questions:
 `rfc8-inner-node-issue.md`; library impact: `rfc8-inner-node-references.md`.

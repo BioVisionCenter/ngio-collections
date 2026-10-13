@@ -1,10 +1,12 @@
 """Tests for the L1 write path: serialize a NodeTree back to documents.
 
-Covers payload shape, reference-stub round-trip, path relativization, and a full
+Covers payload shape, reference round-trip, path relativization, and a full
 build → write → re-read → build round-trip through a writable in-memory store.
 """
 
 from __future__ import annotations
+
+from conftest import uid
 
 from ngio_collections.graph import ROOT, NodeTree, NodeRecord, Reference
 from ngio_collections.models._paths import ZarrPath
@@ -12,7 +14,6 @@ from ngio_collections.resolve import (
     Document,
     build,
     fetch_all,
-    node_dict,
     payload,
     write_document,
 )
@@ -46,64 +47,107 @@ class _MemoryStore:
 # payload / node_dict shape
 # --------------------------------------------------------------------------- #
 
+SCALES = [{"id": uid("s0"), "path": {"type": "zarr", "format": "relative", "href": "./s0"}}]
+
+
+def _root() -> NodeTree:
+    return NodeTree.of(
+        NodeRecord(type="collection", id=uid("root"), name="test", children=())
+    )
+
 
 def _sample_collection() -> NodeTree:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
-    c, img = c.add_child(
+    c = _root()
+    c, _ = c.add_child(
         ROOT,
         NodeRecord(
             type="multiscale",
-            id="img",
-            attributes={"role": "raw"},
-            children=(),
+            id=uid("img"),
+            attributes={"traits": [], "scales": SCALES},
         ),
     )
     c, _ = c.add_child(
-        img, NodeRecord(type="singlescale", id="0", name="test", children=())
+        ROOT, NodeRecord(type="collection", id=uid("sub"), name="sub", children=())
     )
     return c
 
 
-def test_payload_rebuilds_nesting_and_drops_empties() -> None:
+def test_payload_rebuilds_nesting_and_splats_body_in_order() -> None:
     body = payload(_sample_collection(), base_url=f"{DATA}/c.json", relativize=False)
     assert body["version"]  # envelope stamped
-    assert body["type"] == "collection" and body["id"] == "root"
-    (img,) = body["nodes"]
-    assert img["id"] == "img" and img["attributes"] == {"role": "raw"}
-    assert "name" not in img  # None dropped
-    (zero,) = img["nodes"]
-    assert zero["id"] == "0" and "attributes" not in zero  # empty bag dropped
+    assert list(body) == ["version", "type", "id", "name", "nodes"]
+    img, sub = body["nodes"]
+    assert list(img) == ["type", "id", "traits", "scales"]  # no name, no nodes
+    assert img["id"] == uid("img") and img["scales"] == SCALES
+    assert "attributes" not in img
+    assert sub == {"type": "collection", "id": uid("sub"), "name": "sub", "nodes": []}
 
 
-def test_reference_record_serializes_as_path_stub() -> None:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
+def test_reference_record_serializes_as_type_ref_path() -> None:
+    c = _root()
     c, _ = c.add_child(
         ROOT,
         NodeRecord(
             type="multiscale",
-            name="img",
-            ref=Reference(path=ZarrPath(path="../image.zarr"), id="image"),
+            ref=Reference(ref=uid("image"), path=ZarrPath(href="../image.zarr")),
         ),
     )
     body = payload(c, base_url=f"{DATA}/c.json", relativize=False)
     (stub,) = body["nodes"]
-    assert stub["path"] == {"type": "zarr", "path": "../image.zarr"}
-    assert "nodes" not in stub
+    assert stub == {
+        "type": "multiscale",
+        "ref": uid("image"),
+        "path": {"type": "zarr", "format": "relative", "href": "../image.zarr"},
+    }
 
 
-def test_relativize_rewrites_absolute_stub_path() -> None:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
+def test_relativize_rewrites_absolute_href_and_format() -> None:
+    c = _root()
     c, _ = c.add_child(
         ROOT,
         NodeRecord(
             type="multiscale",
-            name="test",
-            ref=Reference(path=ZarrPath(path="/data/image.zarr")),
+            ref=Reference(ref=uid("image"), path=ZarrPath(href="/data/image.zarr")),
         ),
     )
     body = payload(c, base_url=f"{DATA}/c.json", relativize=True)
     (stub,) = body["nodes"]
-    assert stub["path"]["path"] == "./image.zarr"  # relativized against /data/
+    assert stub["path"] == {"type": "zarr", "format": "relative", "href": "./image.zarr"}
+
+
+def test_relativize_rewrites_docpaths_inside_the_body() -> None:
+    c = _root()
+    c, _ = c.add_child(
+        ROOT,
+        NodeRecord(
+            type="multiscale",
+            id=uid("labels"),
+            attributes={
+                "labels": {
+                    "source": [
+                        {
+                            "type": "multiscale",
+                            "ref": uid("image"),
+                            "path": {
+                                "type": "zarr",
+                                "format": "absolute",
+                                "href": "/data/image.zarr",
+                            },
+                        }
+                    ]
+                },
+                "scales": [{"id": uid("s0"), "path": "./0"}],  # plain string: kept
+            },
+        ),
+    )
+    body = payload(c, base_url=f"{DATA}/c.json", relativize=True)
+    (node,) = body["nodes"]
+    assert node["labels"]["source"][0]["path"] == {
+        "type": "zarr",
+        "format": "relative",
+        "href": "./image.zarr",
+    }
+    assert node["scales"][0]["path"] == "./0"
 
 
 # --------------------------------------------------------------------------- #
@@ -123,7 +167,8 @@ async def test_write_then_read_round_trips() -> None:
     assert [reread.record(n).type for n in reread.walk()] == [
         original.record(n).type for n in original.walk()
     ]
-    assert dict(reread.record(reread.find("img")[0]).attributes) == {"role": "raw"}
+    img = reread.record(reread.find(uid("img"))[0])
+    assert img.is_leaf and dict(img.attributes) == {"traits": [], "scales": SCALES}
 
 
 async def test_unedited_write_is_byte_identical_on_resave() -> None:
@@ -133,3 +178,30 @@ async def test_unedited_write_is_byte_identical_on_resave() -> None:
     reread = build(url, await fetch_all(url, store), inline=False)
     await write_document(store, url, reread, existing=first, overwrite=True)
     assert store.files[url] == first
+
+
+async def test_wire_document_with_references_re_serializes_identically() -> None:
+    ome = {
+        "version": "0.x",
+        "type": "collection",
+        "id": uid("root"),
+        "name": "root",
+        "traits": [],
+        "nodes": [
+            {
+                "type": "collection",
+                "ref": uid("crop"),
+                "path": {"type": "zarr", "format": "relative", "href": "./scene"},
+            },
+            {"type": "multiscale", "ref": uid("local")},
+        ],
+    }
+    store = _MemoryStore()
+    url = f"{DATA}/c.json"
+    store.files[url] = {"ome": ome, "sibling": 1}
+    tree = build(url, await fetch_all(url, store), inline=False)
+    await write_document(store, url, tree, existing=store.files[url], overwrite=True)
+    assert store.files[url] == {"ome": ome, "sibling": 1}
+    assert Document.from_content(url, store.files[url]).root == {
+        k: v for k, v in ome.items() if k != "version"
+    }

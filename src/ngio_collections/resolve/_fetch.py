@@ -9,10 +9,10 @@ points at); the build that follows is pure and reads everything from the returne
 are only known once it is parsed — but no resolution *logic* lives here.
 
 Reads are best-effort: a document that cannot be fetched is simply absent from
-`docs`, and `build` then leaves the referring stub in place (or raises, per its
-`on_error`). A document that *was* read but carries no OME payload is kept, marked
-`has_payload=False` — `build` needs that distinction, since such a stub points at
-data rather than at a broken reference.
+`docs`, and `build` then leaves the referring reference in place (or raises, per
+its `on_error`). A document that *was* read but carries no OME payload is kept,
+marked `has_payload=False`; `build` finds no declaration in it and treats the
+reference as unresolvable.
 """
 
 from __future__ import annotations
@@ -25,19 +25,20 @@ from ngio_collections.resolve._document import Document
 
 
 def reference_targets(doc: Document):  # -> Iterator[str]
-    """Yield the normalised URL of every cross-document stub in `doc`.
+    """Yield the normalised URL of every cross-document reference in `doc`.
 
-    Mirrors the resolution in `build`: each node dict carrying a `path` is
-    resolved against `doc.url` and normalised to its metadata-file URL, so the
-    yielded keys match the ones `fetch_all` caches under. Malformed paths are
-    skipped (the build re-resolves and reports them).
+    Mirrors the resolution in `build`: each `nodes` entry carrying `ref` and
+    `path` is resolved against `doc.url` and normalised to its metadata-file
+    URL, so the yielded keys match the ones `fetch_all` caches under. Paths
+    inside a node's body (e.g. `scales[*].path`) locate data, not documents,
+    and are not prefetched. Malformed paths are skipped (the build re-resolves
+    and reports them).
     """
     for node_dict in _walk(doc.root):
-        path = node_dict.get("path")
-        if path is None:
+        if "ref" not in node_dict or "path" not in node_dict:
             continue
         try:
-            yield meta_url(DocPath.model_validate(path).resolve(doc.url))
+            yield meta_url(DocPath.model_validate(node_dict["path"]).resolve(doc.url))
         except Exception:
             continue
 

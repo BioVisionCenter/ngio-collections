@@ -3,93 +3,93 @@
     "ome": {
       "version": "0.x",
       "type": "multiscale",
+      "id": "0192f3a0-e000-7000-8000-000000000011",
       "name": "labels",
-      "id": "labels",
-      "attributes": {
-        "coordinateSystems": [
-          {
-            "id": "labels_space",
-            "axes": [
-              {
-                "name": "y",
-                "type": "space",
-                "unit": "micrometer"
-              },
-              {
-                "name": "x",
-                "type": "space",
-                "unit": "micrometer"
-              }
-            ]
-          }
-        ],
-        "labels": {
-          "labelAttributes": [],
-          "source": [
+      "coordinate_systems": [
+        {
+          "id": "0192f3a0-e000-7000-8000-000000000012",
+          "name": "physical",
+          "axes": [
             {
-              "id": "image",
-              "path": {
-                "type": "zarr",
-                "path": "../image.zarr"
+              "name": "y",
+              "type": "space",
+              "unit": "micrometer"
+            },
+            {
+              "name": "x",
+              "type": "space",
+              "unit": "micrometer"
+            }
+          ]
+        }
+      ],
+      "scales": [
+        {
+          "id": "0192f3a0-e000-7000-8000-000000000013",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./0"
+          },
+          "coordinate_transformations": [
+            {
+              "type": "scale",
+              "scale": [
+                1.0,
+                1.0
+              ],
+              "input": {
+                "type": "scale",
+                "ref": "0192f3a0-e000-7000-8000-000000000013"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-e000-7000-8000-000000000012"
+              }
+            }
+          ]
+        },
+        {
+          "id": "0192f3a0-e000-7000-8000-000000000014",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./1"
+          },
+          "coordinate_transformations": [
+            {
+              "type": "scale",
+              "scale": [
+                2.0,
+                2.0
+              ],
+              "input": {
+                "type": "scale",
+                "ref": "0192f3a0-e000-7000-8000-000000000014"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-e000-7000-8000-000000000012"
               }
             }
           ]
         }
+      ],
+      "labels": {
+        "labelAttributes": [],
+        "source": [
+          {
+            "type": "multiscale",
+            "ref": "0192f3a0-e000-7000-8000-000000000002",
+            "path": {
+              "type": "zarr",
+              "format": "relative",
+              "href": "../image.zarr"
+            }
+          }
+        ]
       },
-      "nodes": [
-        {
-          "type": "singlescale",
-          "name": "labels_0",
-          "id": "labels_0",
-          "attributes": {
-            "coordinateTransformations": [
-              {
-                "input": {
-                  "id": "labels_0"
-                },
-                "output": {
-                  "id": "labels_space"
-                },
-                "type": "scale",
-                "scale": [
-                  1.0,
-                  1.0
-                ]
-              }
-            ]
-          },
-          "path": {
-            "type": "zarr",
-            "path": "./0"
-          }
-        },
-        {
-          "type": "singlescale",
-          "name": "labels_1",
-          "id": "labels_1",
-          "attributes": {
-            "coordinateTransformations": [
-              {
-                "input": {
-                  "id": "labels_1"
-                },
-                "output": {
-                  "id": "labels_space"
-                },
-                "type": "scale",
-                "scale": [
-                  2.0,
-                  2.0
-                ]
-              }
-            ]
-          },
-          "path": {
-            "type": "zarr",
-            "path": "./1"
-          }
-        }
-      ]
+      "nodes": []
     }
   },
   "zarr_format": 3,

@@ -3,15 +3,12 @@
     "ome": {
       "version": "0.x",
       "type": "multiscale",
+      "id": "0192f3a0-e000-7000-8000-000000000062",
       "name": "image",
-      "id": "image",
-      "attributes": {
-        "channels": [
-          "DAPI",
-          "GFP"
-        ],
-        "display": "target-default"
-      },
+      "channels": [
+        "DAPI",
+        "GFP"
+      ],
       "nodes": []
     }
   },

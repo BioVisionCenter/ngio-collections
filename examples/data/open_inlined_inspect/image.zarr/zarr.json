@@ -3,11 +3,9 @@
     "ome": {
       "version": "0.x",
       "type": "multiscale",
+      "id": "0192f3a0-e000-7000-8000-000000000052",
       "name": "image",
-      "id": "image",
-      "attributes": {
-        "role": "raw"
-      },
+      "role": "raw",
       "nodes": []
     }
   },

@@ -24,13 +24,13 @@
     "nodes": [
       { "type": "collection",
         "ref": "0192f3a0-a000-7000-8000-0000000000a1",          // inner node of scene-a
-        "path": { "type": "zarr", "format": "relative", "href": "./scene-a" } },
+        "path": { "type": "zarr", "format": "relative", "href": "../scene-a" } },
       { "type": "collection",
         "ref": "0192f3a0-b000-7000-8000-0000000000b1",          // inner node of scene-b
-        "path": { "type": "zarr", "format": "relative", "href": "./scene-b" } },
+        "path": { "type": "zarr", "format": "relative", "href": "../scene-b" } },
       { "type": "multiscale",
         "ref": "0192f3a0-a000-7000-8000-0000000000a2",          // root of image-a, same mechanism
-        "path": { "type": "zarr", "format": "relative", "href": "./image-a" } }
+        "path": { "type": "zarr", "format": "relative", "href": "../image-a" } }
     ]
   }
 }

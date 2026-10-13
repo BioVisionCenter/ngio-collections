@@ -2,25 +2,25 @@
   "ome": {
     "version": "0.x",
     "type": "collection",
+    "id": "0192f3a0-e000-7000-8000-000000000001",
     "name": "root",
-    "id": "root",
     "nodes": [
       {
         "type": "multiscale",
-        "name": "image",
-        "id": "image",
+        "ref": "0192f3a0-e000-7000-8000-000000000002",
         "path": {
           "type": "zarr",
-          "path": "./image.zarr"
+          "format": "relative",
+          "href": "./image.zarr"
         }
       },
       {
         "type": "multiscale",
-        "name": "labels",
-        "id": "labels",
+        "ref": "0192f3a0-e000-7000-8000-000000000011",
         "path": {
           "type": "zarr",
-          "path": "./labels.zarr"
+          "format": "relative",
+          "href": "./labels.zarr"
         }
       }
     ]

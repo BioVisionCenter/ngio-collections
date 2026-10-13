@@ -22,7 +22,7 @@
         "nodes": [
           { "type": "multiscale",                             // a reference: no id, no name, no traits
             "ref": "0192f3a0-a000-7000-8000-0000000000a2",    // = image-a.jsonc root
-            "path": { "type": "zarr", "format": "relative", "href": "./image-a" } }
+            "path": { "type": "zarr", "format": "relative", "href": "../image-a" } }
         ]
       }
     ]

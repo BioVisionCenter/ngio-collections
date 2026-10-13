@@ -2,19 +2,16 @@
   "ome": {
     "version": "0.x",
     "type": "collection",
+    "id": "0192f3a0-e000-7000-8000-000000000063",
     "name": "root",
-    "id": "root",
     "nodes": [
       {
         "type": "multiscale",
-        "name": "image",
-        "id": "image",
-        "attributes": {
-          "display": "in-memory-stub"
-        },
+        "ref": "0192f3a0-e000-7000-8000-000000000062",
         "path": {
           "type": "zarr",
-          "path": "./image.zarr"
+          "format": "relative",
+          "href": "./image.zarr"
         }
       }
     ]

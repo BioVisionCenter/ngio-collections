@@ -2,22 +2,20 @@
   "ome": {
     "version": "0.x",
     "type": "collection",
+    "id": "0192f3a0-e000-7000-8000-000000000041",
     "name": "My Experiment",
-    "id": "experiment",
     "nodes": [
       {
         "type": "fractal:table",
+        "id": "0192f3a0-e000-7000-8000-000000000042",
         "name": "regionprops",
-        "id": "t1",
-        "attributes": {
-          "region": "FOV_1"
-        },
+        "region": "FOV_1",
         "nodes": []
       },
       {
         "type": "mobie:view",
+        "id": "0192f3a0-e000-7000-8000-000000000043",
         "name": "view",
-        "id": "v1",
         "nodes": []
       }
     ]

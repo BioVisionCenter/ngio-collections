@@ -13,7 +13,7 @@ from ngio_collections.models._paths import (
     PathObj,
     ZarrPath,
 )
-from ngio_collections.models._references import IdStr, ReferenceObj
+from ngio_collections.models._references import IdStr, ReferenceObj, UuidStr, new_id
 from ngio_collections.models.attributes import (
     AcquisitionAttribute,
     AcquisitionObj,
@@ -88,6 +88,8 @@ __all__ = [
     "SceneAttribute",
     "SequenceTransformation",
     "TranslationTransformation",
+    "UuidStr",
     "WellAttribute",
     "ZarrPath",
+    "new_id",
 ]

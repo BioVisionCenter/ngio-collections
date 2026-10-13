@@ -1,13 +1,14 @@
 """Read with `open` / `open_inlined`, write with `create` / `save_inlined`, `delete`.
 
-`open()` reads one document; cross-document children stay reference stubs and the
-tree is editable + writable single-document with `save()`. `open_inlined()`
-resolves references across boundaries into a read-only tree (a stub's attributes
-overlay its target, stub wins); `save_inlined()` snapshots that resolved tree to
+`open()` reads one document; cross-document children stay `{type, ref, path}`
+references and the tree is editable + writable single-document with `save()`.
+`open_inlined()` resolves references across boundaries into a read-only tree:
+each reference is replaced by the node it points at, verbatim (a reference has
+no name or body of its own). `save_inlined()` snapshots that resolved tree to
 one self-contained file. `delete()` removes a node's document from disk.
 
 Documents compose bottom-up: `create()` hands back a reference stub `Node` you
-decorate and attach to a parent with `add_ref`.
+attach to a parent with `add_ref`.
 
 Run with: pixi run python examples/ops_io.py
 """
@@ -15,6 +16,9 @@ Run with: pixi run python examples/ops_io.py
 from pathlib import Path
 
 import ngio_collections as ngc
+
+ROOT = "0192f3a0-e000-7000-8000-000000000031"
+IMAGE = "0192f3a0-e000-7000-8000-000000000032"
 
 
 def _state(node: ngc.Node) -> str:
@@ -26,29 +30,26 @@ def main() -> None:
     url = str(base_path / "collection.json")
 
     # Write a child image document; create() hands back a reference stub.
-    image = ngc.new_node(
-        "multiscale", id="image", name="image", attributes={"role": "raw"}
-    )
+    image = ngc.new_node("multiscale", id=IMAGE, name="image", attributes={"role": "raw"})
     rf_image = ngc.create(str(base_path / "image.zarr"), image, overwrite=True)
 
-    # Decorate the stub with an overlay the parent layers onto the child on read,
-    # then attach it to a detached parent. Paths are relativized when written.
-    rf_image = rf_image.set_attrs({"in_collection": True})
-    root = ngc.new_node("collection", id="root", name="root").add_ref(rf_image)
+    # Attach it to a detached parent. Paths are relativized when written.
+    root = ngc.new_node("collection", id=ROOT, name="root").add_ref(rf_image)
     ngc.create(url, root, overwrite=True)
 
-    # open(): cross-document children stay references.
+    # open(): cross-document children stay references (no id of their own).
     print("open():")
     for node in ngc.open(url).walk():
-        print(f"  {str(node.id):<8} {_state(node):<9} {type(node).__name__}")
+        label = node.name if node.id else f"-> {node.ref_path}"
+        print(f"  {label:<16} {_state(node):<9} {type(node).__name__}")
 
-    # open_inlined(): references resolved by id; stub attributes overlay (win).
+    # open_inlined(): references resolved by id into the declared nodes.
     print("open_inlined():")
     view = ngc.open_inlined(url)
     for node in view.walk():
-        print(f"  {str(node.id):<8} {_state(node):<9} {type(node).__name__}")
-    print("  image attributes:", view.find("image").attributes)
-    print("  image ref():", view.find("image").ref().model_dump())
+        print(f"  {node.name:<16} {_state(node):<9} {type(node).__name__}")
+    print("  image attributes:", view.find(IMAGE).attributes)
+    print("  image ref():", view.find(IMAGE).ref().model_dump(exclude_none=True))
 
     # save_inlined(): flatten the resolved tree into one self-contained file.
     flat_url = str(base_path / "flat.json")
@@ -57,7 +58,7 @@ def main() -> None:
     print(Path(flat_url).read_text())
 
     # delete(): remove the image document from disk (it roots its own file).
-    deleted = ngc.delete(view.find("image"))
+    deleted = ngc.delete(view.find(IMAGE))
     print("deleted:", deleted)
 
 

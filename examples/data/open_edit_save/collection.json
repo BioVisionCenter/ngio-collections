@@ -2,26 +2,22 @@
   "ome": {
     "version": "0.x",
     "type": "collection",
+    "id": "0192f3a0-e000-7000-8000-000000000021",
     "name": "experiment",
-    "id": "root",
     "nodes": [
       {
         "type": "multiscale",
+        "id": "0192f3a0-e000-7000-8000-000000000022",
         "name": "image",
-        "id": "image",
-        "attributes": {
-          "role": "raw",
-          "channel": "DAPI"
-        },
+        "role": "raw",
+        "channel": "DAPI",
         "nodes": []
       },
       {
         "type": "multiscale",
+        "id": "0192f3a0-e000-7000-8000-000000000023",
         "name": "Nuclei segmentation",
-        "id": "nuclei",
-        "attributes": {
-          "role": "label"
-        },
+        "role": "label",
         "nodes": []
       }
     ]

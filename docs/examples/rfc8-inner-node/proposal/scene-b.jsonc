@@ -18,7 +18,7 @@
         "nodes": [
           { "type": "multiscale",
             "ref": "0192f3a0-b000-7000-8000-0000000000b2",    // = image-b.jsonc root
-            "path": { "type": "zarr", "format": "relative", "href": "./image-b" } }
+            "path": { "type": "zarr", "format": "relative", "href": "../image-b" } }
         ]
       }
     ]

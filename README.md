@@ -24,9 +24,9 @@ Specifically, this repository exists to validate:
 - that RFC-8 collections remain tractable at scale (target: 1M-node
   collections).
 
-Findings — including deliberate deviations from the spec (see
-[Discrepancy with RFC-8](#discrepancy-with-rfc-8)) — are meant to be fed
-back into RFC-8 discussions.
+Findings — including the shapes this branch targets ahead of the text (see
+[Targets the Fall 2026 proposal](#targets-the-fall-2026-proposal)) — are
+meant to be fed back into RFC-8 discussions.
 
 ### Non-goals
 
@@ -78,11 +78,15 @@ import from them at your own risk. If something you legitimately need is not
 re-exported at the top level, that is a bug worth reporting rather than a
 reason to deep-import.
 
-## Discrepancy with RFC-8
+## Targets the Fall 2026 proposal
 
-- **`id` is required.** RFC-8 makes `id` optional on every node; this package
-  requires it on all nodes. Ids are the primary handle this package uses for
-  addressing and merging nodes (`find()`, `Resolver.inline()`,
-  `ReferenceObj`).
-- **`name` is optional**, while RFC-8 makes it required. Moreover, this package 
-  does not enforce uniqueness of names within a collection, while RFC-8 does.
+This branch implements the shapes of the Fall 2026 RFC-8 revision proposal
+(deck `2026-09-30 rfc8_revisions`, slides 5-7) rather than the published
+RFC-8 text: every node declares a UUID `id`; a `nodes` entry that points at
+another node is `{type, ref, path?}` and carries nothing else; paths are
+`{type, format, href}`; a multiscale is a leaf whose `scales` live in its
+body; a `ref` with a `path` reaches an *inner* node of the document at
+`path`. The scope, the decisions taken, and what is deliberately left out
+(traits, `legacy_multiscale`, consolidated metadata) are in
+[docs/rfc8-proposal-poc-plan.md](docs/rfc8-proposal-poc-plan.md); the
+worked example is `docs/examples/rfc8-inner-node/proposal/`.

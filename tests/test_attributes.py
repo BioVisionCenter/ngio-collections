@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from conftest import uid
 from ngio_collections.models._references import ReferenceObj
 from ngio_collections.models.attributes import (
     CoordinateSystemsAttribute,
@@ -37,8 +38,31 @@ def test_plate_requires_columns_and_rows() -> None:
 
 
 def test_well_carries_reference_objects() -> None:
-    well = WellAttribute.model_validate({"column": {"id": "c1"}, "row": {"id": "r1"}})
-    assert isinstance(well.column, ReferenceObj) and well.column.id == "c1"
+    well = WellAttribute.model_validate(
+        {
+            "column": {"type": "column", "ref": uid("c1")},
+            "row": {"type": "row", "ref": uid("r1")},
+        }
+    )
+    assert isinstance(well.column, ReferenceObj) and well.column.ref == uid("c1")
+    assert well.column.type == "column" and well.column.path is None
+
+
+def test_reference_obj_requires_type_and_a_uuid_ref() -> None:
+    with pytest.raises(ValidationError):
+        ReferenceObj.model_validate({"ref": uid("x")})  # no type
+    with pytest.raises(ValidationError):
+        ReferenceObj.model_validate({"type": "multiscale", "ref": "image"})
+    with pytest.raises(ValidationError):
+        ReferenceObj.model_validate({"type": "multiscale", "ref": uid("x").upper()})
+    ref = ReferenceObj.model_validate(
+        {
+            "type": "multiscale",
+            "ref": uid("x"),
+            "path": {"type": "zarr", "format": "relative", "href": "./image"},
+        }
+    )
+    assert ref.path is not None and ref.path.href == "./image"
 
 
 def test_coordinate_systems_list_attribute_and_typed_axes() -> None:
@@ -66,8 +90,8 @@ def test_scene_with_nested_typed_transformations() -> None:
             "coordinateTransformations": [
                 {
                     "type": "sequence",
-                    "input": {"id": "cs0"},
-                    "output": {"id": "cs1"},
+                    "input": {"type": "coordinate_system", "ref": uid("cs0")},
+                    "output": {"type": "coordinate_system", "ref": uid("cs1")},
                     "transformations": [
                         {"type": "scale", "scale": [1.0, 1.0]},
                         {"type": "translation", "translation": [0.0, 5.0]},
@@ -78,6 +102,7 @@ def test_scene_with_nested_typed_transformations() -> None:
     )
     seq = scene.coordinate_transformations[0]
     assert isinstance(seq, SequenceTransformation)
+    assert seq.input is not None and seq.input.ref == uid("cs0")
     assert isinstance(seq.transformations[0], ScaleTransformation)
     assert seq.transformations[0].scale == [1.0, 1.0]
     assert isinstance(seq.transformations[1], TranslationTransformation)
@@ -87,7 +112,11 @@ def test_unknown_transformation_falls_back_to_custom_and_round_trips() -> None:
     systems = CoordinateSystemsAttribute.model_validate([])  # sanity: empty list ok
     assert systems.root == []
     transform = CustomTransformation.model_validate(
-        {"type": "myorg:nonlinear", "input": {"id": "a"}, "warp": [1, 2, 3]}
+        {
+            "type": "myorg:nonlinear",
+            "input": {"type": "coordinate_system", "ref": uid("a")},
+            "warp": [1, 2, 3],
+        }
     )
     assert transform.type == "myorg:nonlinear"
     assert transform.warp == [1, 2, 3]  # extra="allow" keeps unknown fields

@@ -2,17 +2,14 @@
   "ome": {
     "version": "0.x",
     "type": "collection",
+    "id": "0192f3a0-e000-7000-8000-000000000031",
     "name": "root",
-    "id": "root",
     "nodes": [
       {
         "type": "multiscale",
+        "id": "0192f3a0-e000-7000-8000-000000000032",
         "name": "image",
-        "id": "image",
-        "attributes": {
-          "role": "raw",
-          "in_collection": true
-        },
+        "role": "raw",
         "nodes": []
       }
     ]

@@ -1,8 +1,8 @@
 """`NodeTree`: the immutable indexed graph that is the v5 in-memory model.
 
 A `NodeTree` is a value: a persistent `NodeId → NodeRecord` map plus two derived
-indices, `by_local_id` (every node carrying a given local `id`) and `refs` (every
-node that points at a given id). Because parents hold child *keys*, editing a
+indices, `by_local_id` (every declaration carrying a given `id`) and `refs` (every
+reference that points at a given id). Because parents hold child *keys*, editing a
 node's data is one map write that leaves all ancestors untouched, and `find` is an
 index lookup rather than a tree walk.
 
@@ -58,11 +58,14 @@ def _index_remove(
 
 def _ref_key(record: NodeRecord) -> str | None:
     """The id this record references, or `None` if it is not a reference."""
-    return record.ref.id if record.ref is not None else None
+    return record.ref.ref if record.ref is not None else None
 
 
 def _segment_for(siblings: tuple[NodeId, ...], record: NodeRecord) -> str:
-    """Pick a path segment unique among `siblings` (prefer the local id)."""
+    """Pick a path segment unique among `siblings` (prefer the declared id).
+
+    A reference record has no id and always gets a positional segment.
+    """
     taken = {sib[-1] for sib in siblings}
     if record.id is not None and record.id not in taken:
         return record.id

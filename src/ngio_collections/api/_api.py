@@ -89,21 +89,31 @@ def _ref_url(ref: ReferenceObj, base_url: str | None) -> str:
 
     Raises:
         NodeStateError: If `ref` carries no path (an intra-document reference);
-            locate it locally on the owning tree with `node.find(ref.id)`.
+            locate it locally on the owning tree with `node.find(ref.ref)`.
     """
     if ref.path is None:
         raise NodeStateError(
-            f"reference to {ref.id!r} has no path; it points within its own "
-            "document — locate it locally with node.find(ref.id)"
+            f"reference to {ref.ref!r} has no path; it points within its own "
+            "document — locate it locally with node.find(ref.ref)"
         )
     return ref.path.resolve(base_url)
 
 
 def _locate(root: Node, ref: ReferenceObj, url: str) -> Node:
-    """Find the node `ref.id` within the tree at `root`, or raise."""
-    node = root.find(ref.id)
+    """Find the node declaring `ref.ref` within the tree at `root`, or raise.
+
+    Raises:
+        LookupError: If no node in the document declares that id.
+        TypeError: If the found node's type differs from `ref.type`.
+    """
+    node = root.find(ref.ref)
     if node is None:
-        raise LookupError(f"no node with id {ref.id!r} in document {url!r}")
+        raise LookupError(f"no node declares id {ref.ref!r} in document {url!r}")
+    if node.type != ref.type:
+        raise TypeError(
+            f"reference type {ref.type!r} does not match node {ref.ref!r} of "
+            f"type {node.type!r} in document {url!r}"
+        )
     return node
 
 
@@ -116,14 +126,15 @@ async def open_ref(
 
     Resolves `ref.path` (relative paths join against `base_url`, the URL of the
     document the reference was read from), opens that document with cross-document
-    children left as reference stubs, and returns the handle for the node whose
-    local id is `ref.id`. Call `.subtree()` on the result to detach it into its
-    own tree.
+    children left as reference stubs, and returns the handle for the node that
+    declares `ref.ref` (anywhere in that document, its root included). Call
+    `.subtree()` on the result to detach it into its own tree.
 
     Raises:
         NodeStateError: If `ref` carries no path (an intra-document reference).
         FileNotFoundError: If no document exists at the resolved URL.
-        LookupError: If `ref.id` is not found in that document.
+        LookupError: If `ref.ref` is not declared in that document.
+        TypeError: If the declared node's type differs from `ref.type`.
     """
     store = _store(store)
     url = _ref_url(ref, base_url)
@@ -142,12 +153,13 @@ async def open_inlined_ref(
 
     Like `open_ref`, but resolves the target document's own cross-document
     references into one read-only tree (see `open_inlined`) before locating
-    `ref.id`.
+    `ref.ref`.
 
     Raises:
         NodeStateError: If `ref` carries no path (an intra-document reference).
         FileNotFoundError: If no document exists at the resolved URL.
-        LookupError: If `ref.id` is not found in that document.
+        LookupError: If `ref.ref` is not declared in that document.
+        TypeError: If the declared node's type differs from `ref.type`.
     """
     store = _store(store)
     url = _ref_url(ref, base_url)
@@ -311,9 +323,7 @@ async def externalize(
     )
     stub = NodeRecord(
         type=node.type,
-        id=node.id,
-        name=node.name,
-        ref=Reference(path=reference_path(url), id=node.id),
+        ref=Reference(ref=node.require_id(), path=reference_path(url)),
         origin_url=home_url,
     )
     root = wrap_node(node.tree.replace(node.node_id, stub), ROOT)
@@ -325,22 +335,26 @@ async def delete(node: Node, store: AnyReadableStore | None = None) -> list[str]
     """Remove `node` from its on-disk document, unlinking the file if left empty.
 
     Operates on the node's *origin* document (re-read fresh), locating the node by
-    its local id — so it is correct for an inlined node too, whose in-memory
+    its declared id — so it is correct for an inlined node too, whose in-memory
     position is not its document position. If the node is its document's root, the
     file is deleted. Idempotent.
 
     Raises:
-        NodeStateError: If `node` is detached, or carries no id to locate it by.
+        NodeStateError: If `node` is detached, or is a reference (a reference
+            owns no document; `remove()` it from its parent and `save()`).
     """
     store = _store(store)
     if node.is_detached:
         raise NodeStateError("node is detached; there is nothing on disk to delete")
-    if node.id is None:
-        raise NodeStateError("node has no id; it cannot be located in its document")
+    if node.is_reference:
+        raise NodeStateError(
+            "node is a reference and owns no document; remove() it from its "
+            "parent and save() instead"
+        )
     url = node.document_url
     assert url is not None
     doc_tree = build(url, await fetch_all(url, store, depth=0), inline=False)
-    matches = doc_tree.find(node.id)
+    matches = doc_tree.find(node.require_id())
     if not matches:
         return []
     target = matches[0]

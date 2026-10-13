@@ -8,9 +8,16 @@ async shell and the pure core agree.
 from __future__ import annotations
 
 import pytest
+from conftest import uid
 
 from ngio_collections.graph import ROOT
-from ngio_collections.resolve import Document, build, fetch_all, reference_targets
+from ngio_collections.resolve import (
+    Document,
+    build,
+    fetch_all,
+    payload,
+    reference_targets,
+)
 
 DATA = "/data"
 
@@ -20,88 +27,143 @@ def _doc(name: str, root: dict) -> Document:
     return Document(url=f"{DATA}/{name}.json", kind="json", root=root)
 
 
-def _stub(name: str, target: str, **extra: object) -> dict:
-    """A cross-document stub node dict pointing at ./<target>.json."""
+def _path(target: str) -> dict:
+    return {"type": "json", "format": "relative", "href": f"./{target}.json"}
+
+
+def _ref(target_id: str, target: str | None = None, type: str = "multiscale") -> dict:
+    """A reference entry pointing at `target_id`, inside ./<target>.json if given."""
+    entry: dict = {"type": type, "ref": uid(target_id)}
+    if target is not None:
+        entry["path"] = _path(target)
+    return entry
+
+
+def _collection(*children: dict, id: str = "root", **body: object) -> dict:
+    """A collection declaration wrapping `children`."""
     return {
-        "type": "multiscale",
-        "name": name,
-        "path": {"type": "json", "path": f"./{target}.json"},
-        **extra,
+        "type": "collection",
+        "id": uid(id),
+        "name": id,
+        **body,
+        "nodes": list(children),
     }
 
 
-def _collection_with(*children: dict, id: str = "root") -> dict:
-    """A collection root node dict wrapping `children`."""
-    return {"type": "collection", "id": id, "name": id, "nodes": list(children)}
-
-
-def _image(id: str = "image", **attrs: object) -> dict:
-    """A materialized multiscale node dict (the usual reference target)."""
-    return {"type": "multiscale", "id": id, "attributes": dict(attrs)}
+def _image(id: str = "image", **body: object) -> dict:
+    """A multiscale declaration (a leaf; its body holds e.g. `scales`)."""
+    return {"type": "multiscale", "id": uid(id), **body}
 
 
 # --------------------------------------------------------------------------- #
-# build: non-inline keeps stubs as references
+# build: declarations vs references
 # --------------------------------------------------------------------------- #
 
 
-def test_open_leaves_stub_as_reference() -> None:
-    entry = _doc("collection", _collection_with(_stub("img", "image")))
-    docs = {entry.url: entry}
-    c = build(entry.url, docs, inline=False)
+def test_open_leaves_reference_in_place() -> None:
+    entry = _doc("collection", _collection(_ref("image", "image")))
+    c = build(entry.url, {entry.url: entry}, inline=False)
     (key,) = c.children_ids(ROOT)
     rec = c.record(key)
     assert rec.is_reference and rec.ref is not None
-    assert rec.ref.path.path == "./image.json"
+    assert rec.ref.ref == uid("image")
+    assert rec.ref.path is not None and rec.ref.path.href == "./image.json"
+    assert rec.id is None and rec.name is None and not rec.attributes
     assert c.mode == "editable"
 
 
+def test_body_is_every_non_structural_key() -> None:
+    root = _collection(
+        _image(scales=[{"id": uid("s0")}], coordinate_systems=[], traits=[]),
+        traits=[{"kind": "x"}],
+    )
+    entry = _doc("collection", root)
+    c = build(entry.url, {entry.url: entry}, inline=False)
+    assert dict(c.record(ROOT).attributes) == {"traits": [{"kind": "x"}]}
+    (img,) = c.children_ids(ROOT)
+    rec = c.record(img)
+    assert rec.is_leaf and list(rec.attributes) == ["scales", "coordinate_systems", "traits"]
+    assert rec.id == uid("image")
+
+
+@pytest.mark.parametrize("on_error", ["skip", "raise"])
+def test_both_or_neither_of_id_and_ref_is_a_document_error(on_error) -> None:
+    both = {"type": "multiscale", "id": uid("a"), "ref": uid("b"), "path": _path("x")}
+    neither = {"type": "multiscale", "name": "anonymous"}
+    for bad in (both, neither):
+        entry = _doc("collection", _collection(bad))
+        for inline in (False, True):
+            with pytest.raises(ValueError):
+                build(entry.url, {entry.url: entry}, inline=inline, on_error=on_error)
+
+
+def test_bare_ref_is_left_in_place_and_serializes_back() -> None:
+    entry = _doc("collection", _collection(_image(), _ref("image")))
+    docs = {entry.url: entry}
+    for inline in (False, True):
+        c = build(entry.url, docs, inline=inline, on_error="raise")
+        img, bare = c.children_ids(ROOT)
+        assert c.record(img).is_leaf
+        rec = c.record(bare)
+        assert rec.is_reference and rec.ref is not None and rec.ref.path is None
+        assert c.referrers(uid("image")) == (bare,)
+    body = payload(c, base_url=entry.url)
+    assert body["nodes"][1] == {"type": "multiscale", "ref": uid("image")}
+
+
 # --------------------------------------------------------------------------- #
-# build: inline splices the target in, with overlay + name fallback
+# build: inline splices the found declaration in, verbatim
 # --------------------------------------------------------------------------- #
 
 
 def _inline_fixture() -> dict[str, Document]:
-    entry = _doc(
-        "collection",
-        _collection_with(_stub("img", "image", attributes={"role": "raw"})),
-    )
-    target = _doc("image", _image(role="target", extra=1))
+    entry = _doc("collection", _collection(_ref("image", "image")))
+    target = _doc("image", _image(name="Image", role="target", extra=1))
     return {entry.url: entry, target.url: target}
 
 
-def test_open_inlined_merges_target_root() -> None:
+def test_open_inlined_splices_the_declaration() -> None:
     docs = _inline_fixture()
     c = build(f"{DATA}/collection.json", docs, inline=True)
     (key,) = c.children_ids(ROOT)
     rec = c.record(key)
-    assert rec.name == "img"  # target has no name -> falls back to the stub
-    assert not rec.is_reference
-    assert rec.type == "multiscale" and rec.id == "image"
-    assert dict(rec.attributes) == {"role": "raw", "extra": 1}  # stub wins
+    assert not rec.is_reference and rec.is_leaf
+    assert rec.type == "multiscale" and rec.id == uid("image")
+    assert rec.name == "Image"  # the referenced node brings its own name
+    assert dict(rec.attributes) == {"role": "target", "extra": 1}  # ... and body
     assert rec.origin_url == f"{DATA}/image.json"
+    assert c.find(uid("image")) == (key,) and c.referrers(uid("image")) == ()
     assert c.mode == "resolved"
 
 
-def test_inlined_boundary_node_retains_the_collapsed_edge() -> None:
-    docs = _inline_fixture()
-    c = build(f"{DATA}/collection.json", docs, inline=True)
+def test_ref_with_path_reaches_an_inner_node() -> None:
+    inner = _collection(_image("deep"), id="crop", traits=["t"])
+    scene = _doc("scene", _collection(inner, id="scene"))
+    entry = _doc("entry", _collection(_ref("crop", "scene", type="collection")))
+    docs = {entry.url: entry, scene.url: scene}
+    c = build(entry.url, docs, inline=True, on_error="raise")
+    (crop_key,) = c.children_ids(ROOT)
+    crop = c.record(crop_key)
+    assert crop.id == uid("crop") and crop.name == "crop" and crop.is_branch
+    assert dict(crop.attributes) == {"traits": ["t"]}
+    assert crop.origin_url == scene.url
+    (deep_key,) = c.children_ids(crop_key)
+    assert c.record(deep_key).id == uid("deep")
+    assert c.find(uid("scene")) == ()  # the scene root itself was not mounted
+
+
+def test_lookup_is_not_transitive_through_references() -> None:
+    # entry -> scene, which only *references* image; `ref` to image's id via
+    # scene must not crawl into image.json.
+    scene = _doc("scene", _collection(_ref("image", "image"), id="scene"))
+    image = _doc("image", _image())
+    entry = _doc("entry", _collection(_ref("image", "scene")))
+    docs = {entry.url: entry, scene.url: scene, image.url: image}
+    c = build(entry.url, docs, inline=True)
     (key,) = c.children_ids(ROOT)
-    edge = c.record(key).edge
-    # the stub's own pre-merge values survive, so the merge is invertible
-    assert edge is not None
-    assert edge.ref.path.path == "./image.json" and edge.ref.id is None
-    assert dict(edge.attributes) == {"role": "raw"}  # stub overlay only
-    assert edge.name == "img"
-    assert edge.origin_url == f"{DATA}/collection.json"  # declaring document
-    # non-boundary nodes carry no edge
-    assert c.record(ROOT).edge is None
-
-
-def test_materialized_and_reference_records_have_no_edge() -> None:
-    entry = _doc("collection", _collection_with(_stub("img", "image"), _image()))
-    c = build(entry.url, {entry.url: entry}, inline=False)
-    assert all(c.record(k).edge is None for k in c.walk())
+    assert c.record(key).is_reference
+    with pytest.raises(LookupError):
+        build(entry.url, docs, inline=True, on_error="raise")
 
 
 def test_depth_zero_disables_inlining() -> None:
@@ -112,7 +174,7 @@ def test_depth_zero_disables_inlining() -> None:
 
 
 def test_missing_target_skips_or_raises() -> None:
-    entry = _doc("collection", _collection_with(_stub("img", "image")))
+    entry = _doc("collection", _collection(_ref("image", "image")))
     docs = {entry.url: entry}  # target image.json not fetched
     skipped = build(entry.url, docs, inline=True, on_error="skip")
     (key,) = skipped.children_ids(ROOT)
@@ -121,9 +183,20 @@ def test_missing_target_skips_or_raises() -> None:
         build(entry.url, docs, inline=True, on_error="raise")
 
 
+def test_unknown_ref_skips_or_raises() -> None:
+    entry = _doc("collection", _collection(_ref("absent", "image")))
+    target = _doc("image", _image())
+    docs = {entry.url: entry, target.url: target}
+    skipped = build(entry.url, docs, inline=True)
+    (key,) = skipped.children_ids(ROOT)
+    assert skipped.record(key).is_reference
+    with pytest.raises(LookupError):
+        build(entry.url, docs, inline=True, on_error="raise")
+
+
 def test_type_mismatch_skips_or_raises() -> None:
-    entry = _doc("collection", _collection_with(_stub("img", "image")))
-    target = _doc("image", {"type": "collection", "id": "image"})  # not multiscale
+    entry = _doc("collection", _collection(_ref("image", "image")))
+    target = _doc("image", {"type": "collection", "id": uid("image"), "nodes": []})
     docs = {entry.url: entry, target.url: target}
     skipped = build(entry.url, docs, inline=True)
     (key,) = skipped.children_ids(ROOT)
@@ -132,31 +205,15 @@ def test_type_mismatch_skips_or_raises() -> None:
         build(entry.url, docs, inline=True, on_error="raise")
 
 
-def test_payload_free_target_is_a_terminal_leaf() -> None:
-    # RFC-8's inlined singlescale: the stub carries its own attributes and its
-    # `path` locates a plain Zarr array, so there is nothing to inline and nothing
-    # wrong. Contrast test_missing_target_skips_or_raises: absent != payload-free.
-    attrs = {"coordinateTransformations": [1]}
-    stub = _stub("s0", "s0", type="singlescale", attributes=attrs)
-    entry = _doc("collection", _collection_with(stub))
+def test_payload_free_target_is_unresolvable() -> None:
+    # A plain Zarr array has no `ome` payload, hence declares nothing.
+    entry = _doc("collection", _collection(_ref("s0", "s0")))
     target = Document(url=f"{DATA}/s0.json", kind="json", root={}, has_payload=False)
     docs = {entry.url: entry, target.url: target}
-    for on_error in ("skip", "raise"):
-        c = build(entry.url, docs, inline=True, on_error=on_error)
-        (key,) = c.children_ids(ROOT)
-        record = c.record(key)
-        assert record.is_reference
-        assert record.ref is not None and record.ref.path.path == "./s0.json"
-        assert record.attributes == attrs
-
-
-def test_present_but_typeless_payload_still_raises() -> None:
-    # An `ome` key that is present but carries no `type` is malformed, not data:
-    # it must keep reaching the type check rather than being silently skipped.
-    entry = _doc("collection", _collection_with(_stub("img", "image")))
-    target = _doc("image", {})  # `ome` present, `version` stripped, no `type`
-    docs = {entry.url: entry, target.url: target}
-    with pytest.raises(TypeError):
+    c = build(entry.url, docs, inline=True, on_error="skip")
+    (key,) = c.children_ids(ROOT)
+    assert c.record(key).is_reference
+    with pytest.raises(LookupError):
         build(entry.url, docs, inline=True, on_error="raise")
 
 
@@ -170,57 +227,28 @@ def test_payload_free_entry_document_raises() -> None:
         build(doc.url, {doc.url: doc}, inline=False)
 
 
-def test_cycle_terminates_and_leaves_stub() -> None:
-    entry = _doc(
-        "collection",
-        {
-            "type": "collection",
-            "id": "root",
-            "name": "root",
-            "nodes": [
-                {
-                    "type": "collection",
-                    "name": "a",
-                    "path": {"type": "json", "path": "./a.json"},
-                }
-            ],
-        },
-    )
-    a = _doc(
-        "a",
-        {
-            "type": "collection",
-            "id": "a",
-            "name": "a",
-            "nodes": [
-                {
-                    "type": "collection",
-                    "name": "back",
-                    "path": {"type": "json", "path": "./collection.json"},
-                }
-            ],
-        },
-    )
+def test_cycle_terminates_and_leaves_reference() -> None:
+    entry = _doc("collection", _collection(_ref("a", "a", type="collection")))
+    a = _doc("a", _collection(_ref("root", "collection", type="collection"), id="a"))
     docs = {entry.url: entry, a.url: a}
     c = build(entry.url, docs, inline=True)
     (a_key,) = c.children_ids(ROOT)
-    assert c.record(a_key).id == "a"  # a inlined
+    assert c.record(a_key).id == uid("a")  # a inlined
     (back_key,) = c.children_ids(a_key)
-    assert c.record(back_key).is_reference  # the cycle back to entry stays a stub
+    assert c.record(back_key).is_reference  # the cycle back to entry stays
 
 
 def test_same_document_inlined_twice_yields_distinct_pristine_nodes() -> None:
     entry = _doc(
-        "collection",
-        _collection_with(_stub("one", "image"), _stub("two", "image")),
+        "collection", _collection(_ref("image", "image"), _ref("image", "image"))
     )
     target = _doc("image", _image())
     docs = {entry.url: entry, target.url: target}
     c = build(entry.url, docs, inline=True)
     a, b = c.children_ids(ROOT)
     assert a != b
-    assert set(c.find("image")) == {a, b}  # both materialized, id never rewritten
-    assert c.record(a).id == c.record(b).id == "image"
+    assert set(c.find(uid("image"))) == {a, b}  # both materialized, id never rewritten
+    assert c.record(a).id == c.record(b).id == uid("image")
 
 
 # --------------------------------------------------------------------------- #
@@ -248,7 +276,7 @@ def _store(*docs: Document) -> _MemoryStore:
 
 
 async def test_fetch_all_gathers_transitive_documents() -> None:
-    entry = _doc("collection", _collection_with(_stub("img", "image")))
+    entry = _doc("collection", _collection(_ref("image", "image")))
     target = _doc("image", _image())
     store = _store(entry, target)
     docs = await fetch_all(entry.url, store)
@@ -256,10 +284,7 @@ async def test_fetch_all_gathers_transitive_documents() -> None:
 
 
 async def test_fetch_then_build_matches_manual_docs() -> None:
-    entry = _doc(
-        "collection",
-        _collection_with(_stub("img", "image", attributes={"role": "raw"})),
-    )
+    entry = _doc("collection", _collection(_ref("image", "image")))
     target = _doc("image", _image(role="target", extra=1))
     fetched = await fetch_all(entry.url, _store(entry, target))
     manual = {entry.url: entry, target.url: target}
@@ -271,15 +296,21 @@ async def test_fetch_then_build_matches_manual_docs() -> None:
 
 
 async def test_fetch_all_depth_zero_reads_only_entry() -> None:
-    entry = _doc("collection", _collection_with(_stub("img", "image")))
+    entry = _doc("collection", _collection(_ref("image", "image")))
     target = _doc("image", _image())
     docs = await fetch_all(entry.url, _store(entry, target), depth=0)
     assert set(docs) == {entry.url}
 
 
-def test_reference_targets_lists_outgoing_urls() -> None:
+def test_reference_targets_lists_outgoing_urls_not_body_paths() -> None:
     entry = _doc(
-        "collection", _collection_with(_stub("a", "image"), _stub("b", "labels"))
+        "collection",
+        _collection(
+            _ref("a", "image"),
+            _ref("b", "labels"),
+            _ref("c"),  # bare ref: nothing to fetch
+            _image(scales=[{"id": uid("s0"), "path": _path("s0")}]),  # body path
+        ),
     )
     assert set(reference_targets(entry)) == {
         f"{DATA}/image.json",

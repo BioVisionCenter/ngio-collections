@@ -26,7 +26,8 @@ class _TransformationBase(BaseObj):
 
     `input` / `output` are optional because transforms wrapped inside
     `sequence` / `bijection` / `byDimension` omit them. They carry the RFC-8
-    reference shape (`id` + optional `path`), not RFC-5's bare name string.
+    reference shape (`type` + `ref` + optional `path`), not RFC-5's bare name
+    string.
     """
 
     name: str | None = None
