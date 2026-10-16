@@ -1,0 +1,87 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "name": "plate",
+    "id": "plate",
+    "attributes": {
+      "plate": {
+        "columns": [
+          {
+            "name": "1"
+          },
+          {
+            "name": "2"
+          },
+          {
+            "name": "3"
+          }
+        ],
+        "rows": [
+          {
+            "name": "A"
+          },
+          {
+            "name": "B"
+          }
+        ]
+      }
+    },
+    "nodes": [
+      {
+        "type": "collection",
+        "name": "wellA1",
+        "id": "wellA1",
+        "path": {
+          "type": "zarr",
+          "path": "./wells/A/1.zarr"
+        }
+      },
+      {
+        "type": "collection",
+        "name": "wellB1",
+        "id": "wellB1",
+        "path": {
+          "type": "zarr",
+          "path": "./wells/B/1.zarr"
+        }
+      },
+      {
+        "type": "collection",
+        "name": "wellB2",
+        "id": "wellB2",
+        "path": {
+          "type": "zarr",
+          "path": "./wells/B/2.zarr"
+        }
+      },
+      {
+        "type": "collection",
+        "name": "wellA2",
+        "id": "wellA2",
+        "path": {
+          "type": "zarr",
+          "path": "./wells/A/2.zarr"
+        }
+      },
+      {
+        "type": "collection",
+        "name": "wellA3",
+        "id": "wellA3",
+        "path": {
+          "type": "zarr",
+          "path": "./wells/A/3.zarr"
+        }
+      },
+      {
+        "type": "collection",
+        "name": "wellB3",
+        "id": "wellB3",
+        "path": {
+          "type": "zarr",
+          "path": "./wells/B/3.zarr"
+        }
+      }
+    ]
+  }
+}
