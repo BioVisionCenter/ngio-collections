@@ -95,7 +95,7 @@ def build_collection(base_path: Path) -> ngc.Node:
         
         write_path = str(base_path / "wells" / (well_path + ".zarr"))
 
-        well_id = f"well{well_path.replace("/", "")}"
+        well_id = f"well{well_path.replace('/', '')}"
         well_collection_node = ngc.new_node("collection", id=well_id, name=well_id)
 
         well_url = plate_url + well_path + "/"

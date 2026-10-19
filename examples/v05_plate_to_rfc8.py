@@ -93,7 +93,7 @@ def build_collection() -> ngc.Node:
             continue
         if colname not in col_names:
             continue
-        well_id = f"well{well_path.replace("/", "")}"
+        well_id = f"well{well_path.replace('/', '')}"
         well_collection_node = ngc.new_node("collection", id=well_id, name=well_id)
 
         well_url = plate_url + well_path + "/"
