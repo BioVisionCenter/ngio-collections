@@ -170,7 +170,7 @@ class _Builder:
             traits=traits_from_list(node_dict.get("traits")),
             fields=_fields(node_dict),
             children=() if "nodes" in node_dict else None,
-            path=None if path is None else DocPath.model_validate(path),
+            path=None if path is None else DocPath.from_dict(path),
             origin_url=origin_url,
         )
 

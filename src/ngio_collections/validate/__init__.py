@@ -8,6 +8,12 @@ want explicitly, or one of the bundles: `CORE_VALIDATORS` (the revision's
 structural rules), `RECOMMENDED_VALIDATORS` (the recommended-tier traits) or
 `ALL_VALIDATORS` (both). `paths_are_core` is opt-in, since this package
 deliberately resolves every path format.
+
+The engine, the lenses and the structural validators run without pydantic. The
+lenses and the schema-shape checks (`multiscale_is_complete`,
+`scale_matches_axes`, `labels_source_resolves`, `trait_applies_to`) read
+through the pydantic value models and raise `ImportError` when run without the
+`validate` extra; the bundles themselves stay importable.
 """
 
 from __future__ import annotations
@@ -38,6 +44,7 @@ from ngio_collections.validate._structural import (
     references_resolve,
 )
 from ngio_collections.validate._views import (
+    TraitType,
     get_trait,
     has_trait,
     read_fields,
@@ -53,6 +60,7 @@ __all__ = [
     "ALL_VALIDATORS",
     "CORE_VALIDATORS",
     "RECOMMENDED_VALIDATORS",
+    "TraitType",
     "ValidationError",
     "ValidatorType",
     "extension_types_declared",

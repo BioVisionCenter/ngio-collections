@@ -23,7 +23,7 @@ from ngio_collections.io.store import (
     default_store,
 )
 from ngio_collections.io.store._adapt import as_async
-from ngio_collections.models._config import NodeStateError
+from ngio_collections.models._errors import NodeStateError
 from ngio_collections.models._manifest import ExtensionRegistry
 from ngio_collections.models._paths import ALL_FORMATS, DocPath, meta_url
 from ngio_collections.models._references import ReferenceObj

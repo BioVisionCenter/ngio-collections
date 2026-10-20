@@ -1,17 +1,24 @@
-"""Shared base for the OME value models.
+"""Shared base for the pydantic value models (the optional `validate` tier).
 
-`BaseObj` is the frozen Pydantic base for non-node OME value objects (paths,
-references, traits, declarations). RFC-8 revision 1 writes snake_case keys
+`BaseObj` is the frozen Pydantic base for non-node OME value objects (traits,
+declarations, transformations). RFC-8 revision 1 writes snake_case keys
 (`coordinate_systems`, `row_index`, …), so models serialize by field name; a
 camelCase spelling is still accepted on read so older documents can be
-inspected. `NodeStateError` flags a node that is in the wrong state for a
-requested operation. Pure data layer: no IO.
+inspected. `UuidStr` is the constrained id field those models use. This module
+imports pydantic at import time; the core never imports it.
 """
 
 from __future__ import annotations
 
-from pydantic import AliasChoices, AliasGenerator, BaseModel, ConfigDict
+from typing import Annotated
+
+from pydantic import AliasChoices, AliasGenerator, BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
+
+from ngio_collections.models._ids import UUID_PATTERN
+
+UuidStr = Annotated[str, Field(pattern=UUID_PATTERN)]
+"""A pydantic string field constrained to the canonical UUID form."""
 
 
 def _read_aliases(field_name: str) -> AliasChoices:
@@ -31,11 +38,3 @@ class BaseObj(BaseModel):
         extra="allow",
         frozen=True,
     )
-
-
-class NodeStateError(ValueError):
-    """A node is in the wrong state for the requested operation.
-
-    Subclasses `ValueError` so callers can keep catching `ValueError`. The
-    message points to the API that fits the node's actual state.
-    """

@@ -5,16 +5,16 @@ requires every extension a document uses to be declared in an
 `extension_manifest` under the `ome` key, so a reader can list the extensions
 and their schemas without a central registry. `ExtensionManifestEntry` is one
 such declaration; `ExtensionRegistry` is the process-wide table of entries a
-writer draws on to fill a document's manifest automatically. Pure data: no IO.
+writer draws on to fill a document's manifest automatically. Pure data: no IO,
+and no pydantic, since the write path derives manifests through these.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Iterable, Iterator, Mapping
 
-from pydantic import Field
-
-from ngio_collections.models._config import BaseObj
+from ngio_collections._types import JSONValue
 
 
 def is_extension_type(type_name: str) -> bool:
@@ -26,20 +26,112 @@ def is_extension_type(type_name: str) -> bool:
     return "://" in type_name
 
 
-class SchemaRef(BaseObj):
+@dataclass(frozen=True, kw_only=True)
+class SchemaRef:
     """One schema an extension publishes: its kind and where to fetch it."""
 
     type: str
     url: str
 
+    @classmethod
+    def from_dict(cls, data: Mapping[str, JSONValue] | SchemaRef) -> SchemaRef:
+        """Build a schema reference from its wire mapping (`{type, url}`).
 
-class ExtensionManifestEntry(BaseObj):
+        Raises:
+            ValueError: If `data` is not a mapping with string `type` and `url`.
+        """
+        if isinstance(data, SchemaRef):
+            return data
+        if not isinstance(data, Mapping):
+            raise ValueError(f"a schema reference must be a mapping, got {data!r}")
+        type_, url = data.get("type"), data.get("url")
+        if not isinstance(type_, str) or not isinstance(url, str):
+            raise ValueError(
+                f"schema reference {dict(data)!r} needs string `type` and `url`"
+            )
+        return cls(type=type_, url=url)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        """Return the wire form `{type, url}`."""
+        return {"type": self.type, "url": self.url}
+
+
+@dataclass(frozen=True, kw_only=True)
+class ExtensionManifestEntry:
     """One `extension_manifest` entry: the extension's id, version and schemas."""
 
     id: str
     version: str
-    schemas: list[SchemaRef] = Field(default_factory=list)
+    schemas: tuple[SchemaRef, ...] = ()
     homepage: str | None = None
+
+    def __post_init__(self) -> None:
+        """Check `id` / `version` are strings and coerce `schemas` to `SchemaRef`s.
+
+        Raises:
+            ValueError: If `id` or `version` is not a string, or a schema entry
+                is malformed.
+        """
+        if not isinstance(self.id, str) or not isinstance(self.version, str):
+            raise ValueError(
+                f"manifest entry needs string `id` and `version`, got "
+                f"{self.id!r} / {self.version!r}"
+            )
+        # Mappings are accepted for convenience and coerced to `SchemaRef`s.
+        object.__setattr__(
+            self, "schemas", tuple(SchemaRef.from_dict(s) for s in self.schemas)
+        )
+
+    @classmethod
+    def from_dict(
+        cls, data: Mapping[str, JSONValue] | ExtensionManifestEntry
+    ) -> ExtensionManifestEntry:
+        """Build an entry from its wire mapping (`{id, version, schemas?, homepage?}`).
+
+        Unknown keys are ignored. An `ExtensionManifestEntry` is returned as is.
+
+        Raises:
+            ValueError: If `data` is not a mapping or fails the field checks.
+        """
+        if isinstance(data, ExtensionManifestEntry):
+            return data
+        if not isinstance(data, Mapping):
+            raise ValueError(f"a manifest entry must be a mapping, got {data!r}")
+        if "id" not in data or "version" not in data:
+            raise ValueError(f"manifest entry {dict(data)!r} needs `id` and `version`")
+        id_, version = data["id"], data["version"]
+        if not isinstance(id_, str) or not isinstance(version, str):
+            raise ValueError(
+                f"manifest entry {dict(data)!r} needs string `id` and `version`"
+            )
+        schemas = data.get("schemas") or ()
+        if not isinstance(schemas, (list, tuple)):
+            raise ValueError(f"manifest `schemas` must be a list, got {schemas!r}")
+        refs: list[SchemaRef] = []
+        for item in schemas:
+            if not isinstance(item, Mapping):
+                raise ValueError(f"a schema reference must be a mapping, got {item!r}")
+            refs.append(SchemaRef.from_dict(item))
+        homepage = data.get("homepage")
+        if homepage is not None and not isinstance(homepage, str):
+            raise ValueError(f"manifest `homepage` must be a string, got {homepage!r}")
+        return cls(
+            id=id_,
+            version=version,
+            schemas=tuple(refs),
+            homepage=homepage,
+        )
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        """Return the wire form (`schemas` always, `homepage` only when set)."""
+        out: dict[str, JSONValue] = {
+            "id": self.id,
+            "version": self.version,
+            "schemas": [s.to_dict() for s in self.schemas],
+        }
+        if self.homepage is not None:
+            out["homepage"] = self.homepage
+        return out
 
     def covers(self, type_name: str) -> bool:
         """Return whether `type_name` is derived from this extension's `id`."""
@@ -101,13 +193,16 @@ def manifest_entries(
     uris = [t for t in dict.fromkeys(used_types) if is_extension_type(t)]
     out: list[dict] = []
     seen_ids: set[str] = set()
-    known_entries = [ExtensionManifestEntry.model_validate(k) for k in known]
+    # Known entries are kept as the dicts the document declared (lossless),
+    # paired with their parsed form for `covers` / `id`.
+    known_entries = [(ExtensionManifestEntry.from_dict(k), dict(k)) for k in known]
     for uri in uris:
-        hit = next((k for k in known_entries if k.covers(uri)), None)
+        hit = next((k for k, _ in known_entries if k.covers(uri)), None)
+        wire = next((d for k, d in known_entries if k is hit), None)
         if hit is None and registry is not None:
             hit = registry.lookup(uri)
         if hit is None or hit.id in seen_ids:
             continue
         seen_ids.add(hit.id)
-        out.append(hit.model_dump(mode="json", exclude_none=True))
+        out.append(wire if wire is not None else hit.to_dict())
     return out

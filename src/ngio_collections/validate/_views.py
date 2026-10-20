@@ -6,17 +6,24 @@ entry into the validated model on demand, operating on a `NodeRecord`. They are
 *composable*: a node carrying both `well` and `scene` answers `has_trait` for
 each, independently. `read_fields` does the same for node-type fields
 (`MultiscaleFields`).
+
+This module imports no pydantic: it only calls `trait_type()` / `model_validate`
+on the model *classes* the caller hands it, and those classes cannot exist
+without the `validate` extra installed.
 """
 
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from ngio_collections.graph import NodeRecord
-from ngio_collections.models._config import BaseObj
-from ngio_collections.models.traits import BaseTrait, TraitType
 
-ModelType = TypeVar("ModelType", bound=BaseObj)
+if TYPE_CHECKING:
+    from ngio_collections.models._config import BaseObj
+    from ngio_collections.models.traits import BaseTrait
+
+ModelType = TypeVar("ModelType", bound="BaseObj")
+TraitType = TypeVar("TraitType", bound="BaseTrait")
 
 
 def trait_key(trait: type[BaseTrait] | str) -> str:

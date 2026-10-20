@@ -10,11 +10,13 @@ from __future__ import annotations
 import json
 
 import pytest
-from pydantic import ValidationError
 
 import ngio_collections as ngc
 from ngio_collections.models._manifest import manifest_entries
 from tests.conftest import FIXTURES, mk
+
+# The whole module is about the typed models: skip it without pydantic.
+ValidationError = pytest.importorskip("pydantic").ValidationError
 
 
 def test_plate_trait_follows_the_revision_example() -> None:
@@ -92,17 +94,17 @@ def test_scene_trait_accepts_camel_case_and_writes_snake_case() -> None:
 
 def test_reference_obj_is_typed_uuid_and_closed() -> None:
     ref = ngc.ReferenceObj(type="scale", ref=mk(0xC))
-    assert ref.model_dump(mode="json", exclude_none=True) == {
+    assert ref.to_dict() == {
         "type": "scale",
         "ref": mk(0xC),
     }
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         ngc.ReferenceObj(type="scale", ref="s0")  # not a UUID
-    with pytest.raises(ValidationError):
-        ngc.ReferenceObj.model_validate({"type": "scale", "ref": mk(1), "name": "x"})
-    with pytest.raises(ValidationError):
-        ngc.ReferenceObj.model_validate({"type": "scale", "id": mk(1)})  # a declaration
-    with_path = ngc.ReferenceObj.model_validate(
+    with pytest.raises(ValueError):
+        ngc.ReferenceObj.from_dict({"type": "scale", "ref": mk(1), "name": "x"})
+    with pytest.raises(ValueError):
+        ngc.ReferenceObj.from_dict({"type": "scale", "id": mk(1)})  # a declaration
+    with_path = ngc.ReferenceObj.from_dict(
         {
             "type": "coordinate_system",
             "ref": mk(0x20),
@@ -188,3 +190,36 @@ def test_extension_manifest_registry_and_derivation() -> None:
     ]
     assert entries[0]["schemas"][0]["url"].endswith("schema.json")
     assert manifest_entries(["https://nobody.org/x"], registry=registry) == []
+
+
+def test_dataclass_locators_work_as_pydantic_fields() -> None:
+    """`DocPath` / `ReferenceObj` are stdlib dataclasses; pydantic coerces them."""
+    wire = {
+        "type": "scale",
+        "id": mk(0x30),
+        "path": {"type": "zarr", "format": "relative", "href": "./s0"},
+        "coordinate_transformations": [
+            {
+                "type": "scale",
+                "scale": [1.0, 2.0],
+                "input": {"type": "scale", "ref": mk(0x30)},
+                "output": {"type": "coordinate_system", "ref": mk(0x20)},
+            }
+        ],
+    }
+    scale = ngc.Scale.model_validate(wire)
+    assert isinstance(scale.path, ngc.DocPath) and scale.path.href == "./s0"
+    (transform,) = scale.coordinate_transformations
+    assert isinstance(transform.input, ngc.ReferenceObj)
+    assert transform.input.path is None
+    assert scale.model_dump(mode="json", exclude_none=True) == wire
+    # instances pass through, including the convenience subclasses
+    assert ngc.Scale(id=mk(0x30), path=ngc.ZarrPath(href="./s1")).path.href == "./s1"
+    # the dataclass checks surface as pydantic validation errors
+    with pytest.raises(ValidationError):
+        ngc.Scale.model_validate(
+            {**wire, "path": {"type": "zarr", "format": "http", "href": "/local"}}
+        )
+    with pytest.raises(ValidationError):
+        ngc.ReferenceObj  # noqa: B018  (still importable)
+        ngc.ScaleTransformation(input={"type": "scale", "ref": "not-a-uuid"})

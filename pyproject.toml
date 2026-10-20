@@ -1,6 +1,6 @@
 [project]
 authors = [{ name = "lorenzo", email = "lorenzo.cerrone@uzh.ch" }]
-dependencies = ["pydantic>=2.0.0,<3.0.0"]
+dependencies = []
 name = "ngio-collections"
 requires-python = ">= 3.11"
 version = "0.2.0"
@@ -8,6 +8,7 @@ version = "0.2.0"
 [project.optional-dependencies]
 fsspec = ["fsspec"]
 speedups = ["orjson"]
+validate = ["pydantic>=2.0.0,<3.0.0"]
 
 [build-system]
 build-backend = "hatchling.build"
@@ -26,6 +27,7 @@ ngio_collections = { path = ".", editable = true }
 [tool.pixi.tasks]
 
 [tool.pixi.feature.dev.dependencies]
+pydantic = ">=2,<3"
 orjson = "*"
 fsspec = "*"
 ruff = ">=0.1"
@@ -41,12 +43,23 @@ pytest = "pytest"
 type-check = "ty check"
 
 [tool.pixi.feature.test.dependencies]
+pydantic = ">=2,<3"
 pytest = ">=8"
 pytest-asyncio = ">=0.24"
+
+# The pydantic-free core: same test deps, no pydantic. `pytest` here skips the
+# tests marked `requires_pydantic` and proves the rest never imports it.
+[tool.pixi.feature.core.dependencies]
+pytest = ">=8"
+pytest-asyncio = ">=0.24"
+
+[tool.pixi.feature.core.tasks]
+pytest = "pytest"
 
 [tool.pixi.environments]
 dev = ["dev"]
 test = ["test"]
+core = ["core"]
 
 [tool.pixi.feature.test.tasks]
 pytest = "pytest"
@@ -55,6 +68,7 @@ validate-examples = "python examples/validate_all.py"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["pydantic: needs the optional pydantic dependency (the `validate` extra)"]
 
 [tool.ty.environment]
 python = ".pixi/envs/dev"

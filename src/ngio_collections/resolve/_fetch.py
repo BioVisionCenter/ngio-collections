@@ -47,7 +47,7 @@ def reference_targets(
         if path is None:
             continue
         try:
-            yield DocPath.model_validate(path).meta_url(doc.url, formats=formats)
+            yield DocPath.from_dict(path).meta_url(doc.url, formats=formats)
         except Exception:
             continue
 
@@ -66,9 +66,11 @@ def trait_reference_targets(
             if key == "nodes":
                 continue
             for ref in _walk_references(value):
+                path = ref["path"]
+                if not isinstance(path, Mapping):
+                    continue
                 try:
-                    path = DocPath.model_validate(ref["path"])
-                    yield path.meta_url(doc.url, formats=formats)
+                    yield DocPath.from_dict(path).meta_url(doc.url, formats=formats)
                 except Exception:
                     continue
 

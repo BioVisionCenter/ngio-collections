@@ -6,6 +6,7 @@ The base infra (`BaseTrait`, `UnknownTrait`, `TraitType`) lives in `_base`;
 sub-RFCs. Re-exported here so consumers have a single trait import surface.
 """
 
+from ngio_collections.models._vocabulary import BUILTIN_TRAIT_TYPES
 from ngio_collections.models.traits._base import BaseTrait, TraitType, UnknownTrait
 from ngio_collections.models.traits._provisional import (
     AcquisitionObj,
@@ -19,11 +20,6 @@ from ngio_collections.models.traits._provisional import (
     WellTrait,
 )
 from ngio_collections.models.traits._scene import SceneTrait
-
-BUILTIN_TRAIT_TYPES: frozenset[str] = frozenset(
-    {"scene", "plate", "well", "acquisition", "labels", "bioformats2raw"}
-)
-"""Keyword trait types the revision names (core or recommended tier)."""
 
 __all__ = [
     "BUILTIN_TRAIT_TYPES",

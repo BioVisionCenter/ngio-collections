@@ -13,8 +13,7 @@ from typing import Annotated, ClassVar, Literal
 
 from pydantic import Field
 
-from ngio_collections.models._config import BaseObj
-from ngio_collections.models._ids import UuidStr
+from ngio_collections.models._config import BaseObj, UuidStr
 from ngio_collections.models._references import ReferenceObj
 from ngio_collections.models.traits._base import BaseTrait
 

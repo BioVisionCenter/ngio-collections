@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import builtins
 from dataclasses import replace
-from typing import Iterator, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Iterator, Mapping, Sequence, cast
 
+from ngio_collections._optional import require_pydantic
 from ngio_collections._types import JSONValue
 from ngio_collections.graph import (
     ROOT,
@@ -36,18 +37,13 @@ from ngio_collections.graph import (
     TreeBuilder,
     is_ancestor,
 )
-from ngio_collections.models._config import NodeStateError
+from ngio_collections.models._errors import NodeStateError
 from ngio_collections.models._ids import is_uuid, new_id
 from ngio_collections.models._manifest import is_extension_type
-from ngio_collections.models._multiscale import (
-    CoordinateSystem,
-    MultiscaleFields,
-    Scale,
-)
 from ngio_collections.models._paths import DocPath, meta_url
 from ngio_collections.models._references import ReferenceObj
-from ngio_collections.models.traits import BaseTrait, TraitType
 from ngio_collections.validate import (
+    TraitType,
     ValidationError,
     ValidatorType,
     get_trait,
@@ -56,6 +52,12 @@ from ngio_collections.validate import (
     trait_key,
     validate,
 )
+
+if TYPE_CHECKING:
+    # The typed value models need pydantic (the `validate` extra). They are only
+    # named in annotations here; at runtime they are imported lazily where used.
+    from ngio_collections.models._multiscale import CoordinateSystem, Scale
+    from ngio_collections.models.traits import BaseTrait
 
 BUILTIN_NODE_TYPES = frozenset({"collection", "multiscale"})
 """Keyword node types; anything else must be an extension URI."""
@@ -286,8 +288,8 @@ class Node:
         """Support `WellTrait in node` and `"well" in node` membership tests."""
         if isinstance(trait, str):
             return trait in self.record.traits
-        if isinstance(trait, builtins.type) and issubclass(trait, BaseTrait):
-            return has_trait(self.record, trait)
+        if isinstance(trait, builtins.type) and hasattr(trait, "trait_type"):
+            return has_trait(self.record, cast("builtins.type[BaseTrait]", trait))
         return False
 
     def get_field(self, key: str) -> JSONValue | None:
@@ -396,11 +398,27 @@ class Node:
         return self._root(self._tree.remove(self._id))
 
 
+def _dump(value: object) -> dict[str, JSONValue]:
+    """Return the wire dict for a value model or a mapping.
+
+    A mapping is copied verbatim (nothing is validated: validation is lazy and
+    explicit, run the validators); anything else must be a pydantic value model
+    and is dumped in JSON mode without `None` fields.
+
+    Raises:
+        TypeError: If `value` is neither a mapping nor a value model.
+    """
+    if isinstance(value, Mapping):
+        return dict(value)
+    dump = getattr(value, "model_dump", None)
+    if dump is None:
+        raise TypeError(f"expected a mapping or a value model, got {value!r}")
+    return dump(mode="json", exclude_none=True)
+
+
 def _trait_dict(trait: BaseTrait | Mapping[str, JSONValue]) -> dict[str, JSONValue]:
     """Return the wire dict for a trait model or mapping (must carry `type`)."""
-    if isinstance(trait, BaseTrait):
-        return trait.model_dump(mode="json", exclude_none=True)
-    data = dict(trait)
+    data = _dump(trait)
     if not isinstance(data.get("type"), str):
         raise ValueError(f"a trait must carry a string `type`: {data!r}")
     return data
@@ -495,22 +513,16 @@ def new_multiscale(
     """Create a detached `multiscale` node with its `coordinate_systems` and `scales`.
 
     The result is the root of an image document: `create()` it, then attach the
-    returned stub to a collection with `add_external`.
+    returned stub to a collection with `add_external`. Models are dumped and
+    mappings stored verbatim; nothing is validated here (run
+    `multiscale_is_complete`).
     """
-    fields = MultiscaleFields(
-        coordinate_systems=[
-            c if isinstance(c, CoordinateSystem) else CoordinateSystem.model_validate(c)
-            for c in coordinate_systems
-        ],
-        scales=[s if isinstance(s, Scale) else Scale.model_validate(s) for s in scales],
-    )
+    fields: dict[str, JSONValue] = {
+        "coordinate_systems": [_dump(c) for c in coordinate_systems],
+        "scales": [_dump(s) for s in scales],
+    }
     return new_node(
-        "multiscale",
-        id=id,
-        name=name,
-        traits=traits,
-        fields=fields.model_dump(mode="json", exclude_none=True),
-        path=path,
+        "multiscale", id=id, name=name, traits=traits, fields=fields, path=path
     )
 
 
@@ -527,18 +539,29 @@ class CollectionNode(Node):
 
 
 class MultiscaleNode(Node):
-    """Handle for a `multiscale` node, with typed access to its fields."""
+    """Handle for a `multiscale` node, with typed access to its fields.
+
+    The typed reads (`coordinate_systems`, `scales`, `scale`, `coordinate_system`)
+    validate through the pydantic value models and need the `validate` extra;
+    the raw lists are always at `node.fields["coordinate_systems"]` / `["scales"]`.
+    """
 
     @property
     def coordinate_systems(self) -> tuple[CoordinateSystem, ...]:
-        """The multiscale's coordinate systems (validated)."""
+        """The multiscale's coordinate systems (validated; needs pydantic)."""
+        require_pydantic("MultiscaleNode.coordinate_systems")
+        from ngio_collections.models._multiscale import CoordinateSystem
+
         raw = self.record.fields.get("coordinate_systems")
         items = raw if isinstance(raw, list) else []
         return tuple(CoordinateSystem.model_validate(c) for c in items)
 
     @property
     def scales(self) -> tuple[Scale, ...]:
-        """The multiscale's scales (validated), coarsest last as written."""
+        """The multiscale's scales (validated; needs pydantic), coarsest last as written."""
+        require_pydantic("MultiscaleNode.scales")
+        from ngio_collections.models._multiscale import Scale
+
         raw = self.record.fields.get("scales")
         items = raw if isinstance(raw, list) else []
         return tuple(Scale.model_validate(s) for s in items)
@@ -552,27 +575,15 @@ class MultiscaleNode(Node):
         return next((c for c in self.coordinate_systems if c.id == id), None)
 
     def set_scales(self, scales: Sequence[Scale | Mapping[str, JSONValue]]) -> Node:
-        """Replace the `scales` field; return the tree root."""
-        dumped = [
-            (s if isinstance(s, Scale) else Scale.model_validate(s)).model_dump(
-                mode="json", exclude_none=True
-            )
-            for s in scales
-        ]
+        """Replace the `scales` field (models dumped, mappings verbatim); return the root."""
+        dumped = [_dump(s) for s in scales]
         return self.set_field("scales", cast(JSONValue, dumped))
 
     def set_coordinate_systems(
         self, systems: Sequence[CoordinateSystem | Mapping[str, JSONValue]]
     ) -> Node:
-        """Replace the `coordinate_systems` field; return the tree root."""
-        dumped = [
-            (
-                c
-                if isinstance(c, CoordinateSystem)
-                else CoordinateSystem.model_validate(c)
-            ).model_dump(mode="json", exclude_none=True)
-            for c in systems
-        ]
+        """Replace the `coordinate_systems` field (models dumped, mappings verbatim)."""
+        dumped = [_dump(c) for c in systems]
         return self.set_field("coordinate_systems", cast(JSONValue, dumped))
 
 

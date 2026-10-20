@@ -19,15 +19,19 @@ remote data (a published image, remote arrays as scales) without bundling it.
 from __future__ import annotations
 
 import posixpath
-from typing import Literal
+from dataclasses import dataclass, replace
+from typing import Literal, Mapping, cast, get_args
 from urllib.parse import urljoin
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from ngio_collections._types import JSONValue
 
 ZARR_METADATA_FILE = "zarr.json"
 
 PathType = Literal["zarr", "json"]
 PathFormat = Literal["relative", "absolute", "http"]
+
+_PATH_TYPES: frozenset[str] = frozenset(get_args(PathType))
+_PATH_FORMATS: frozenset[str] = frozenset(get_args(PathFormat))
 
 ALL_FORMATS: frozenset[str] = frozenset({"relative", "absolute", "http"})
 """Every format this package resolves (the documented deviation from the spec)."""
@@ -161,31 +165,77 @@ def relativize(href: str, base_url: str | None) -> tuple[PathFormat, str]:
     return "relative", (rel if rel.startswith("../") else "./" + rel)
 
 
-class DocPath(BaseModel):
+@dataclass(frozen=True, kw_only=True)
+class DocPath:
     """A `{type, format, href}` path object locating a document or array.
 
     The single wire/value type for paths. `resolve` / `relativize` delegate to
-    the module functions so the inverse-pair invariant lives in one place.
-    Frozen and `extra="allow"` so unknown keys round-trip; constructed directly
-    or via the `ZarrPath` / `JsonPath` convenience subclasses.
+    the module functions so the inverse-pair invariant lives in one place. A
+    frozen stdlib dataclass (no pydantic): construct it directly, via the
+    `ZarrPath` / `JsonPath` convenience subclasses, or with `from_dict`; it is
+    also accepted as a field of the pydantic value models. Unknown keys are not
+    kept: the shape is closed.
     """
-
-    model_config = ConfigDict(extra="allow", frozen=True)
 
     type: PathType
     format: PathFormat
     href: str
 
-    @model_validator(mode="after")
-    def _href_matches_format(self) -> DocPath:
-        """Reject the two obviously inconsistent `format` / `href` pairings."""
+    def __post_init__(self) -> None:
+        """Check the literals and reject inconsistent `format` / `href` pairings.
+
+        Raises:
+            ValueError: If `type` or `format` is not a known literal, `href` is
+                not a string, an `http` path has no `http(s)://` href, or a
+                `relative` path carries a URL href.
+        """
+        if self.type not in _PATH_TYPES:
+            raise ValueError(
+                f"path type must be one of {sorted(_PATH_TYPES)}, got {self.type!r}"
+            )
+        if self.format not in _PATH_FORMATS:
+            raise ValueError(
+                f"path format must be one of {sorted(_PATH_FORMATS)}, got {self.format!r}"
+            )
+        if not isinstance(self.href, str):
+            raise ValueError(f"path href must be a string, got {self.href!r}")
         if self.format == "http" and not is_http(self.href):
             raise ValueError(
                 f"format 'http' needs an http(s):// href, got {self.href!r}"
             )
         if self.format == "relative" and "://" in self.href:
             raise ValueError(f"format 'relative' cannot carry a URL href {self.href!r}")
-        return self
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, JSONValue] | DocPath) -> DocPath:
+        """Build a path object from its wire mapping (`{type, format, href}`).
+
+        A `DocPath` instance is returned as is.
+
+        Raises:
+            ValueError: If `data` is not a mapping, misses one of the three keys,
+                or fails the checks in `__post_init__`.
+        """
+        if isinstance(data, DocPath):
+            return data
+        if not isinstance(data, Mapping):
+            raise ValueError(f"a path object must be a mapping, got {data!r}")
+        missing = [k for k in ("type", "format", "href") if k not in data]
+        if missing:
+            raise ValueError(f"path object {dict(data)!r} is missing {missing}")
+        type_, format_, href = data["type"], data["format"], data["href"]
+        if not (isinstance(type_, str) and isinstance(format_, str)):
+            raise ValueError(f"path object {dict(data)!r} needs string type and format")
+        if not isinstance(href, str):
+            raise ValueError(f"path href must be a string, got {href!r}")
+        # `__post_init__` checks the literals; the casts only satisfy the checker.
+        return cls(
+            type=cast(PathType, type_), format=cast(PathFormat, format_), href=href
+        )
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        """Return the wire form `{type, format, href}`."""
+        return {"type": self.type, "format": self.format, "href": self.href}
 
     def resolve(
         self, base_url: str | None, *, formats: frozenset[str] = ALL_FORMATS
@@ -217,7 +267,7 @@ class DocPath(BaseModel):
         format, href = relativize(self.href, base_url)
         if format == self.format and href == self.href:
             return self
-        return self.model_copy(update={"format": format, "href": href})
+        return replace(self, format=format, href=href)
 
     @classmethod
     def for_url(cls, url: str) -> DocPath:
@@ -239,6 +289,7 @@ class DocPath(BaseModel):
         return cls(type="zarr", format=format_for_url(url), href=url)
 
 
+@dataclass(frozen=True, kw_only=True)
 class ZarrPath(DocPath):
     """A `zarr`-typed `DocPath` (group or array directory), `relative` by default."""
 
@@ -246,6 +297,7 @@ class ZarrPath(DocPath):
     format: PathFormat = "relative"
 
 
+@dataclass(frozen=True, kw_only=True)
 class JsonPath(DocPath):
     """A `json`-typed `DocPath` (standalone JSON document), `relative` by default."""
 
@@ -253,6 +305,6 @@ class JsonPath(DocPath):
     format: PathFormat = "relative"
 
 
-# `DocPath` already validates the `type` literal directly, so no discriminated
+# `DocPath` already checks the `type` literal directly, so no discriminated
 # union is needed; the alias keeps the historical public name.
 PathObj = DocPath

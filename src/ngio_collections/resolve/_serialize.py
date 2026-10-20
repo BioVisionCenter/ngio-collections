@@ -55,7 +55,7 @@ def _entry_dict(
         data["name"] = name
     if path is not None:
         out_path = path.relativize(base_url) if relativize else path
-        data["path"] = out_path.model_dump(mode="json")
+        data["path"] = out_path.to_dict()
     if traits:
         trait_list = cast(JSONValue, traits_to_list(traits))
         if relativize:

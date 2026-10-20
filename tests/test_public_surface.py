@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import ngio_collections as ngc
+from tests.conftest import requires_pydantic
 
 
+@requires_pydantic  # the typed value models resolve lazily and need pydantic
 def test_all_names_resolve() -> None:
     assert ngc.__all__
     for name in ngc.__all__:

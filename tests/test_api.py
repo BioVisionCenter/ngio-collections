@@ -6,16 +6,18 @@ documents, externalize and delete, through the real verbs.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 import ngio_collections as ngc
 import ngio_collections.api._api as aio
 from ngio_collections.api import MemoryStore
 from ngio_collections.models import ExtensionManifestEntry, ExtensionRegistry
-from ngio_collections.models._config import NodeStateError
+from ngio_collections.models._errors import NodeStateError
 from ngio_collections.resolve import EmbeddedMultiscaleError, IdMismatchError
 from tests._builders import collection, multiscale
-from tests.conftest import DATA, mk
+from tests.conftest import DATA, mk, requires_pydantic
 
 RENDER = "https://napari.org/ngff/rendering"
 
@@ -34,6 +36,7 @@ async def _image_and_collection(store: MemoryStore) -> tuple[ngc.Node, ngc.Node]
     return stub, root
 
 
+@requires_pydantic  # `.scales` and ALL_VALIDATORS read through the typed models
 async def test_create_link_open_resolve_roundtrip() -> None:
     store = MemoryStore()
     stub, _ = await _image_and_collection(store)
@@ -121,6 +124,7 @@ async def test_entry_and_target_must_share_the_uuid() -> None:
         await aio.open_resolved(f"{DATA}/c.json", store, on_error="raise")
 
 
+@requires_pydantic  # validators / `.scales` read through the typed models
 async def test_manifest_is_derived_from_the_registry_and_exposed() -> None:
     store = MemoryStore()
     registry = ExtensionRegistry(
@@ -230,6 +234,7 @@ async def test_externalize_rejects_invalid_targets() -> None:
     assert updated.find(mk(3)).is_external
 
 
+@requires_pydantic  # validators / `.scales` read through the typed models
 def test_sync_api_on_local_store(tmp_path) -> None:
     image_url = str(tmp_path / "raw")
     stub = ngc.create(image_url, multiscale(2), None)
@@ -244,6 +249,7 @@ def test_sync_api_on_local_store(tmp_path) -> None:
     assert not view.find(mk(2)).is_external and view.validate(ngc.ALL_VALIDATORS) == []
 
 
+@requires_pydantic  # `.scales`
 async def test_open_ref_follows_typed_references() -> None:
     store = MemoryStore()
     await _image_and_collection(store)
@@ -274,6 +280,7 @@ async def test_open_ref_follows_typed_references() -> None:
         await aio.open_ref(ngc.ReferenceObj(type="multiscale", ref=mk(2)))
 
 
+@requires_pydantic  # `.scales`
 async def test_resolve_ref_is_local_and_pure() -> None:
     store = MemoryStore()
     await _image_and_collection(store)
@@ -299,7 +306,7 @@ async def test_open_resolved_ref_resolves_nested_documents() -> None:
     opened = await aio.open(f"{DATA}/entry.json", store)
     (entry,) = opened.children()
     view = await aio.open_resolved_ref(
-        entry.ref_local().model_copy(update={"path": entry.path}),
+        replace(entry.ref_local(), path=entry.path),
         opened.document_url,
         store,
     )
@@ -322,6 +329,7 @@ async def test_create_guards() -> None:
         await aio.create(f"{DATA}/bad.json", embedded, store)
 
 
+@requires_pydantic  # validators / `.scales` read through the typed models
 async def test_routed_store_resolves_remote_nodes() -> None:
     local, remote = MemoryStore(), MemoryStore()
     await aio.create("https://h.org/ref.zarr", multiscale(2), remote)

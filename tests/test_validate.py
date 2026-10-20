@@ -22,6 +22,9 @@ from ngio_collections.validate import (
 from tests._builders import collection, external, multiscale, scale_id
 from tests.conftest import DATA, mk
 
+# Lenses and validators read through the typed models: skip without pydantic.
+pytest.importorskip("pydantic")
+
 PLATE = ngc.PlateTrait(rows=[ngc.RowObj(name="A")], columns=[ngc.ColumnObj(name="1")])
 WELL = ngc.WellTrait(row_index=0, column_index=0)
 

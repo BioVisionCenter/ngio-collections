@@ -13,7 +13,7 @@ from ngio_collections.api import (
     StoreReadOnlyError,
 )
 from tests._builders import collection, multiscale
-from tests.conftest import mk
+from tests.conftest import mk, requires_pydantic
 
 
 async def test_store_contract() -> None:
@@ -49,6 +49,7 @@ async def test_read_only_rejects_writes_and_fails_early_through_the_api() -> Non
         await aio.create("/c.json", collection(1), store)
 
 
+@requires_pydantic  # validators / `.scales` read through the typed models
 async def test_hermetic_create_open_save_roundtrip() -> None:
     store = MemoryStore()
     stub = await aio.create("/data/image.zarr", multiscale(2, name="raw"), store)

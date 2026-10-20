@@ -9,7 +9,6 @@ raise under `CORE_FORMATS`.
 """
 
 import pytest
-from pydantic import ValidationError
 
 from ngio_collections.models._paths import (
     ALL_FORMATS,
@@ -125,16 +124,30 @@ def test_for_url_picks_type_and_format():
 
 
 def test_docpath_rejects_inconsistent_format_and_href():
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         DocPath(type="zarr", format="http", href="/local/path")
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         DocPath(type="zarr", format="relative", href="https://h.org/x")
-    with pytest.raises(ValidationError):
-        DocPath.model_validate({"type": "zarr", "href": "./x"})  # format is required
+    with pytest.raises(ValueError):
+        DocPath.from_dict({"type": "zarr", "href": "./x"})  # format is required
+    with pytest.raises(ValueError):
+        DocPath(type="tiff", format="relative", href="./x")  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        DocPath.from_dict("./x")  # type: ignore[arg-type]
+
+
+def test_docpath_dict_round_trip_is_a_closed_shape():
+    wire = {"type": "zarr", "format": "relative", "href": "./x"}
+    path = DocPath.from_dict(wire)
+    assert path == DocPath(type="zarr", format="relative", href="./x")
+    assert path.to_dict() == wire == ZarrPath(href="./x").to_dict()
+    assert DocPath.from_dict(path) is path
+    # unknown keys are not kept: the path-object shape is closed
+    assert DocPath.from_dict({**wire, "weird": 1}).to_dict() == wire
 
 
 def test_convenience_subclasses_default_to_relative():
-    assert ZarrPath(href="./s0").model_dump(mode="json") == {
+    assert ZarrPath(href="./s0").to_dict() == {
         "type": "zarr",
         "format": "relative",
         "href": "./s0",

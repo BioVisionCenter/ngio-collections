@@ -35,6 +35,6 @@ def register_extension(
     model = (
         entry
         if isinstance(entry, ExtensionManifestEntry)
-        else ExtensionManifestEntry.model_validate(entry)
+        else ExtensionManifestEntry.from_dict(entry)
     )
     return registry.register(model)

@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 
 import ngio_collections as ngc
-from ngio_collections.models._config import NodeStateError
+from ngio_collections.models._errors import NodeStateError
 from tests._builders import collection, external, multiscale
-from tests.conftest import mk
+from tests.conftest import mk, requires_pydantic
 
 RENDER = "https://napari.org/ngff/rendering"
 
@@ -60,7 +60,7 @@ def test_detached_state_and_origin_url() -> None:
         "absolute",
         "/data/image.zarr",
     )
-    assert node.ref_local().model_dump(mode="json", exclude_none=True) == {
+    assert node.ref_local().to_dict() == {
         "type": "multiscale",
         "ref": mk(1),
     }
@@ -73,6 +73,7 @@ def test_detached_state_and_origin_url() -> None:
         root.stub()
 
 
+@requires_pydantic
 def test_multiscale_handle_exposes_fields() -> None:
     ms = multiscale(4, axis_names=("z", "y", "x"), levels=3)
     assert isinstance(ms, ngc.MultiscaleNode)
@@ -141,6 +142,7 @@ def test_subtree_extracts_independent_detached_tree() -> None:
 # --------------------------------------------------------------------------- #
 
 
+@requires_pydantic
 def test_trait_lenses_and_typed_edits() -> None:
     root = _tree()
     well = ngc.WellTrait(row_index=0, column_index=1)
@@ -156,6 +158,7 @@ def test_trait_lenses_and_typed_edits() -> None:
         node[ngc.PlateTrait]
 
 
+@requires_pydantic
 def test_set_trait_drops_none_fields_and_writes_snake_case() -> None:
     root = _tree()
     scene = ngc.SceneTrait(
@@ -171,6 +174,7 @@ def test_set_trait_drops_none_fields_and_writes_snake_case() -> None:
     }
 
 
+@requires_pydantic
 def test_set_traits_upserts_by_type_and_drop_traits() -> None:
     root = _tree()
     root = root.set_traits(
@@ -217,6 +221,7 @@ def test_register_node_type_requires_a_uri() -> None:
     assert type(ngc.new_node("https://mobie.example/view", id=mk(9))) is ngc.Node
 
 
+@requires_pydantic
 def test_validate_through_handle() -> None:
     plate = ngc.new_collection(
         id=mk(0),

@@ -68,7 +68,7 @@ def main() -> None:
     nuclei = view.find(uid(3))
     assert isinstance(nuclei, ngc.MultiscaleNode)
     print("nuclei scales :", [s.path.href for s in nuclei.scales])
-    print("portable ref  :", nuclei.ref().model_dump(mode="json", exclude_none=True))
+    print("portable ref  :", nuclei.ref().to_dict())
     print("validation    :", view.validate(ngc.ALL_VALIDATORS))
 
     # A resolved view is read-only; edits go through `open` + `save`.

@@ -194,9 +194,7 @@ class _Writer:
             self.store,
             url,
             builder.finish(),
-            extension_manifest=[
-                BENCH_EXTENSION.model_dump(mode="json", exclude_none=True)
-            ],
+            extension_manifest=[BENCH_EXTENSION.to_dict()],
         )
         self.documents += 1
 

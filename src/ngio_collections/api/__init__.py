@@ -5,10 +5,13 @@ subclasses (rather than relying on import-side-effect self-registration). The
 synchronous verbs are the common case; the async core lives in
 `ngio_collections.api._api`. The value models (traits, paths, references, the
 multiscale fields) and store backends are re-exported here so the whole surface
-is one import.
+is one import. The pydantic value models are forwarded lazily (see
+`ngio_collections.models`): importing this module never needs pydantic.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from ngio_collections import models as _models
 from ngio_collections.api._extensions import EXTENSIONS, register_extension
@@ -50,7 +53,28 @@ from ngio_collections.io.store import (
     SyncReadableStore,
     SyncWritableStore,
 )
-from ngio_collections.models import *  # noqa: F403  (value models: traits, paths, refs)
+from ngio_collections.models import (
+    ALL_FORMATS,
+    BUILTIN_TRAIT_TYPES,
+    CORE_FORMATS,
+    UUID_PATTERN,
+    DocPath,
+    ExtensionManifestEntry,
+    ExtensionRegistry,
+    JsonPath,
+    NodeStateError,
+    PathFormat,
+    PathObj,
+    PathType,
+    ReferenceObj,
+    SchemaRef,
+    UnsupportedPathFormatError,
+    ZarrPath,
+    is_extension_type,
+    is_uuid,
+    manifest_entries,
+    new_id,
+)
 from ngio_collections.validate import (
     ALL_VALIDATORS,
     CORE_VALIDATORS,
@@ -61,9 +85,55 @@ from ngio_collections.validate import (
     validate,
 )
 
+if TYPE_CHECKING:
+    from ngio_collections.models import (  # noqa: F401
+        AcquisitionObj,
+        AcquisitionTrait,
+        AffineTransformation,
+        Axis,
+        BaseObj,
+        BaseTrait,
+        BijectionTransformation,
+        ByDimensionItem,
+        ByDimensionTransformation,
+        ColumnObj,
+        CoordinateSystem,
+        CoordinatesTransformation,
+        CoordinateTransformation,
+        CustomTransformation,
+        DisplacementsTransformation,
+        IdentityTransformation,
+        LabelObj,
+        LabelsTrait,
+        MapAxisTransformation,
+        MultiscaleFields,
+        PlateTrait,
+        RgbaColor,
+        RotationTransformation,
+        RowObj,
+        Scale,
+        ScaleTransformation,
+        SceneTrait,
+        SequenceTransformation,
+        TraitType,
+        TranslationTransformation,
+        UnknownTrait,
+        UuidStr,
+        WellTrait,
+    )
+
 # Composition root: wire the typed handles explicitly. Validators are passed
 # explicitly per call (no global registry) as a sequence of plain callables.
 register_node_types()
+
+
+def __getattr__(name: str):  # noqa: D103  (PEP 562: forward the pydantic models)
+    if name in _models.PYDANTIC_NAMES:
+        value = getattr(_models, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 _API = [
     "ALL_VALIDATORS",
@@ -108,5 +178,8 @@ _API = [
     "validate",
     "wrap_node",
 ]
+
+PYDANTIC_NAMES = _models.PYDANTIC_NAMES
+"""Names in `__all__` that need the `validate` extra (resolved lazily)."""
 
 __all__ = sorted(_API + list(_models.__all__))

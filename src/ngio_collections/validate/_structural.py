@@ -17,18 +17,21 @@ index lookups its own references need, so one node costs O(neighbourhood):
 - `external_unresolved`: in a fully resolved view, no node is left external.
 - `paths_are_core` (opt-in): every path object uses the `relative` format, the
   only core one (§7.3). Not bundled: this package resolves all formats.
+
+All but `multiscale_is_complete` (which validates through the pydantic
+`MultiscaleFields` model) run without pydantic.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Iterator, Mapping
 
+from ngio_collections._optional import require_pydantic
 from ngio_collections._types import JSONValue
 from ngio_collections.graph import find_declaration, iter_declarations
 from ngio_collections.models._ids import is_uuid
 from ngio_collections.models._manifest import ExtensionManifestEntry, is_extension_type
-from ngio_collections.models._multiscale import MultiscaleFields
-from ngio_collections.models.traits import BUILTIN_TRAIT_TYPES
+from ngio_collections.models._vocabulary import BUILTIN_TRAIT_TYPES
 from ngio_collections.resolve import is_path_object
 from ngio_collections.validate._engine import ValidationError
 
@@ -89,9 +92,15 @@ def node_fields_allowed(node: Node) -> None:
 
 
 def multiscale_is_complete(node: Node) -> None:
-    """A multiscale body declares well-formed coordinate systems and scales."""
+    """A multiscale body declares well-formed coordinate systems and scales.
+
+    Validates the fields through `MultiscaleFields`, so it needs pydantic.
+    """
     if node.type != "multiscale" or node.is_external:
         return
+    require_pydantic("multiscale_is_complete")
+    from ngio_collections.models._multiscale import MultiscaleFields
+
     try:
         fields = MultiscaleFields.model_validate(dict(node.fields))
     except Exception as exc:  # pydantic.ValidationError
@@ -164,8 +173,7 @@ def _manifest_entries(node: Node, url: str | None) -> list[ExtensionManifestEntr
     if url is None:
         return []
     return [
-        ExtensionManifestEntry.model_validate(e)
-        for e in node.tree.manifests.get(url, ())
+        ExtensionManifestEntry.from_dict(e) for e in node.tree.manifests.get(url, ())
     ]
 
 

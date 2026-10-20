@@ -39,10 +39,10 @@ def relativize_paths(value: JSONValue, base_url: str | None) -> JSONValue:
     if isinstance(value, dict):
         if is_path_object(value):
             try:
-                path = DocPath.model_validate(value)
+                path = DocPath.from_dict(value)
             except Exception:
                 return value  # malformed: leave it for validation to report
-            return path.relativize(base_url).model_dump(mode="json")
+            return path.relativize(base_url).to_dict()
         return {k: relativize_paths(v, base_url) for k, v in value.items()}
     if isinstance(value, list):
         return [relativize_paths(v, base_url) for v in value]

@@ -16,6 +16,7 @@ only); keep it stated in the README and `models/_paths.py`.
 pixi run lint                        # ruff (includes Google-style docstring rules)
 pixi run type-check                  # ty
 pixi run --environment dev pytest
+pixi run --environment core pytest   # without pydantic
 NGC_OFFLINE=1 pixi run --environment test validate-examples
 ```
 
@@ -24,6 +25,13 @@ NGC_OFFLINE=1 pixi run --environment test validate-examples
 - **Immutability:** nodes are frozen records. Every edit goes through
   `model_copy` / `dataclasses.replace` and returns a NEW tree — never mutate
   in place.
-- **No IO in `models/`:** `models/` is pure Pydantic. The only IO
+- **No IO in `models/`:** `models/` is pure data. The only IO
   surface is the `store/` layer.
+- **pydantic is optional** (the `validate` extra). Only `models/_config.py`,
+  `models/_multiscale.py`, `models/_transformation.py` and `models/traits/`
+  may import it at module level. Everything else is stdlib: `DocPath`,
+  `ReferenceObj` and the manifest entries are dataclasses with
+  `from_dict` / `to_dict`; code that needs a typed model imports it lazily
+  after `_optional.require_pydantic(...)`. `tests/test_optional_pydantic.py`
+  and the `core` pixi environment guard the boundary.
 - **Docstrings:** Google-style. Use single backticks for code spans (Markdown).

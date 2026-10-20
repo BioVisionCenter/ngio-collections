@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -11,6 +12,13 @@ from ngio_collections.api import MemoryStore
 
 FIXTURES = Path(__file__).parent / "data" / "revision"
 DATA = "/data"
+
+HAS_PYDANTIC = importlib.util.find_spec("pydantic") is not None
+
+requires_pydantic = pytest.mark.skipif(
+    not HAS_PYDANTIC, reason="needs the optional pydantic dependency"
+)
+"""Mark tests that use the typed value models (the `validate` extra)."""
 
 
 def mk(n: int) -> str:

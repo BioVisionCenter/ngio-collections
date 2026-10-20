@@ -1,4 +1,8 @@
-"""Builders for revision-shaped detached trees used across the tests."""
+"""Builders for revision-shaped detached trees used across the tests.
+
+The multiscale builder works from plain dicts so the core suite runs without
+pydantic; tests that need the typed models construct them explicitly.
+"""
 
 from __future__ import annotations
 
@@ -8,8 +12,8 @@ import ngio_collections as ngc
 from tests.conftest import mk
 
 
-def axes(*names: str) -> list[ngc.Axis]:
-    return [ngc.Axis(name=n, type="space", unit="micrometer") for n in names]
+def axes(*names: str) -> list[dict]:
+    return [{"name": n, "type": "space", "unit": "micrometer"} for n in names]
 
 
 def cs_id(n: int) -> str:
@@ -27,24 +31,31 @@ def multiscale(
     *,
     axis_names: Sequence[str] = ("y", "x"),
     levels: int = 2,
-    traits: Sequence[ngc.BaseTrait | Mapping] = (),
+    traits: Sequence[object | Mapping] = (),
     name: str | None = None,
     path: ngc.DocPath | None = None,
 ) -> ngc.Node:
     """A detached multiscale `mk(n)` with `levels` scales mapping into one system."""
-    system = ngc.CoordinateSystem(id=cs_id(n), name="physical", axes=axes(*axis_names))
+    system = {
+        "type": "coordinate_system",
+        "id": cs_id(n),
+        "name": "physical",
+        "axes": axes(*axis_names),
+    }
     scales = [
-        ngc.Scale(
-            id=scale_id(n, i),
-            path=ngc.ZarrPath(href=f"./s{i}"),
-            coordinate_transformations=[
-                ngc.ScaleTransformation(
-                    scale=[2.0**i] * len(axis_names),
-                    input=ngc.ReferenceObj(type="scale", ref=scale_id(n, i)),
-                    output=ngc.ReferenceObj(type="coordinate_system", ref=cs_id(n)),
-                )
+        {
+            "type": "scale",
+            "id": scale_id(n, i),
+            "path": ngc.ZarrPath(href=f"./s{i}").to_dict(),
+            "coordinate_transformations": [
+                {
+                    "type": "scale",
+                    "scale": [2.0**i] * len(axis_names),
+                    "input": {"type": "scale", "ref": scale_id(n, i)},
+                    "output": {"type": "coordinate_system", "ref": cs_id(n)},
+                }
             ],
-        )
+        }
         for i in range(levels)
     ]
     return ngc.new_multiscale(
@@ -60,7 +71,7 @@ def multiscale(
 def collection(
     n: int,
     *children: ngc.Node,
-    traits: Sequence[ngc.BaseTrait | Mapping] = (),
+    traits: Sequence[object | Mapping] = (),
     name: str | None = None,
 ) -> ngc.Node:
     """A detached collection `mk(n)` holding `children` (multiscales must be external)."""

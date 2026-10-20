@@ -62,10 +62,14 @@ into RFC-8 discussions.
   snapshots stays cheap.
 - **Layered architecture.** `models/` is pure data with no IO; the only IO
   surface is the store layer, behind a small protocol.
-- **Minimal core dependencies.** The core runs on the stdlib plus Pydantic.
-  Performance-critical seams (persistent maps, JSON) are thin interfaces so
-  accelerated backends (`pyrsistent`, `orjson`) can drop in without touching
-  callers.
+- **Zero core dependencies.** The core (open / edit / save / resolve, the raw
+  traits and fields, the structural validators) runs on the stdlib alone.
+  Pydantic is the optional `validate` extra: it powers the typed value models
+  (`WellTrait`, `Scale`, …), the `node[Trait]` lenses, `MultiscaleNode.scales`
+  and the schema-shape validators; without it those raise an `ImportError`
+  naming the extra. Performance-critical seams (persistent maps, JSON) are thin
+  interfaces so accelerated backends (`pyrsistent`, `orjson`) can drop in
+  without touching callers.
 - **Lazy, explicit validation.** Loading a document never validates it.
   Validators are cheap, composable callables run on demand over a subtree, and
   each check reads only a bounded neighborhood of its node. Three bundles ship:
@@ -77,6 +81,14 @@ into RFC-8 discussions.
   a thin wrapper over it.
 
 ## Getting started
+
+Install the core, or add the `validate` extra for the typed value models and
+the full validator bundles:
+
+```bash
+pip install ngio-collections              # stdlib only
+pip install 'ngio-collections[validate]'  # + pydantic: WellTrait, Scale, node[Trait], ...
+```
 
 Usage examples are in the [examples/](examples/) directory; each writes its
 documents under `examples/data/`. The simplest way to run them is with

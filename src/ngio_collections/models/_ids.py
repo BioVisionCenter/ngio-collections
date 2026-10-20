@@ -13,9 +13,6 @@ import os
 import re
 import time
 import uuid
-from typing import Annotated
-
-from pydantic import Field
 
 UUID_PATTERN = (
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -23,9 +20,6 @@ UUID_PATTERN = (
 """Canonical hyphenated UUID text, any version."""
 
 _UUID_RE = re.compile(UUID_PATTERN)
-
-UuidStr = Annotated[str, Field(pattern=UUID_PATTERN)]
-"""A pydantic string field constrained to the canonical UUID form."""
 
 
 def is_uuid(value: object) -> bool:

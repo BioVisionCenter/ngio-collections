@@ -5,7 +5,8 @@ carries its own `type` (a keyword for built-in traits, a URI for extension
 traits). A trait model fixes that `type` as a `Literal` default, which is both
 the serialized field and the key the node handle indexes it under (`node[WellTrait]`,
 `node.has_trait("well")`). `applies_to` records which node types may carry the
-trait (§3.1); an empty set means any. Pure data: depends only on `BaseObj`.
+trait (§3.1); an empty set means any. Pure data: depends only on `BaseObj`
+(pydantic; the `validate` extra).
 """
 
 from __future__ import annotations

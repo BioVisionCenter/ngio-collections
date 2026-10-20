@@ -14,45 +14,30 @@ the rules the revision's examples imply and §3.1's `applies_to` constraint:
 
 Each is a plain callable that `raise`s `ValidationError` on a problem and returns
 otherwise; callers pass the ones they want explicitly or use the bundles.
+`well_under_plate` and `plate_children_are_wells` only look at trait types and
+run without pydantic; the other three read through the pydantic value models
+and import them lazily (the `validate` extra).
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Iterable
 
-from ngio_collections.models._multiscale import CoordinateSystem, MultiscaleFields
-from ngio_collections.models._transformation import (
-    CoordinateTransformation,
-    ScaleTransformation,
-)
-from ngio_collections.models.traits import (
-    AcquisitionTrait,
-    BaseTrait,
-    LabelsTrait,
-    PlateTrait,
-    SceneTrait,
-    WellTrait,
-)
+from ngio_collections._optional import require_pydantic
 from ngio_collections.validate._engine import ValidationError
 
 if TYPE_CHECKING:
     from ngio_collections.api._node import Node
-
-_BUILTIN_TRAITS: tuple[type[BaseTrait], ...] = (
-    SceneTrait,
-    PlateTrait,
-    WellTrait,
-    AcquisitionTrait,
-    LabelsTrait,
-)
+    from ngio_collections.models._multiscale import CoordinateSystem
+    from ngio_collections.models._transformation import CoordinateTransformation
 
 
 def well_under_plate(node: Node) -> None:
     """A node carrying `well` must be a child of a node carrying `plate`."""
-    if not node.has_trait(WellTrait):
+    if not node.has_trait("well"):
         return
     parent = node.parent()
-    if parent is None or not parent.has_trait(PlateTrait):
+    if parent is None or not parent.has_trait("plate"):
         raise ValidationError(
             "a node with a `well` trait must be a child of a node with a `plate` trait"
         )
@@ -60,10 +45,10 @@ def well_under_plate(node: Node) -> None:
 
 def plate_children_are_wells(node: Node) -> None:
     """Every child of a node carrying `plate` is a collection carrying `well`."""
-    if not node.has_trait(PlateTrait):
+    if not node.has_trait("plate"):
         return
     for child in node.children():
-        if child.type != "collection" or not child.has_trait(WellTrait):
+        if child.type != "collection" or not child.has_trait("well"):
             raise ValidationError(
                 f"child {child.id!r} of a plate is not a collection with a `well` trait"
             )
@@ -71,7 +56,17 @@ def plate_children_are_wells(node: Node) -> None:
 
 def trait_applies_to(node: Node) -> None:
     """Each built-in trait sits on a node type it applies to (§3.1)."""
-    for trait in _BUILTIN_TRAITS:
+    require_pydantic("trait_applies_to")
+    from ngio_collections.models.traits import (
+        AcquisitionTrait,
+        LabelsTrait,
+        PlateTrait,
+        SceneTrait,
+        WellTrait,
+    )
+
+    builtin = (SceneTrait, PlateTrait, WellTrait, AcquisitionTrait, LabelsTrait)
+    for trait in builtin:
         if (
             node.has_trait(trait)
             and trait.applies_to
@@ -88,6 +83,8 @@ def _check_scales(
     systems: Iterable[CoordinateSystem],
 ) -> None:
     """Raise if a `scale` transform's factor count mismatches its output system."""
+    from ngio_collections.models._transformation import ScaleTransformation
+
     by_id = {s.id: s for s in systems}
     for transform in transforms:
         if not isinstance(transform, ScaleTransformation) or transform.scale is None:
@@ -107,6 +104,10 @@ def _check_scales(
 
 def scale_matches_axes(node: Node) -> None:
     """A `scale` transform's factor count must match its coordinate system's axes."""
+    require_pydantic("scale_matches_axes")
+    from ngio_collections.models._multiscale import MultiscaleFields
+    from ngio_collections.models.traits import SceneTrait
+
     if node.type == "multiscale" and node.fields:
         try:
             fields = MultiscaleFields.model_validate(dict(node.fields))
@@ -121,6 +122,9 @@ def scale_matches_axes(node: Node) -> None:
 
 def labels_source_resolves(node: Node) -> None:
     """A `labels` trait's `source` entries are references to multiscales."""
+    require_pydantic("labels_source_resolves")
+    from ngio_collections.models.traits import LabelsTrait
+
     labels = node.get_trait(LabelsTrait)
     if labels is None:
         return

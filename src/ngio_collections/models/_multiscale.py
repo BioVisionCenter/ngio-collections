@@ -18,8 +18,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ngio_collections.models._config import BaseObj
-from ngio_collections.models._ids import UuidStr
+from ngio_collections.models._config import BaseObj, UuidStr
 from ngio_collections.models._paths import DocPath
 from ngio_collections.models._transformation import CoordinateTransformation
 
