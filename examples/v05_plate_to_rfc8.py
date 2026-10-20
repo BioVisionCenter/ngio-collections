@@ -100,8 +100,8 @@ def build_collection() -> ngc.Node:
             img["path"] for img in well_json["attributes"]["ome"]["well"]["images"]
         ]
         for img_path in img_paths:
-            img_url = well_url + img_path
-            ms_json = requests.get(img_url + "/zarr.json").json()["attributes"]["ome"][
+            img_url = well_url + img_path + "/"
+            ms_json = requests.get(img_url + "zarr.json").json()["attributes"]["ome"][
                 "multiscales"
             ][0]
             axes = [
@@ -109,14 +109,14 @@ def build_collection() -> ngc.Node:
                 for ax in ms_json["axes"]
             ]
             # paths are http URLs to the datasets within the multiscale image
-            ds_paths = [well_url + ds["path"] for ds in ms_json["datasets"]]
+            ds_paths = [img_url + ds["path"] for ds in ms_json["datasets"]]
             scales = [
                 ds["coordinateTransformations"][0]["scale"]
                 for ds in ms_json["datasets"]
             ]
 
             multiscale_node = build_multiscale(
-                f"A1_field{img_path}", ds_paths, scales, axes
+                f"{rowname}{colname}_field{img_path}", ds_paths, scales, axes
             )
             well_collection_node = well_collection_node.add(multiscale_node)
 

@@ -92,7 +92,7 @@
                 },
                 "path": {
                   "type": "zarr",
-                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/1/0"
+                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/1/0/0"
                 }
               },
               {
@@ -121,7 +121,7 @@
                 },
                 "path": {
                   "type": "zarr",
-                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/1/1"
+                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/1/0/1"
                 }
               },
               {
@@ -150,7 +150,7 @@
                 },
                 "path": {
                   "type": "zarr",
-                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/1/2"
+                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/1/0/2"
                 }
               }
             ]
@@ -164,12 +164,12 @@
         "nodes": [
           {
             "type": "multiscale",
-            "name": "A1_field0",
-            "id": "A1_field0",
+            "name": "A2_field0",
+            "id": "A2_field0",
             "attributes": {
               "coordinateSystems": [
                 {
-                  "id": "A1_field0_space",
+                  "id": "A2_field0_space",
                   "axes": [
                     {
                       "name": "t",
@@ -200,16 +200,16 @@
             "nodes": [
               {
                 "type": "singlescale",
-                "name": "A1_field0_scale0",
-                "id": "A1_field0_scale0",
+                "name": "A2_field0_scale0",
+                "id": "A2_field0_scale0",
                 "attributes": {
                   "coordinateTransformations": [
                     {
                       "input": {
-                        "id": "A1_field0_scale0"
+                        "id": "A2_field0_scale0"
                       },
                       "output": {
-                        "id": "A1_field0_space"
+                        "id": "A2_field0_space"
                       },
                       "type": "scale",
                       "scale": [
@@ -224,21 +224,21 @@
                 },
                 "path": {
                   "type": "zarr",
-                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/2/0"
+                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/2/0/0"
                 }
               },
               {
                 "type": "singlescale",
-                "name": "A1_field0_scale1",
-                "id": "A1_field0_scale1",
+                "name": "A2_field0_scale1",
+                "id": "A2_field0_scale1",
                 "attributes": {
                   "coordinateTransformations": [
                     {
                       "input": {
-                        "id": "A1_field0_scale1"
+                        "id": "A2_field0_scale1"
                       },
                       "output": {
-                        "id": "A1_field0_space"
+                        "id": "A2_field0_space"
                       },
                       "type": "scale",
                       "scale": [
@@ -253,21 +253,21 @@
                 },
                 "path": {
                   "type": "zarr",
-                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/2/1"
+                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/2/0/1"
                 }
               },
               {
                 "type": "singlescale",
-                "name": "A1_field0_scale2",
-                "id": "A1_field0_scale2",
+                "name": "A2_field0_scale2",
+                "id": "A2_field0_scale2",
                 "attributes": {
                   "coordinateTransformations": [
                     {
                       "input": {
-                        "id": "A1_field0_scale2"
+                        "id": "A2_field0_scale2"
                       },
                       "output": {
-                        "id": "A1_field0_space"
+                        "id": "A2_field0_space"
                       },
                       "type": "scale",
                       "scale": [
@@ -282,7 +282,7 @@
                 },
                 "path": {
                   "type": "zarr",
-                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/2/2"
+                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/2/0/2"
                 }
               }
             ]
@@ -296,12 +296,12 @@
         "nodes": [
           {
             "type": "multiscale",
-            "name": "A1_field0",
-            "id": "A1_field0",
+            "name": "A3_field0",
+            "id": "A3_field0",
             "attributes": {
               "coordinateSystems": [
                 {
-                  "id": "A1_field0_space",
+                  "id": "A3_field0_space",
                   "axes": [
                     {
                       "name": "t",
@@ -332,16 +332,16 @@
             "nodes": [
               {
                 "type": "singlescale",
-                "name": "A1_field0_scale0",
-                "id": "A1_field0_scale0",
+                "name": "A3_field0_scale0",
+                "id": "A3_field0_scale0",
                 "attributes": {
                   "coordinateTransformations": [
                     {
                       "input": {
-                        "id": "A1_field0_scale0"
+                        "id": "A3_field0_scale0"
                       },
                       "output": {
-                        "id": "A1_field0_space"
+                        "id": "A3_field0_space"
                       },
                       "type": "scale",
                       "scale": [
@@ -356,21 +356,21 @@
                 },
                 "path": {
                   "type": "zarr",
-                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/3/0"
+                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/3/0/0"
                 }
               },
               {
                 "type": "singlescale",
-                "name": "A1_field0_scale1",
-                "id": "A1_field0_scale1",
+                "name": "A3_field0_scale1",
+                "id": "A3_field0_scale1",
                 "attributes": {
                   "coordinateTransformations": [
                     {
                       "input": {
-                        "id": "A1_field0_scale1"
+                        "id": "A3_field0_scale1"
                       },
                       "output": {
-                        "id": "A1_field0_space"
+                        "id": "A3_field0_space"
                       },
                       "type": "scale",
                       "scale": [
@@ -385,21 +385,21 @@
                 },
                 "path": {
                   "type": "zarr",
-                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/3/1"
+                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/3/0/1"
                 }
               },
               {
                 "type": "singlescale",
-                "name": "A1_field0_scale2",
-                "id": "A1_field0_scale2",
+                "name": "A3_field0_scale2",
+                "id": "A3_field0_scale2",
                 "attributes": {
                   "coordinateTransformations": [
                     {
                       "input": {
-                        "id": "A1_field0_scale2"
+                        "id": "A3_field0_scale2"
                       },
                       "output": {
-                        "id": "A1_field0_space"
+                        "id": "A3_field0_space"
                       },
                       "type": "scale",
                       "scale": [
@@ -414,7 +414,7 @@
                 },
                 "path": {
                   "type": "zarr",
-                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/3/2"
+                  "path": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/3/0/2"
                 }
               }
             ]
