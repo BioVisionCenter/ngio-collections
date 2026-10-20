@@ -1,0 +1,241 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "name": "ExpD_chicken_embryo_MIP.ome",
+      "id": "ExpD_chicken_embryo_MIP.ome",
+      "attributes": {
+        "coordinateSystems": [
+          {
+            "id": "ExpD_chicken_embryo_MIP.ome_space",
+            "axes": [
+              {
+                "name": "y",
+                "type": "space",
+                "unit": "micrometer"
+              },
+              {
+                "name": "x",
+                "type": "space",
+                "unit": "micrometer"
+              }
+            ]
+          }
+        ]
+      },
+      "nodes": [
+        {
+          "type": "singlescale",
+          "name": "ExpD_chicken_embryo_MIP.ome_scale0",
+          "id": "ExpD_chicken_embryo_MIP.ome_scale0",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_scale0"
+                },
+                "output": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  1.6,
+                  1.6
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0066/ExpD_chicken_embryo_MIP.ome.zarr/0"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "ExpD_chicken_embryo_MIP.ome_scale1",
+          "id": "ExpD_chicken_embryo_MIP.ome_scale1",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_scale1"
+                },
+                "output": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  3.2,
+                  3.2
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0066/ExpD_chicken_embryo_MIP.ome.zarr/1"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "ExpD_chicken_embryo_MIP.ome_scale2",
+          "id": "ExpD_chicken_embryo_MIP.ome_scale2",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_scale2"
+                },
+                "output": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  6.4,
+                  6.4
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0066/ExpD_chicken_embryo_MIP.ome.zarr/2"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "ExpD_chicken_embryo_MIP.ome_scale3",
+          "id": "ExpD_chicken_embryo_MIP.ome_scale3",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_scale3"
+                },
+                "output": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  12.8,
+                  12.8
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0066/ExpD_chicken_embryo_MIP.ome.zarr/3"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "ExpD_chicken_embryo_MIP.ome_scale4",
+          "id": "ExpD_chicken_embryo_MIP.ome_scale4",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_scale4"
+                },
+                "output": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  25.6,
+                  25.6
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0066/ExpD_chicken_embryo_MIP.ome.zarr/4"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "ExpD_chicken_embryo_MIP.ome_scale5",
+          "id": "ExpD_chicken_embryo_MIP.ome_scale5",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_scale5"
+                },
+                "output": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  51.2,
+                  51.2
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0066/ExpD_chicken_embryo_MIP.ome.zarr/5"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "ExpD_chicken_embryo_MIP.ome_scale6",
+          "id": "ExpD_chicken_embryo_MIP.ome_scale6",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_scale6"
+                },
+                "output": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  102.4,
+                  102.4
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0066/ExpD_chicken_embryo_MIP.ome.zarr/6"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "ExpD_chicken_embryo_MIP.ome_scale7",
+          "id": "ExpD_chicken_embryo_MIP.ome_scale7",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_scale7"
+                },
+                "output": {
+                  "id": "ExpD_chicken_embryo_MIP.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  204.8,
+                  204.8
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0066/ExpD_chicken_embryo_MIP.ome.zarr/7"
+          }
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

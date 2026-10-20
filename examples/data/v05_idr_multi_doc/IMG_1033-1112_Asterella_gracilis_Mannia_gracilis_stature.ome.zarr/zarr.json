@@ -1,0 +1,219 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "name": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome",
+      "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome",
+      "attributes": {
+        "coordinateSystems": [
+          {
+            "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_space",
+            "axes": [
+              {
+                "name": "t",
+                "type": "time"
+              },
+              {
+                "name": "c",
+                "type": "channel"
+              },
+              {
+                "name": "z",
+                "type": "space"
+              },
+              {
+                "name": "y",
+                "type": "space",
+                "unit": "micrometer"
+              },
+              {
+                "name": "x",
+                "type": "space",
+                "unit": "micrometer"
+              }
+            ]
+          }
+        ]
+      },
+      "nodes": [
+        {
+          "type": "singlescale",
+          "name": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale0",
+          "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale0",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale0"
+                },
+                "output": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  70.55555555555556,
+                  70.55555555555556
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0157/Asterella gracilis SWE/IMG_1033-1112 Asterella gracilis (Mannia gracilis) stature.ome.zarr/0"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale1",
+          "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale1",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale1"
+                },
+                "output": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  141.11111111111111,
+                  141.11111111111111
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0157/Asterella gracilis SWE/IMG_1033-1112 Asterella gracilis (Mannia gracilis) stature.ome.zarr/1"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale2",
+          "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale2",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale2"
+                },
+                "output": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  282.22222222222223,
+                  282.22222222222223
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0157/Asterella gracilis SWE/IMG_1033-1112 Asterella gracilis (Mannia gracilis) stature.ome.zarr/2"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale3",
+          "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale3",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale3"
+                },
+                "output": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  564.4444444444445,
+                  564.4444444444445
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0157/Asterella gracilis SWE/IMG_1033-1112 Asterella gracilis (Mannia gracilis) stature.ome.zarr/3"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale4",
+          "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale4",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale4"
+                },
+                "output": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1128.888888888889,
+                  1128.888888888889
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0157/Asterella gracilis SWE/IMG_1033-1112 Asterella gracilis (Mannia gracilis) stature.ome.zarr/4"
+          }
+        },
+        {
+          "type": "singlescale",
+          "name": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale5",
+          "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale5",
+          "attributes": {
+            "coordinateTransformations": [
+              {
+                "input": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_scale5"
+                },
+                "output": {
+                  "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome_space"
+                },
+                "type": "scale",
+                "scale": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  2257.777777777778,
+                  2257.777777777778
+                ]
+              }
+            ]
+          },
+          "path": {
+            "type": "zarr",
+            "path": "https:/livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0157/Asterella gracilis SWE/IMG_1033-1112 Asterella gracilis (Mannia gracilis) stature.ome.zarr/5"
+          }
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}
