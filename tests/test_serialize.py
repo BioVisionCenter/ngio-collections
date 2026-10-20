@@ -1,135 +1,231 @@
-"""Tests for the L1 write path: serialize a NodeTree back to documents.
+"""Tests for the write path: serialize a NodeTree back to documents.
 
-Covers payload shape, reference-stub round-trip, path relativization, and a full
-build → write → re-read → build round-trip through a writable in-memory store.
+Covers payload shape and key order, declaring-entry round-trip, path
+relativization on nodes and inside traits / fields, the embedded-multiscale
+guard, that a resolved view serializes back to its entry document, and a full
+build → write → re-read round-trip through a writable in-memory store.
 """
 
 from __future__ import annotations
 
-from ngio_collections.graph import ROOT, NodeTree, NodeRecord, Reference
-from ngio_collections.models._paths import ZarrPath
+import pytest
+
+from ngio_collections.api import MemoryStore
+from ngio_collections.graph import ROOT, NodeRecord, NodeTree
+from ngio_collections.models import ExtensionRegistry
+from ngio_collections.models._paths import DocPath, ZarrPath
 from ngio_collections.resolve import (
-    Document,
+    EmbeddedMultiscaleError,
     build,
+    derive_manifest,
     fetch_all,
     node_dict,
     payload,
+    used_extension_types,
     write_document,
 )
+from tests.conftest import DATA, mk
 
-DATA = "/data"
-
-
-class _MemoryStore:
-    """A minimal writable in-memory store (url -> dict)."""
-
-    def __init__(self) -> None:
-        self.files: dict[str, dict] = {}
-
-    async def get(self, url: str) -> dict:
-        """Return the document at `url`, raising FileNotFoundError if absent."""
-        try:
-            return self.files[url]
-        except KeyError as exc:
-            raise FileNotFoundError(url) from exc
-
-    async def put(self, url: str, data: dict, *, overwrite: bool = False) -> None:
-        """Store `data` at `url`."""
-        self.files[url] = data
-
-    async def delete(self, url: str) -> None:
-        """Delete `url` if present."""
-        self.files.pop(url, None)
+RENDER = "https://napari.org/ngff/rendering"
+WELL = {"type": "well", "row_index": 0, "column_index": 0}
 
 
-# --------------------------------------------------------------------------- #
-# payload / node_dict shape
-# --------------------------------------------------------------------------- #
-
-
-def _sample_collection() -> NodeTree:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
-    c, img = c.add_child(
+def _sample() -> NodeTree:
+    """root → {labels (embedded collection) → img (external multiscale)}."""
+    c = NodeTree.of(NodeRecord(type="collection", id=mk(0), name="root", children=()))
+    c, labels = c.add_child(
         ROOT,
-        NodeRecord(
-            type="multiscale",
-            id="img",
-            attributes={"role": "raw"},
-            children=(),
-        ),
+        NodeRecord(type="collection", id=mk(2), traits={"well": WELL}, children=()),
     )
     c, _ = c.add_child(
-        img, NodeRecord(type="singlescale", id="0", name="test", children=())
+        labels,
+        NodeRecord(
+            type="multiscale",
+            id=mk(1),
+            name="img",
+            traits={RENDER: {"type": RENDER, "contrast_limits": [0, 1]}},
+            path=ZarrPath(href="./img"),
+        ),
     )
     return c
 
 
-def test_payload_rebuilds_nesting_and_drops_empties() -> None:
-    body = payload(_sample_collection(), base_url=f"{DATA}/c.json", relativize=False)
-    assert body["version"]  # envelope stamped
-    assert body["type"] == "collection" and body["id"] == "root"
-    (img,) = body["nodes"]
-    assert img["id"] == "img" and img["attributes"] == {"role": "raw"}
-    assert "name" not in img  # None dropped
-    (zero,) = img["nodes"]
-    assert zero["id"] == "0" and "attributes" not in zero  # empty bag dropped
+def test_payload_shape_and_key_order() -> None:
+    body = payload(_sample(), base_url=f"{DATA}/c.json", relativize=False)
+    assert list(body)[:3] == ["version", "type", "id"]  # no manifest when empty
+    assert (
+        body["type"] == "collection" and body["id"] == mk(0) and body["name"] == "root"
+    )
+    (labels,) = body["nodes"]
+    assert list(labels) == ["type", "id", "traits", "nodes"]  # name None dropped
+    assert labels["traits"] == [WELL]
+    (img,) = labels["nodes"]
+    assert list(img) == ["type", "id", "name", "path", "traits"]
+    assert img["path"] == {"type": "zarr", "format": "relative", "href": "./img"}
+    assert "nodes" not in img
 
 
-def test_reference_record_serializes_as_path_stub() -> None:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
+def test_payload_carries_the_manifest_when_given() -> None:
+    manifest = [{"id": "https://napari.org/ngff/", "version": "1.0", "schemas": []}]
+    body = payload(_sample(), base_url=f"{DATA}/c.json", extension_manifest=manifest)
+    assert list(body)[:2] == ["version", "extension_manifest"]
+    assert body["extension_manifest"] == manifest
+
+
+def test_fields_are_emitted_on_the_node() -> None:
+    fields = {"coordinate_systems": [], "scales": []}
+    c = NodeTree.of(NodeRecord(type="multiscale", id=mk(1), fields=fields))
+    body = payload(c, base_url=f"{DATA}/img/zarr.json")
+    assert list(body) == ["version", "type", "id", "coordinate_systems", "scales"]
+
+
+def test_relativize_rewrites_node_path_and_embedded_path_objects() -> None:
+    c = NodeTree.of(NodeRecord(type="collection", id=mk(0), children=()))
     c, _ = c.add_child(
         ROOT,
         NodeRecord(
             type="multiscale",
-            name="img",
-            ref=Reference(path=ZarrPath(path="../image.zarr"), id="image"),
+            id=mk(1),
+            path=DocPath(type="zarr", format="absolute", href="/data/image.zarr"),
+            traits={
+                "labels": {
+                    "type": "labels",
+                    "source": [
+                        {
+                            "type": "multiscale",
+                            "ref": mk(3),
+                            "path": {
+                                "type": "zarr",
+                                "format": "absolute",
+                                "href": "/data/raw.zarr",
+                            },
+                        }
+                    ],
+                }
+            },
         ),
     )
-    body = payload(c, base_url=f"{DATA}/c.json", relativize=False)
-    (stub,) = body["nodes"]
-    assert stub["path"] == {"type": "zarr", "path": "../image.zarr"}
-    assert "nodes" not in stub
-
-
-def test_relativize_rewrites_absolute_stub_path() -> None:
-    c = NodeTree.of(NodeRecord(type="collection", id="root", name="test", children=()))
-    c, _ = c.add_child(
-        ROOT,
+    (stub,) = payload(c, base_url=f"{DATA}/c.json", relativize=True)["nodes"]
+    assert stub["path"] == {
+        "type": "zarr",
+        "format": "relative",
+        "href": "./image.zarr",
+    }
+    assert stub["traits"][0]["source"][0]["path"]["href"] == "./raw.zarr"
+    # http hrefs stay verbatim
+    remote = NodeTree.of(
         NodeRecord(
             type="multiscale",
-            name="test",
-            ref=Reference(path=ZarrPath(path="/data/image.zarr")),
-        ),
+            id=mk(1),
+            fields={
+                "scales": [
+                    {
+                        "type": "scale",
+                        "id": mk(9),
+                        "path": {
+                            "type": "zarr",
+                            "format": "http",
+                            "href": "https://h.org/a/0",
+                        },
+                    }
+                ]
+            },
+        )
     )
-    body = payload(c, base_url=f"{DATA}/c.json", relativize=True)
-    (stub,) = body["nodes"]
-    assert stub["path"]["path"] == "./image.zarr"  # relativized against /data/
+    body = payload(remote, base_url=f"{DATA}/img/zarr.json", relativize=True)
+    assert body["scales"][0]["path"]["href"] == "https://h.org/a/0"
+
+
+def test_embedded_multiscale_is_refused_when_strict() -> None:
+    c = NodeTree.of(NodeRecord(type="collection", id=mk(0), children=()))
+    c, _ = c.add_child(ROOT, NodeRecord(type="multiscale", id=mk(1), fields={}))
+    with pytest.raises(EmbeddedMultiscaleError):
+        payload(c, base_url=f"{DATA}/c.json")
+    lenient = node_dict(
+        c, ROOT, base_url=f"{DATA}/c.json", relativize=False, strict=False
+    )
+    assert lenient["nodes"][0]["type"] == "multiscale"
+    # a multiscale as the document root is fine
+    payload(
+        NodeTree.of(NodeRecord(type="multiscale", id=mk(1))),
+        base_url=f"{DATA}/i/zarr.json",
+    )
+
+
+async def test_resolved_view_serializes_back_to_the_entry_document(
+    revision_store,
+) -> None:
+    url = f"{DATA}/collection/zarr.json"
+    original = (await revision_store.get(url))["attributes"]["ome"]
+    view = build(url, await fetch_all(url, revision_store), inline=True)
+    body = payload(view.tree if hasattr(view, "tree") else view, base_url=url)
+    assert body["nodes"] == original["nodes"]
+    assert body["traits"] == original["traits"]
 
 
 # --------------------------------------------------------------------------- #
-# Round-trip through a store
+# Round-trip through a store, manifests
 # --------------------------------------------------------------------------- #
 
 
 async def test_write_then_read_round_trips() -> None:
-    original = _sample_collection()
-    store = _MemoryStore()
+    original = _sample()
+    store = MemoryStore()
     url = await write_document(store, f"{DATA}/c.json", original)
-
-    reread = build(url, await fetch_all(url, store), inline=False)
+    reread = build(url, await fetch_all(url, store, depth=0), inline=False)
     assert [reread.record(n).id for n in reread.walk()] == [
         original.record(n).id for n in original.walk()
     ]
-    assert [reread.record(n).type for n in reread.walk()] == [
-        original.record(n).type for n in original.walk()
-    ]
-    assert dict(reread.record(reread.find("img")[0]).attributes) == {"role": "raw"}
+    img = reread.record(reread.find(mk(1))[0])
+    assert img.is_external and img.traits[RENDER]["contrast_limits"] == [0, 1]
 
 
-async def test_unedited_write_is_byte_identical_on_resave() -> None:
-    store = _MemoryStore()
-    url = await write_document(store, f"{DATA}/c.json", _sample_collection())
-    first = store.files[url]
-    reread = build(url, await fetch_all(url, store), inline=False)
+async def test_unedited_write_is_identical_on_resave() -> None:
+    store = MemoryStore()
+    url = await write_document(store, f"{DATA}/c.json", _sample())
+    first = await store.get(url)
+    reread = build(url, await fetch_all(url, store, depth=0), inline=False)
     await write_document(store, url, reread, existing=first, overwrite=True)
-    assert store.files[url] == first
+    assert await store.get(url) == first
+
+
+def test_used_extension_types_stop_at_document_boundaries() -> None:
+    c = _sample()  # RENDER is on the external entry; counted (the entry is ours)
+    assert used_extension_types(c) == (RENDER,)
+    registry = (
+        ExtensionRegistry(
+            [{"id": "https://napari.org/ngff/", "version": "1.0"}]  # type: ignore[list-item]
+        )
+        if False
+        else ExtensionRegistry()
+    )
+    from ngio_collections.models import ExtensionManifestEntry
+
+    registry.register(
+        ExtensionManifestEntry(id="https://napari.org/ngff/", version="1.0")
+    )
+    assert derive_manifest(c, registry=registry) == [
+        {"id": "https://napari.org/ngff/", "version": "1.0", "schemas": []}
+    ]
+    # an unknown URI is left undeclared, never a failure
+    assert derive_manifest(c) == []
+
+
+async def test_write_derives_and_preserves_manifest_entries() -> None:
+    from ngio_collections.models import ExtensionManifestEntry
+
+    store = MemoryStore()
+    registry = ExtensionRegistry(
+        [ExtensionManifestEntry(id="https://napari.org/ngff/", version="1.0")]
+    )
+    url = await write_document(store, f"{DATA}/c.json", _sample(), registry=registry)
+    written = (await store.get(url))["ome"]
+    assert written["extension_manifest"][0]["id"] == "https://napari.org/ngff/"
+    # re-saving without the registry keeps the entry the document already declared
+    reread = build(url, await fetch_all(url, store, depth=0), inline=False)
+    await write_document(
+        store, url, reread, existing=await store.get(url), overwrite=True
+    )
+    assert (await store.get(url))["ome"]["extension_manifest"] == written[
+        "extension_manifest"
+    ]

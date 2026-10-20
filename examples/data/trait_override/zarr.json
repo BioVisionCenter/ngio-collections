@@ -1,0 +1,37 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "extension_manifest": [
+        {
+          "id": "https://napari.org/ngff/",
+          "version": "1.0",
+          "schemas": []
+        }
+      ],
+      "type": "collection",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
+      "name": "root",
+      "nodes": [
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+          "name": "image",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./image"
+          },
+          "traits": [
+            {
+              "type": "https://napari.org/ngff/visible",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

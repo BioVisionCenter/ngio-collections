@@ -1,0 +1,159 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "collection",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000006",
+      "name": "plate-001",
+      "traits": [
+        {
+          "type": "plate",
+          "rows": [
+            {
+              "name": "A"
+            },
+            {
+              "name": "B"
+            }
+          ],
+          "columns": [
+            {
+              "name": "1"
+            },
+            {
+              "name": "2"
+            }
+          ],
+          "acquisitions": [
+            {
+              "type": "acquisition",
+              "id": "0192f3a0-7c1e-7b00-9c22-00000000000b",
+              "name": "t0",
+              "starttime": 1727683200,
+              "endtime": 1727686800
+            }
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "type": "collection",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000007",
+          "name": "A1",
+          "traits": [
+            {
+              "type": "well",
+              "row_index": 0,
+              "column_index": 0
+            },
+            {
+              "type": "scene",
+              "coordinate_systems": [
+                {
+                  "type": "coordinate_system",
+                  "id": "0192f3a0-7c1e-7b00-9c22-000000000008",
+                  "axes": [
+                    {
+                      "name": "y",
+                      "type": "space",
+                      "unit": "micrometer"
+                    },
+                    {
+                      "name": "x",
+                      "type": "space",
+                      "unit": "micrometer"
+                    }
+                  ]
+                }
+              ],
+              "coordinate_transformations": [
+                {
+                  "type": "translation",
+                  "translation": [
+                    0,
+                    0
+                  ],
+                  "input": {
+                    "type": "coordinate_system",
+                    "path": {
+                      "type": "zarr",
+                      "format": "relative",
+                      "href": "./A/1/0"
+                    },
+                    "ref": "0192f3a0-7c1e-7b00-9c22-000000000022"
+                  },
+                  "output": {
+                    "type": "coordinate_system",
+                    "ref": "0192f3a0-7c1e-7b00-9c22-000000000008"
+                  }
+                },
+                {
+                  "type": "translation",
+                  "translation": [
+                    0,
+                    820
+                  ],
+                  "input": {
+                    "type": "coordinate_system",
+                    "path": {
+                      "type": "zarr",
+                      "format": "relative",
+                      "href": "./A/1/1"
+                    },
+                    "ref": "0192f3a0-7c1e-7b00-9c22-000000000023"
+                  },
+                  "output": {
+                    "type": "coordinate_system",
+                    "ref": "0192f3a0-7c1e-7b00-9c22-000000000008"
+                  }
+                }
+              ]
+            }
+          ],
+          "nodes": [
+            {
+              "type": "multiscale",
+              "id": "0192f3a0-7c1e-7b00-9c22-000000000009",
+              "name": "fov0",
+              "path": {
+                "type": "zarr",
+                "format": "relative",
+                "href": "./A/1/0"
+              },
+              "traits": [
+                {
+                  "type": "acquisition",
+                  "acquisition": {
+                    "type": "acquisition",
+                    "ref": "0192f3a0-7c1e-7b00-9c22-00000000000b"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "multiscale",
+              "id": "0192f3a0-7c1e-7b00-9c22-00000000000a",
+              "name": "fov1",
+              "path": {
+                "type": "zarr",
+                "format": "relative",
+                "href": "./A/1/1"
+              },
+              "traits": [
+                {
+                  "type": "acquisition",
+                  "acquisition": {
+                    "type": "acquisition",
+                    "ref": "0192f3a0-7c1e-7b00-9c22-00000000000b"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

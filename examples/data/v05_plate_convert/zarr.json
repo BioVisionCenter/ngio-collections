@@ -1,0 +1,53 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "collection",
+      "id": "ae9a32c3-1a9b-567f-b2da-463de35f23c4",
+      "name": "idr0010 76-45",
+      "traits": [
+        {
+          "type": "plate",
+          "rows": [
+            {
+              "name": "A"
+            }
+          ],
+          "columns": [
+            {
+              "name": "1"
+            },
+            {
+              "name": "2"
+            }
+          ],
+          "acquisitions": []
+        }
+      ],
+      "nodes": [
+        {
+          "type": "collection",
+          "id": "cc046466-3f36-58e3-938e-06776649e7b5",
+          "name": "A1",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./A/1"
+          }
+        },
+        {
+          "type": "collection",
+          "id": "203333c7-8a40-55a3-8297-b90b17faae98",
+          "name": "A2",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./A/2"
+          }
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

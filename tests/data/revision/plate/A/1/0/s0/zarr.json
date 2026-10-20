@@ -1,0 +1,11 @@
+{
+  "zarr_format": 3,
+  "node_type": "array",
+  "shape": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "data_type": "uint8"
+}

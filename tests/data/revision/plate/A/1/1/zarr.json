@@ -1,0 +1,85 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "id": "0192f3a0-7c1e-7b00-9c22-00000000000a",
+      "name": "fov1",
+      "coordinate_systems": [
+        {
+          "type": "coordinate_system",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000023",
+          "name": "physical",
+          "axes": [
+            {
+              "name": "y",
+              "type": "space",
+              "unit": "micrometer"
+            },
+            {
+              "name": "x",
+              "type": "space",
+              "unit": "micrometer"
+            }
+          ]
+        }
+      ],
+      "scales": [
+        {
+          "type": "scale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000032",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./s0"
+          },
+          "coordinate_transformations": [
+            {
+              "type": "scale",
+              "scale": [
+                0.1,
+                0.1
+              ],
+              "input": {
+                "type": "scale",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000032"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000023"
+              }
+            }
+          ]
+        },
+        {
+          "type": "scale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000033",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./s1"
+          },
+          "coordinate_transformations": [
+            {
+              "type": "scale",
+              "scale": [
+                0.2,
+                0.2
+              ],
+              "input": {
+                "type": "scale",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000033"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000023"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

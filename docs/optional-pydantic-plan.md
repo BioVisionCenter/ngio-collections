@@ -1,3 +1,9 @@
+> **Stale (October 2026).** Written against RFC-8 as published. The repo now
+> targets revision 1: read `attributes` as `traits` + `fields`, `ReferenceObj`
+> as `{type, ref, path?}`, `DocPath` as `{type, format, href}`, and
+> `models/attributes/` as `models/traits/`. The lazy-validation structure and
+> the approach below still apply; names and file paths do not.
+
 # Make pydantic an optional dependency
 
 ## Context

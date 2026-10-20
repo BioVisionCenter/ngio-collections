@@ -1,63 +1,103 @@
-"""The built-in example validators and the tuple that bundles them.
+"""RECOMMENDED validators: the rules of the revision's recommended-tier traits.
 
-These demonstrate the two neighbourhood shapes a validator reads through the
-`Node` handle:
+HCS and labels are deferred to sub-RFCs (RFC-8 revision 1 §11), so these encode
+the rules the revision's examples imply and §3.1's `applies_to` constraint:
 
-- `well_under_plate` reads *up* one level (a node with a `well` capability must
-  sit under a node with a `plate` capability).
-- `scale_matches_axes` follows a *reference*: a `scale` transform's factor count
-  must match the axis count of the coordinate system it points at, searched on
-  the node itself and its ancestors.
+- `well_under_plate` reads *up* one level: a `well` sits under a `plate`.
+- `plate_children_are_wells` reads *down* one level: a plate's children are
+  collections carrying `well`.
+- `trait_applies_to`: each built-in trait sits on a node type it applies to.
+- `scale_matches_axes`: a `scale` transform's factor count matches the axis
+  count of the coordinate system it maps into, within the same multiscale (or
+  the same `scene`).
+- `labels_source_resolves`: a `labels` trait's sources are multiscales.
 
 Each is a plain callable that `raise`s `ValidationError` on a problem and returns
-otherwise; callers pass the ones they want explicitly
-(`ngc.validate(view, validators=(ngc.well_under_plate, ngc.scale_matches_axes))`).
+otherwise; callers pass the ones they want explicitly or use the bundles.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Iterable
 
-from ngio_collections.models.attributes import (
-    CoordinateSystem,
-    CoordinateSystemsAttribute,
-    CoordinateTransformationsAttribute,
-    PlateAttribute,
-    SceneAttribute,
+from ngio_collections.models._multiscale import CoordinateSystem, MultiscaleFields
+from ngio_collections.models._transformation import (
+    CoordinateTransformation,
     ScaleTransformation,
-    WellAttribute,
+)
+from ngio_collections.models.traits import (
+    AcquisitionTrait,
+    BaseTrait,
+    LabelsTrait,
+    PlateTrait,
+    SceneTrait,
+    WellTrait,
 )
 from ngio_collections.validate._engine import ValidationError
 
 if TYPE_CHECKING:
     from ngio_collections.api._node import Node
 
+_BUILTIN_TRAITS: tuple[type[BaseTrait], ...] = (
+    SceneTrait,
+    PlateTrait,
+    WellTrait,
+    AcquisitionTrait,
+    LabelsTrait,
+)
+
 
 def well_under_plate(node: Node) -> None:
     """A node carrying `well` must be a child of a node carrying `plate`."""
-    if not node.has(WellAttribute):
+    if not node.has_trait(WellTrait):
         return
     parent = node.parent()
-    if parent is None or not parent.has(PlateAttribute):
+    if parent is None or not parent.has_trait(PlateTrait):
         raise ValidationError(
-            "a node with a `well` attribute must be a child of a node with a "
-            "`plate` attribute"
+            "a node with a `well` trait must be a child of a node with a `plate` trait"
         )
 
 
-def scale_matches_axes(node: Node) -> None:
-    """A `scale` transform's factor count must match its coordinate system's axes."""
-    if not node.has(CoordinateTransformationsAttribute):
+def plate_children_are_wells(node: Node) -> None:
+    """Every child of a node carrying `plate` is a collection carrying `well`."""
+    if not node.has_trait(PlateTrait):
         return
-    for transform in node[CoordinateTransformationsAttribute].root:
+    for child in node.children():
+        if child.type != "collection" or not child.has_trait(WellTrait):
+            raise ValidationError(
+                f"child {child.id!r} of a plate is not a collection with a `well` trait"
+            )
+
+
+def trait_applies_to(node: Node) -> None:
+    """Each built-in trait sits on a node type it applies to (§3.1)."""
+    for trait in _BUILTIN_TRAITS:
+        if (
+            node.has_trait(trait)
+            and trait.applies_to
+            and node.type not in trait.applies_to
+        ):
+            raise ValidationError(
+                f"trait {trait.trait_type()!r} applies to {sorted(trait.applies_to)}, "
+                f"not to a {node.type!r} node"
+            )
+
+
+def _check_scales(
+    transforms: Iterable[CoordinateTransformation],
+    systems: Iterable[CoordinateSystem],
+) -> None:
+    """Raise if a `scale` transform's factor count mismatches its output system."""
+    by_id = {s.id: s for s in systems}
+    for transform in transforms:
         if not isinstance(transform, ScaleTransformation) or transform.scale is None:
             continue
         ref = transform.output or transform.input
-        if ref is None:
+        if ref is None or ref.path is not None:
             continue
-        system = _find_coordinate_system(node, ref.id)
+        system = by_id.get(ref.ref)
         if system is None:
-            continue  # unresolved system: a referential check's concern, not this one
+            continue  # a dangling reference is `references_resolve`'s concern
         if len(transform.scale) != len(system.axes):
             raise ValidationError(
                 f"scale transform has {len(transform.scale)} factor(s) but "
@@ -65,28 +105,45 @@ def scale_matches_axes(node: Node) -> None:
             )
 
 
-def _find_coordinate_system(node: Node, system_id: str) -> CoordinateSystem | None:
-    """Search the focus node and its ancestors for coordinate system `system_id`."""
-    for scope in _self_and_ancestors(node):
-        system = _coordinate_system_in(scope, system_id)
-        if system is not None:
-            return system
-    return None
+def scale_matches_axes(node: Node) -> None:
+    """A `scale` transform's factor count must match its coordinate system's axes."""
+    if node.type == "multiscale" and node.fields:
+        try:
+            fields = MultiscaleFields.model_validate(dict(node.fields))
+        except Exception:
+            return  # malformed fields are `multiscale_is_complete`'s concern
+        for scale in fields.scales:
+            _check_scales(scale.coordinate_transformations, fields.coordinate_systems)
+    scene = node.get_trait(SceneTrait)
+    if scene is not None:
+        _check_scales(scene.coordinate_transformations, scene.coordinate_systems)
 
 
-def _self_and_ancestors(node: Node) -> Iterator[Node]:
-    """Yield `node` then each of its ancestors up to the root."""
-    yield node
-    yield from node.ancestors()
+def labels_source_resolves(node: Node) -> None:
+    """A `labels` trait's `source` entries are references to multiscales."""
+    labels = node.get_trait(LabelsTrait)
+    if labels is None:
+        return
+    for source in labels.source:
+        if source.type != "multiscale":
+            raise ValidationError(
+                f"labels source {source.ref!r} has type {source.type!r}, "
+                "expected 'multiscale'"
+            )
+        if source.path is not None:
+            continue
+        keys = node.tree.find(source.ref)
+        if not any(node.tree.record(k).type == "multiscale" for k in keys):
+            raise ValidationError(
+                f"labels source {source.ref!r} is not a multiscale in this document"
+            )
 
 
-def _coordinate_system_in(node: Node, system_id: str) -> CoordinateSystem | None:
-    """Return the coordinate system `system_id` defined on `node`, if any."""
-    systems: list[CoordinateSystem] = []
-    coordinate_systems = node.get_attr(CoordinateSystemsAttribute)
-    if coordinate_systems is not None:
-        systems.extend(coordinate_systems.root)
-    scene = node.get_attr(SceneAttribute)
-    if scene is not None and scene.coordinate_systems:
-        systems.extend(scene.coordinate_systems)
-    return next((s for s in systems if s.id == system_id), None)
+RECOMMENDED_VALIDATORS = (
+    well_under_plate,
+    plate_children_are_wells,
+    trait_applies_to,
+    scale_matches_axes,
+    labels_source_resolves,
+)
+"""The checks for the revision's recommended-tier traits."""

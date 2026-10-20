@@ -13,8 +13,11 @@ import threading
 from typing import Any, Coroutine, TypeVar
 
 from ngio_collections.api import _api
+from ngio_collections.api._extensions import EXTENSIONS
 from ngio_collections.api._node import Node
 from ngio_collections.io.store import AnyReadableStore
+from ngio_collections.models._manifest import ExtensionRegistry
+from ngio_collections.models._paths import ALL_FORMATS
 from ngio_collections.models._references import ReferenceObj
 from ngio_collections.resolve import OnError
 
@@ -47,15 +50,20 @@ def open(source: str, store: AnyReadableStore | None = None) -> Node:
     return _run(_api.open(source, store))
 
 
-def open_inlined(
+def open_resolved(
     source: str,
     store: AnyReadableStore | None = None,
     *,
     depth: int | None = None,
     on_error: OnError = "skip",
+    formats: frozenset[str] = ALL_FORMATS,
 ) -> Node:
-    """Synchronous `open_inlined`."""
-    return _run(_api.open_inlined(source, store, depth=depth, on_error=on_error))
+    """Synchronous `open_resolved`."""
+    return _run(
+        _api.open_resolved(
+            source, store, depth=depth, on_error=on_error, formats=formats
+        )
+    )
 
 
 def open_ref(
@@ -67,7 +75,7 @@ def open_ref(
     return _run(_api.open_ref(ref, base_url, store))
 
 
-def open_inlined_ref(
+def open_resolved_ref(
     ref: ReferenceObj,
     base_url: str | None = None,
     store: AnyReadableStore | None = None,
@@ -75,9 +83,9 @@ def open_inlined_ref(
     depth: int | None = None,
     on_error: OnError = "skip",
 ) -> Node:
-    """Synchronous `open_inlined_ref`."""
+    """Synchronous `open_resolved_ref`."""
     return _run(
-        _api.open_inlined_ref(ref, base_url, store, depth=depth, on_error=on_error)
+        _api.open_resolved_ref(ref, base_url, store, depth=depth, on_error=on_error)
     )
 
 
@@ -88,36 +96,30 @@ def create(
     *,
     overwrite: bool = False,
     relativize: bool = True,
+    registry: ExtensionRegistry = EXTENSIONS,
 ) -> Node:
     """Synchronous `create`."""
     return _run(
         _api.create(
-            destination, root, store, overwrite=overwrite, relativize=relativize
+            destination,
+            root,
+            store,
+            overwrite=overwrite,
+            relativize=relativize,
+            registry=registry,
         )
     )
 
 
 def save(
-    node: Node, store: AnyReadableStore | None = None, *, relativize: bool = True
-) -> Node:
-    """Synchronous `save`."""
-    return _run(_api.save(node, store, relativize=relativize))
-
-
-def save_inlined(
-    view: Node,
-    destination: str,
+    node: Node,
     store: AnyReadableStore | None = None,
     *,
-    overwrite: bool = False,
     relativize: bool = True,
+    registry: ExtensionRegistry = EXTENSIONS,
 ) -> Node:
-    """Synchronous `save_inlined`."""
-    return _run(
-        _api.save_inlined(
-            view, destination, store, overwrite=overwrite, relativize=relativize
-        )
-    )
+    """Synchronous `save`."""
+    return _run(_api.save(node, store, relativize=relativize, registry=registry))
 
 
 def externalize(
@@ -127,15 +129,26 @@ def externalize(
     *,
     overwrite: bool = False,
     relativize: bool = True,
+    registry: ExtensionRegistry = EXTENSIONS,
 ) -> Node:
     """Synchronous `externalize`."""
     return _run(
         _api.externalize(
-            node, destination, store, overwrite=overwrite, relativize=relativize
+            node,
+            destination,
+            store,
+            overwrite=overwrite,
+            relativize=relativize,
+            registry=registry,
         )
     )
 
 
-def delete(node: Node, store: AnyReadableStore | None = None) -> list[str]:
+def delete(
+    node: Node, store: AnyReadableStore | None = None, *, cascade: bool = False
+) -> list[str]:
     """Synchronous `delete`."""
-    return _run(_api.delete(node, store))
+    return _run(_api.delete(node, store, cascade=cascade))
+
+
+resolve_ref = _api.resolve_ref

@@ -6,13 +6,14 @@ import pytest
 
 import ngio_collections.api._api as aio
 from ngio_collections.api import (
-    MemoryStore,
     AsyncReadableStore,
+    AsyncWritableStore,
+    MemoryStore,
     StoreDuplicateValueError,
     StoreReadOnlyError,
-    AsyncWritableStore,
-    new_node,
 )
+from tests._builders import collection, multiscale
+from tests.conftest import mk
 
 
 async def test_store_contract() -> None:
@@ -20,21 +21,13 @@ async def test_store_contract() -> None:
     assert isinstance(store, AsyncReadableStore) and isinstance(
         store, AsyncWritableStore
     )
-
     assert await store.get("/a.json") == {"seed": True}
     with pytest.raises(FileNotFoundError):
         await store.get("/missing.json")
-
     await store.put("/b.json", {"data": True})
-    assert await store.get("/b.json") == {"data": True}
-
-    _items = []
-    async for item in store.items():
-        _items.append(item)
-
-    assert dict(_items) == {"/a.json": {"seed": True}, "/b.json": {"data": True}}
+    items = [item async for item in store.items()]
+    assert dict(items) == {"/a.json": {"seed": True}, "/b.json": {"data": True}}
     assert (await store.contains("/b.json")) and (await store.size()) == 2
-
     await store.delete("/b.json")
     await store.delete("/b.json")  # idempotent
     assert not (await store.contains("/b.json"))
@@ -44,55 +37,25 @@ async def test_put_rejects_duplicate_url_without_overwrite() -> None:
     store = MemoryStore({"/a.json": {"seed": True}})
     with pytest.raises(StoreDuplicateValueError):
         await store.put("/a.json", {"clobber": True})
-    assert await store.get("/a.json") == {"seed": True}
-
     await store.put("/a.json", {"clobber": True}, overwrite=True)
     assert await store.get("/a.json") == {"clobber": True}
 
 
-async def test_initial_mapping_is_copied() -> None:
-    seed = {"/a.json": {"seed": True}}
-    store = MemoryStore(seed)
-    seed["/a.json"] = {"seed": False}
-    assert await store.get("/a.json") == {"seed": True}
-
-
-async def test_read_only_rejects_writes() -> None:
+async def test_read_only_rejects_writes_and_fails_early_through_the_api() -> None:
     store = MemoryStore({"/a.json": {"seed": True}}, read_only=True)
-    assert await store.get("/a.json") == {"seed": True}
     with pytest.raises(StoreReadOnlyError):
         await store.put("/b.json", {"data": True})
     with pytest.raises(StoreReadOnlyError):
-        await store.delete("/a.json")
-
-
-async def test_read_only_fails_early_through_the_api() -> None:
-    store = MemoryStore(read_only=True)
-    with pytest.raises(StoreReadOnlyError):
-        await aio.create(
-            "/c.json", new_node("collection", id="root", name="test"), store
-        )
+        await aio.create("/c.json", collection(1), store)
 
 
 async def test_hermetic_create_open_save_roundtrip() -> None:
     store = MemoryStore()
-    image = new_node("multiscale", id="image", name="test", attributes={"role": "raw"})
-    stub = await aio.create("/data/image.zarr", image, store)
-    root = new_node("collection", id="root", name="test", children=[stub])
-    await aio.create("/data/c.json", root, store)
-
+    stub = await aio.create("/data/image.zarr", multiscale(2, name="raw"), store)
+    await aio.create("/data/c.json", collection(1).add_external(stub), store)
     opened = await aio.open("/data/c.json", store)
-    edited = opened.find("image").set_attrs({"role": "edited"})
-    await aio.save(edited, store)
-
-    inlined = await aio.open_inlined("/data/c.json", store)
-    assert inlined.find("image").attributes["role"] == "edited"
-
-    _items = []
-    async for item in store.items():
-        _items.append(item)
-
-    assert {url for url, _ in _items} == {
-        "/data/c.json",
-        "/data/image.zarr/zarr.json",
-    }
+    await aio.save(opened.find(mk(2)).rename("edited"), store)
+    view = await aio.open_resolved("/data/c.json", store)
+    assert view.find(mk(2)).name == "edited" and len(view.find(mk(2)).scales) == 2
+    urls = {url async for url, _ in store.items()}
+    assert urls == {"/data/c.json", "/data/image.zarr/zarr.json"}

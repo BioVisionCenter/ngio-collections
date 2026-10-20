@@ -1,0 +1,20 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "0192f3a0-7c1e-7b00-9c22-000000000044",
+    "name": "child",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "id": "0192f3a0-7c1e-7b00-9c22-000000000041",
+        "name": "img",
+        "path": {
+          "type": "zarr",
+          "format": "relative",
+          "href": "../img"
+        }
+      }
+    ]
+  }
+}

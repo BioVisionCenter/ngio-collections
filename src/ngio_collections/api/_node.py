@@ -1,49 +1,64 @@
 """The public `Node` handle: a positioned, typed view over a `NodeTree`.
 
-A `Node` pairs a `NodeTree` with a `NodeId` — "which graph" and "which node in
-it" — and carries all the behaviour users reach for: navigation (`walk` / `find`
-/ `children` / `parent`), capability lenses (`node[WellAttribute]`), validation,
-`ref`, state, and the functional edits. Edits return a *new* `Node` over a *new*
-`NodeTree`; the handle itself is immutable by convention. The underlying record
-is inert data — the handle is exactly the v5 "node you hold and call methods on".
+A `Node` pairs a `NodeTree` with a `NodeId` ("which graph" and "which node in
+it") and carries all the behaviour users reach for: navigation (`walk` / `find`
+/ `children` / `parent`), trait lenses (`node[WellTrait]`), node fields,
+validation, `ref`, state, and the functional edits. Edits return a *new* `Node`
+over a *new* `NodeTree`; the handle itself is immutable by convention. The
+underlying record is inert data.
 
-Construction is handle-rooted and fluent: `new_node(...)` seeds a detached root,
-`add` grafts a child subtree, and positioned edits return the updated handle.
-Typed subclasses (`CollectionNode` / `MultiscaleNode` / `SinglescaleNode` plus a
-generic `Node` fallback) come from the registry by `record.type`.
+Construction is handle-rooted and fluent: `new_node(...)` / `new_collection` /
+`new_multiscale` seed a detached root, `add` grafts a child subtree,
+`add_external` attaches the declaring entry of a node that lives in its own
+document, and positioned edits return the updated handle. Typed subclasses
+(`CollectionNode` / `MultiscaleNode` plus a generic `Node` fallback) come from
+the registry by `record.type`.
+
+RFC-8 revision 1 never embeds a multiscale in a collection (§8.1): `add`
+rejects a multiscale child that carries no `path`. Create the image document
+first (`create`), then attach the returned stub.
 """
 
 from __future__ import annotations
 
 import builtins
 from dataclasses import replace
-from typing import Iterator, Mapping, Sequence, TypeVar
+from typing import Iterator, Mapping, Sequence, cast
 
 from ngio_collections._types import JSONValue
 from ngio_collections.graph import (
     ROOT,
-    NodeTree,
+    Fields,
     NodeId,
     NodeRecord,
-    Reference,
+    NodeTree,
+    Traits,
     TreeBuilder,
     is_ancestor,
 )
 from ngio_collections.models._config import NodeStateError
-from ngio_collections.models._paths import DocPath, JsonPath, ZarrPath, meta_url
-from ngio_collections.models._paths import ZARR_METADATA_FILE
+from ngio_collections.models._ids import is_uuid, new_id
+from ngio_collections.models._manifest import is_extension_type
+from ngio_collections.models._multiscale import (
+    CoordinateSystem,
+    MultiscaleFields,
+    Scale,
+)
+from ngio_collections.models._paths import DocPath, meta_url
 from ngio_collections.models._references import ReferenceObj
-from ngio_collections.models.attributes import AnyAttribute
+from ngio_collections.models.traits import BaseTrait, TraitType
 from ngio_collections.validate import (
     ValidationError,
     ValidatorType,
-    get_attribute,
-    has_attribute,
-    read_attribute,
+    get_trait,
+    has_trait,
+    read_trait,
+    trait_key,
     validate,
 )
 
-A = TypeVar("A", bound=AnyAttribute)
+BUILTIN_NODE_TYPES = frozenset({"collection", "multiscale"})
+"""Keyword node types; anything else must be an extension URI."""
 
 
 class Node:
@@ -51,21 +66,21 @@ class Node:
 
     __slots__ = ("_tree", "_id")
 
-    def __init__(self, collection: NodeTree, node_id: NodeId) -> None:
-        """Bind this handle to `node_id` within `collection`."""
-        self._tree = collection
+    def __init__(self, tree: NodeTree, node_id: NodeId) -> None:
+        """Bind this handle to `node_id` within `tree`."""
+        self._tree = tree
         self._id = node_id
 
     # -- identity & state ---------------------------------------------------
 
     @property
     def tree(self) -> NodeTree:
-        """The node-tree this handle views."""
+        """The node tree this handle views."""
         return self._tree
 
     @property
     def node_id(self) -> NodeId:
-        """This node's structural key within the collection."""
+        """This node's structural key within the tree."""
         return self._id
 
     @property
@@ -75,33 +90,48 @@ class Node:
 
     @property
     def type(self) -> str:
-        """The structural type tag (`collection` / `multiscale` / …)."""
+        """The structural type (`collection` / `multiscale` / an extension URI)."""
         return self.record.type
 
     @property
     def name(self) -> str | None:
-        """The optional display name."""
+        """The optional, free-form display name."""
         return self.record.name
 
     @property
-    def id(self) -> str | None:
-        """The pristine local id."""
+    def id(self) -> str:
+        """The node's UUID."""
         return self.record.id
 
     @property
-    def attributes(self) -> Mapping[str, JSONValue]:
-        """The raw attribute bag (validate a capability via `node[Attr]`)."""
-        return self.record.attributes
+    def traits(self) -> Traits:
+        """The raw traits, indexed by trait type (validate one via `node[Trait]`)."""
+        return self.record.traits
 
     @property
-    def is_reference(self) -> bool:
+    def fields(self) -> Fields:
+        """The raw node-type fields (`coordinate_systems`, `scales`, …)."""
+        return self.record.fields
+
+    @property
+    def path(self) -> DocPath | None:
+        """The path object of an external node, or `None` if embedded."""
+        return self.record.path
+
+    @property
+    def ref_path(self) -> str | None:
+        """The `href` of an external node's path, or `None` if embedded."""
+        path = self.record.path
+        return None if path is None else path.href
+
+    @property
+    def is_external(self) -> bool:
         """Whether this node carries a `path` rather than embedded children.
 
-        True for an unresolved cross-document reference, and also for a node whose
-        `path` locates plain data (a Zarr array) — that one is fully resolved, it
-        just has nothing to inline.
+        True for a declaring entry whose document was not resolved, and for a
+        node whose `path` locates plain data.
         """
-        return self.record.is_reference
+        return self.record.is_external
 
     @property
     def is_detached(self) -> bool:
@@ -114,21 +144,10 @@ class Node:
         return self.record.origin_url
 
     @property
-    def ref_path(self) -> str | None:
-        """The document path this reference stores, or `None` if not a reference."""
-        ref = self.record.ref
-        return None if ref is None else ref.path.path
-
-    def require_id(self) -> str:
-        """Return this node's local id, narrowing it to `str`.
-
-        Raises:
-            NodeStateError: If the node carries no id.
-        """
-        id = self.record.id
-        if id is None:
-            raise NodeStateError("node has no id; it cannot be referenced")
-        return id
+    def extension_manifest(self) -> tuple[dict, ...]:
+        """The `extension_manifest` of this node's document (empty if detached)."""
+        url = self.record.origin_url
+        return () if url is None else self._tree.manifests.get(url, ())
 
     def require_document_url(self) -> str:
         """Return the URL of this node's backing document, narrowing it to `str`.
@@ -144,24 +163,28 @@ class Node:
         return url
 
     def ref(self) -> ReferenceObj:
-        """Return a portable `{id, path}` locator for this node on disk.
+        """Return a portable typed reference to this node in its document.
 
         Raises:
-            NodeStateError: If the node is detached or carries no id.
+            NodeStateError: If the node is detached.
         """
         return ReferenceObj(
-            id=self.require_id(), path=reference_path(self.require_document_url())
+            type=self.type,
+            ref=self.id,
+            path=DocPath.for_url(self.require_document_url()),
         )
 
-    def ref_stub(self) -> Node:
-        """Return a detached reference stub locating this node in its origin document.
+    def ref_local(self) -> ReferenceObj:
+        """Return a same-document typed reference (`{type, ref}`) to this node."""
+        return ReferenceObj(type=self.type, ref=self.id)
 
-        The stub is the same shape `create`/`save` return: attach it under a
-        parent with `add_ref` to link this node's document rather than embed its
-        subtree. It carries this node's local id, so it serializes with an `id`
-        and stays findable by `find(id)` wherever it lands. Unlike `ref()`, no
-        local id is required — a stub whose `id` is `None` points at the
-        document root (and is only structurally addressable).
+    def stub(self) -> Node:
+        """Return a detached declaring entry (`{type, id, name, path}`) for this node.
+
+        The stub is the same shape `create` / `save` return: attach it under a
+        parent with `add_external` to link this node's document rather than
+        embed its subtree. It carries this node's UUID, as the revision requires
+        the entry and the document root to share one id.
 
         Raises:
             NodeStateError: If the node is detached (no backing document).
@@ -195,19 +218,20 @@ class Node:
             yield wrap_node(self._tree, node_id)
 
     def find(self, id: str) -> Node | None:
-        """Return the first node in this subtree whose local id is `id`.
+        """Return the first node in this subtree whose UUID is `id`.
 
-        This covers unresolved reference stubs too: a stub minted by `create` /
-        `save` / `ref_stub` carries its target root's local id, so a
-        cross-document child is findable by id in a single-document `open` and
-        can be handled uniformly (e.g. `remove()`d). The exception is an
-        id-less stub — a plain doc-root reference, legal on disk — which is not
-        id-addressable; reach it structurally via `children()` / `walk()`.
+        This covers external nodes too: a declaring entry carries the UUID of
+        the document it points at, so a cross-document child is findable by id
+        in a single-document `open`.
         """
         for key in self._tree.find(id):
             if key == self._id or is_ancestor(self._id, key):
                 return wrap_node(self._tree, key)
         return None
+
+    def find_by_name(self, name: str) -> tuple[Node, ...]:
+        """Return every node in this subtree named `name` (names are not unique)."""
+        return tuple(n for n in self.walk() if n.name == name)
 
     def subtree(self) -> Node:
         """Return this node's subtree re-rooted into its own detached tree.
@@ -215,9 +239,8 @@ class Node:
         A located handle (`walk`/`find`) is already scoped to its subtree but
         stays part of the whole tree (its edits return the whole-tree root, and
         `parent()` climbs out). `subtree()` instead extracts an *independent*,
-        detached `NodeTree` whose root is this node — so it can be edited in
-        isolation (edits return the subtree root) or written as a new document
-        with `create()`. The source tree is untouched.
+        detached `NodeTree` whose root is this node, so it can be edited in
+        isolation or written as a new document with `create()`.
         """
         src = self._tree
         root = src.record(self._id)
@@ -239,26 +262,37 @@ class Node:
             )
         return wrap_node(builder.finish(), ROOT)
 
-    # -- capability lenses --------------------------------------------------
+    # -- trait and field lenses ---------------------------------------------
 
     # `type` is a property on this class, so it shadows the builtin in these
-    # annotations — spell it `builtins.type` to subscript the real type.
-    def __getitem__(self, attr_type: builtins.type[A]) -> A:
-        """Validate and return this node's value for `attr_type`."""
-        return read_attribute(self.record, attr_type)
+    # annotations; spell it `builtins.type` to subscript the real type.
+    def __getitem__(self, trait_type: builtins.type[TraitType]) -> TraitType:
+        """Validate and return this node's trait of `trait_type`.
 
-    def get_attr(self, attr_type: builtins.type[A]) -> A | None:
-        """Return this node's `attr_type` value, or `None` if absent."""
-        return get_attribute(self.record, attr_type)
+        Raises:
+            KeyError: If the trait is absent.
+        """
+        return read_trait(self.record, trait_type)
 
-    def has(self, attr_type: builtins.type[A]) -> bool:
-        """Return whether this node carries `attr_type`'s capability."""
-        return has_attribute(self.record, attr_type)
+    def get_trait(self, trait_type: builtins.type[TraitType]) -> TraitType | None:
+        """Return this node's validated trait of `trait_type`, or `None` if absent."""
+        return get_trait(self.record, trait_type)
 
-    def __contains__(self, attr_type: object) -> bool:
-        """Support `SomeAttribute in node` membership tests."""
-        key = getattr(attr_type, "key", None)
-        return isinstance(key, str) and key in self.record.attributes
+    def has_trait(self, trait: builtins.type[BaseTrait] | str) -> bool:
+        """Return whether this node carries `trait` (a model class or type string)."""
+        return has_trait(self.record, trait)
+
+    def __contains__(self, trait: object) -> bool:
+        """Support `WellTrait in node` and `"well" in node` membership tests."""
+        if isinstance(trait, str):
+            return trait in self.record.traits
+        if isinstance(trait, builtins.type) and issubclass(trait, BaseTrait):
+            return has_trait(self.record, trait)
+        return False
+
+    def get_field(self, key: str) -> JSONValue | None:
+        """Return the node-type field `key`, or `None` if absent."""
+        return self.record.fields.get(key)
 
     # -- validation ---------------------------------------------------------
 
@@ -274,52 +308,85 @@ class Node:
     # -- functional edits ---------------------------------------------------
     #
     # Edits are positioned on the located node but return the *root* handle of
-    # the new collection (tree-in, tree-out): `root.find("img").set_attr(x)`
-    # yields the whole updated tree, so it round-trips through `create`/`save`.
-    # Reads (walk/find/children/parent) return located handles instead.
+    # the new tree (tree-in, tree-out): `root.find(uuid).set_trait(x)` yields
+    # the whole updated tree, so it round-trips through `create`/`save`. Reads
+    # (walk/find/children/parent) return located handles instead.
 
-    def _root(self, collection: NodeTree) -> Node:
-        """Wrap the root of `collection` (the tree-out of every edit)."""
-        return wrap_node(collection, ROOT)
+    def _root(self, tree: NodeTree) -> Node:
+        """Wrap the root of `tree` (the tree-out of every edit)."""
+        return wrap_node(tree, ROOT)
 
-    def set_attr(self, value: AnyAttribute) -> Node:
-        """Set the typed attribute `value` (keyed by its model's `key`)."""
-        dumped = value.model_dump(mode="json", by_alias=True, exclude_none=True)
-        return self._root(self._tree.set_attrs(self._id, {value.key: dumped}))
+    def set_trait(self, trait: BaseTrait | Mapping[str, JSONValue]) -> Node:
+        """Upsert one trait (a model or a mapping carrying `type`)."""
+        return self._root(self._tree.set_trait(self._id, _trait_dict(trait)))
 
-    def set_attrs(
-        self,
-        values: Mapping[str, JSONValue],
-        *,
-        drop: Sequence[str | builtins.type[AnyAttribute]] = (),
-    ) -> Node:
-        """Merge raw `values` into this node's attribute bag, removing `drop`.
+    def set_traits(self, *traits: BaseTrait | Mapping[str, JSONValue]) -> Node:
+        """Upsert several traits in one edit, keyed by their `type`."""
+        merged = dict(self.record.traits)
+        for trait in traits:
+            data = _trait_dict(trait)
+            merged[str(data["type"])] = data
+        return self._root(self._tree.set_traits(self._id, merged))
 
-        `drop` (str keys or attribute classes) is applied after the merge, in
-        one edit — so a merge-then-drop needs no re-`find` between two calls.
+    def drop_traits(self, *traits: str | builtins.type[BaseTrait]) -> Node:
+        """Remove the given traits (type strings or model classes)."""
+        return self._root(
+            self._tree.drop_traits(self._id, tuple(trait_key(t) for t in traits))
+        )
+
+    def set_fields(self, fields: Mapping[str, JSONValue]) -> Node:
+        """Replace this node's node-type fields."""
+        return self._root(self._tree.set_fields(self._id, fields))
+
+    def set_field(self, key: str, value: JSONValue) -> Node:
+        """Set one node-type field."""
+        return self._root(
+            self._tree.set_fields(self._id, {**self.record.fields, key: value})
+        )
+
+    def set_path(self, path: DocPath | None) -> Node:
+        """Make this node external (point it at `path`) or embedded again (`None`).
+
+        Raises:
+            NodeStateError: If the node has children; an external node is a leaf.
         """
-        return self._root(self._tree.set_attrs(self._id, values, drop=_attr_keys(drop)))
-
-    def drop_attrs(self, *keys: str | builtins.type[AnyAttribute]) -> Node:
-        """Remove `keys` from this node's bag (str keys or attribute classes)."""
-        return self._root(self._tree.drop_attrs(self._id, _attr_keys(keys)))
+        record = self.record
+        if record.children:
+            raise NodeStateError(
+                f"node {record.id!r} has children; externalize() it instead"
+            )
+        updated = replace(record, path=path, children=None if path is not None else ())
+        return self._root(self._tree.replace(self._id, updated))
 
     def rename(self, name: str | None) -> Node:
         """Set this node's display name."""
         return self._root(self._tree.rename(self._id, name))
 
     def add(self, *children: Node) -> Node:
-        """Graft each child's subtree under this node, in order; return the tree root."""
+        """Graft each child's subtree under this node, in order; return the tree root.
+
+        Raises:
+            NodeStateError: If a child is a multiscale with no `path`: the
+                revision never embeds a multiscale. `create()` its document
+                first and attach the returned stub with `add_external`.
+        """
         tree = self._tree
         for child in children:
+            if child.type == "multiscale" and not child.is_external:
+                raise NodeStateError(
+                    f"multiscale {child.id!r} has no path; a multiscale is always its "
+                    "own document: create() it, then add_external() the stub"
+                )
             tree = _graft(tree, self._id, child._tree, child._id)
         return self._root(tree)
 
-    def add_ref(self, *stubs: Node) -> Node:
-        """Attach reference stubs (from `create`/`save`/`ref_stub`) under this node."""
+    def add_external(self, *stubs: Node) -> Node:
+        """Attach declaring entries (from `create` / `save` / `stub`) under this node."""
         for stub in stubs:
-            if not stub.is_reference:
-                raise ValueError("add_ref expects reference nodes (e.g. from create)")
+            if not stub.is_external:
+                raise ValueError(
+                    "add_external expects external nodes (e.g. from create)"
+                )
         return self.add(*stubs)
 
     def remove(self) -> Node:
@@ -329,36 +396,35 @@ class Node:
         return self._root(self._tree.remove(self._id))
 
 
-def _attr_keys(keys: Sequence[str | builtins.type[AnyAttribute]]) -> tuple[str, ...]:
-    """Resolve attribute classes to their `key`, passing str keys through."""
-    return tuple(k if isinstance(k, str) else k.key for k in keys)
-
-
-def reference_path(url: str) -> DocPath:
-    """Return the `DocPath` a reference stores to point at the document at `url`.
-
-    JSON points at the document URL; Zarr points at the group directory (the URL
-    without the trailing `zarr.json`).
-    """
-    url = meta_url(url)
-    suffix = "/" + ZARR_METADATA_FILE
-    if url.endswith(suffix):
-        return ZarrPath(path=url[: -len(suffix)])
-    if url.endswith(".json"):
-        return JsonPath(path=url)
-    return ZarrPath(path=url)
+def _trait_dict(trait: BaseTrait | Mapping[str, JSONValue]) -> dict[str, JSONValue]:
+    """Return the wire dict for a trait model or mapping (must carry `type`)."""
+    if isinstance(trait, BaseTrait):
+        return trait.model_dump(mode="json", exclude_none=True)
+    data = dict(trait)
+    if not isinstance(data.get("type"), str):
+        raise ValueError(f"a trait must carry a string `type`: {data!r}")
+    return data
 
 
 def _graft(
-    collection: NodeTree, parent_key: NodeId, other: NodeTree, other_node: NodeId
+    tree: NodeTree, parent_key: NodeId, other: NodeTree, other_node: NodeId
 ) -> NodeTree:
     """Copy `other`'s subtree at `other_node` under `parent_key`, recursively."""
     record = other.record(other_node)
     seed = replace(record, children=() if record.children is not None else None)
-    collection, key = collection.add_child(parent_key, seed)
+    tree, key = tree.add_child(parent_key, seed)
     for child in other.children_ids(other_node):
-        collection = _graft(collection, key, other, child)
-    return collection
+        tree = _graft(tree, key, other, child)
+    return tree
+
+
+def _traits_from(traits: Sequence[BaseTrait | Mapping[str, JSONValue]]) -> dict:
+    """Index constructor `traits` by type."""
+    out: dict[str, JSONValue] = {}
+    for trait in traits:
+        data = _trait_dict(trait)
+        out[str(data["type"])] = data
+    return out
 
 
 def new_node(
@@ -366,52 +432,91 @@ def new_node(
     *,
     id: str | None = None,
     name: str | None = None,
-    attributes: Mapping[str, JSONValue] | None = None,
+    traits: Sequence[BaseTrait | Mapping[str, JSONValue]] = (),
+    fields: Mapping[str, JSONValue] | None = None,
     children: Sequence[Node] | None = None,
-    ref: Reference | None = None,
+    path: DocPath | None = None,
     origin_url: str | None = None,
 ) -> Node:
-    """Create a detached collection rooted at a new node and return its handle.
+    """Create a detached tree rooted at a new node and return its handle.
 
-    A node with a `ref` is a leaf reference stub; otherwise it is a branch whose
-    `children` subtrees are grafted in order (and can keep growing via `add`).
+    A node with a `path` is an external leaf (a declaring entry); otherwise it is
+    a branch whose `children` subtrees are grafted in order (and can keep growing
+    via `add`). `id` defaults to a freshly minted UUIDv7.
 
     `origin_url` is provenance: pass it to reconstruct a node known to live in
-    the document at that URL without reading it (a cache, a mirror, a serialized
-    description). It makes the node document-backed rather than detached — it
-    drives `is_detached`, `document_url`, `ref()` / `ref_stub()`, and `save`
-    routing (`create()` rejects document-backed trees) — and the caller asserts
-    the document actually exists. Grafted `children` keep their own origins.
+    the document at that URL without reading it. It makes the node
+    document-backed rather than detached (`is_detached`, `document_url`,
+    `ref()` / `stub()`, and `create()` rejecting it) and the caller asserts the
+    document actually exists.
+
+    Raises:
+        ValueError: If `id` is not a UUID, or `children` are given with `path`.
     """
-    if children is not None and ref is not None:
-        raise ValueError("a reference stub is a leaf; it cannot take children")
+    if children and path is not None:
+        raise ValueError("an external node is a leaf; it cannot take children")
+    node_id = new_id() if id is None else id
+    if not is_uuid(node_id):
+        raise ValueError(f"node id must be a UUID (see new_id()), got {node_id!r}")
     record = NodeRecord(
         type=node_type,
-        id=id,
+        id=node_id,
         name=name,
-        attributes=dict(attributes) if attributes else {},
-        children=None if ref is not None else (),
-        ref=ref,
+        traits=_traits_from(traits),
+        fields=dict(fields) if fields else {},
+        children=None if path is not None else (),
+        path=path,
         origin_url=None if origin_url is None else meta_url(origin_url),
     )
     node = wrap_node(NodeTree.of(record), ROOT)
     return node.add(*children) if children else node
 
 
-def _reference_stub(node: Node, url: str) -> Node:
-    """Build a detached reference stub locating `node` in the document at `url`.
+def new_collection(
+    *,
+    id: str | None = None,
+    name: str | None = None,
+    traits: Sequence[BaseTrait | Mapping[str, JSONValue]] = (),
+    children: Sequence[Node] = (),
+) -> Node:
+    """Create a detached `collection` node (see `new_node`)."""
+    return new_node("collection", id=id, name=name, traits=traits, children=children)
 
-    The stub carries `node`'s local id both as its own `id` (so it serializes
-    with one and stays addressable via `find` wherever it is grafted) and as the
-    `Reference.id` to locate inside the target document. A node without an id
-    yields an id-less doc-root stub.
+
+def new_multiscale(
+    *,
+    coordinate_systems: Sequence[CoordinateSystem | Mapping[str, JSONValue]],
+    scales: Sequence[Scale | Mapping[str, JSONValue]],
+    id: str | None = None,
+    name: str | None = None,
+    traits: Sequence[BaseTrait | Mapping[str, JSONValue]] = (),
+    path: DocPath | None = None,
+) -> Node:
+    """Create a detached `multiscale` node with its `coordinate_systems` and `scales`.
+
+    The result is the root of an image document: `create()` it, then attach the
+    returned stub to a collection with `add_external`.
     """
-    return new_node(
-        node.type,
-        id=node.id,
-        name=node.name,
-        ref=Reference(path=reference_path(url), id=node.id),
+    fields = MultiscaleFields(
+        coordinate_systems=[
+            c if isinstance(c, CoordinateSystem) else CoordinateSystem.model_validate(c)
+            for c in coordinate_systems
+        ],
+        scales=[s if isinstance(s, Scale) else Scale.model_validate(s) for s in scales],
     )
+    return new_node(
+        "multiscale",
+        id=id,
+        name=name,
+        traits=traits,
+        fields=fields.model_dump(mode="json", exclude_none=True),
+        path=path,
+    )
+
+
+def _reference_stub(node: Node, url: str) -> Node:
+    """Build a detached declaring entry locating `node`'s document at `url`."""
+    return new_node(node.type, id=node.id, name=node.name, path=DocPath.for_url(url))
 
 
 # -- typed-subclass registry (populated by the composition root) ------------
@@ -422,15 +527,57 @@ class CollectionNode(Node):
 
 
 class MultiscaleNode(Node):
-    """Handle for a `multiscale` node."""
+    """Handle for a `multiscale` node, with typed access to its fields."""
 
+    @property
+    def coordinate_systems(self) -> tuple[CoordinateSystem, ...]:
+        """The multiscale's coordinate systems (validated)."""
+        raw = self.record.fields.get("coordinate_systems")
+        items = raw if isinstance(raw, list) else []
+        return tuple(CoordinateSystem.model_validate(c) for c in items)
 
-class SinglescaleNode(Node):
-    """Handle for a `singlescale` node."""
+    @property
+    def scales(self) -> tuple[Scale, ...]:
+        """The multiscale's scales (validated), coarsest last as written."""
+        raw = self.record.fields.get("scales")
+        items = raw if isinstance(raw, list) else []
+        return tuple(Scale.model_validate(s) for s in items)
+
+    def scale(self, id: str) -> Scale | None:
+        """Return the scale declared with UUID `id`, or `None`."""
+        return next((s for s in self.scales if s.id == id), None)
+
+    def coordinate_system(self, id: str) -> CoordinateSystem | None:
+        """Return the coordinate system declared with UUID `id`, or `None`."""
+        return next((c for c in self.coordinate_systems if c.id == id), None)
+
+    def set_scales(self, scales: Sequence[Scale | Mapping[str, JSONValue]]) -> Node:
+        """Replace the `scales` field; return the tree root."""
+        dumped = [
+            (s if isinstance(s, Scale) else Scale.model_validate(s)).model_dump(
+                mode="json", exclude_none=True
+            )
+            for s in scales
+        ]
+        return self.set_field("scales", cast(JSONValue, dumped))
+
+    def set_coordinate_systems(
+        self, systems: Sequence[CoordinateSystem | Mapping[str, JSONValue]]
+    ) -> Node:
+        """Replace the `coordinate_systems` field; return the tree root."""
+        dumped = [
+            (
+                c
+                if isinstance(c, CoordinateSystem)
+                else CoordinateSystem.model_validate(c)
+            ).model_dump(mode="json", exclude_none=True)
+            for c in systems
+        ]
+        return self.set_field("coordinate_systems", cast(JSONValue, dumped))
 
 
 class NodeTypeRegistry:
-    """Maps a structural `type` tag to the `Node` subclass that wraps it."""
+    """Maps a structural `type` to the `Node` subclass that wraps it."""
 
     def __init__(self) -> None:
         """Start an empty registry (generic `Node` is the fallback)."""
@@ -440,40 +587,48 @@ class NodeTypeRegistry:
         """Bind `node_type` to handle class `cls`."""
         self._by_type[node_type] = cls
 
-    def wrap(self, collection: NodeTree, node_id: NodeId) -> Node:
+    def wrap(self, tree: NodeTree, node_id: NodeId) -> Node:
         """Wrap `node_id` in its registered handle class, or generic `Node`."""
-        cls = self._by_type.get(collection.record(node_id).type, Node)
-        return cls(collection, node_id)
+        cls = self._by_type.get(tree.record(node_id).type, Node)
+        return cls(tree, node_id)
 
 
 NODE_TYPES = NodeTypeRegistry()
 
 
-def wrap_node(collection: NodeTree, node_id: NodeId) -> Node:
+def wrap_node(tree: NodeTree, node_id: NodeId) -> Node:
     """Wrap `node_id` in its typed handle (generic `Node` if unregistered).
 
     This is the seam `register_node_type` consumers go through; its `NodeTree` /
     `NodeId` parameters come from an existing handle (`node.tree`, `node.node_id`)
     rather than from the internal `graph` package.
     """
-    return NODE_TYPES.wrap(collection, node_id)
+    return NODE_TYPES.wrap(tree, node_id)
 
 
 def register_node_types(registry: NodeTypeRegistry = NODE_TYPES) -> NodeTypeRegistry:
     """Register the built-in typed handles on `registry` (the default registry)."""
     registry.register("collection", CollectionNode)
     registry.register("multiscale", MultiscaleNode)
-    registry.register("singlescale", SinglescaleNode)
     return registry
 
 
 def register_node_type(
     node_type: str, cls: type[Node], *, registry: NodeTypeRegistry = NODE_TYPES
 ) -> type[Node]:
-    """Register a custom `node_type` → handle `cls` (data still lives in attributes).
+    """Register an extension `node_type` (a URI) → handle `cls`.
 
     Lets nodes of `node_type` wrap as `cls` (e.g. for `isinstance` / type-specific
     helpers) instead of the generic `Node`; unregistered types degrade to `Node`.
+
+    Raises:
+        ValueError: If `node_type` is neither a built-in keyword nor a URI;
+            prefixed names such as `myorg:table` are not valid in revision 1.
     """
+    if node_type not in BUILTIN_NODE_TYPES and not is_extension_type(node_type):
+        raise ValueError(
+            f"extension node types are URIs (e.g. 'https://myorg.org/ngff/table'); "
+            f"{node_type!r} is neither a built-in type nor a URI"
+        )
     registry.register(node_type, cls)
     return cls

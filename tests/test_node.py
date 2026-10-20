@@ -1,272 +1,245 @@
 """Tests for the public `Node` handle (no IO).
 
-Covers handle-rooted/fluent construction, typed subclasses, navigation, capability
-lenses, validation through the handle, and the functional edits.
+Covers handle-rooted construction with minted UUIDs, typed subclasses,
+navigation, trait and field lenses, the embedding guard, validation through the
+handle, and the functional edits.
 """
 
 from __future__ import annotations
 
 import pytest
 
-import ngio_collections.api as ngc
-from ngio_collections.api import (
-    CollectionNode,
-    MultiscaleNode,
-    Node,
-    Reference,
-    new_node,
-)
+import ngio_collections as ngc
 from ngio_collections.models._config import NodeStateError
-from ngio_collections.models._paths import ZarrPath
-from ngio_collections.models.attributes import (
-    Axis,
-    CoordinateSystem,
-    CoordinateSystemsAttribute,
-    PlateAttribute,
-    WellAttribute,
-)
+from tests._builders import collection, external, multiscale
+from tests.conftest import mk
+
+RENDER = "https://napari.org/ngff/rendering"
 
 
-def _build_tree() -> Node:
-    """root[collection] → {img[multiscale], labels[collection] → nuclei}."""
-    root = new_node("collection", id="root", name="test")
-    root = root.add(
-        new_node("multiscale", id="img", name="test", attributes={"role": "raw"})
-    )
-    labels = new_node("collection", id="labels", name="test")
-    labels = labels.add(new_node("multiscale", id="nuclei", name="test"))
-    return root.add(labels)
+def _tree() -> ngc.Node:
+    """root[collection] → {img (external multiscale), labels[collection] → nuclei (external)}."""
+    labels = collection(2, external(3, "./nuclei"), name="labels")
+    return collection(0, external(1, "./img"), labels, name="root")
 
 
-def test_construction_and_typed_subclasses() -> None:
-    root = _build_tree()
-    assert isinstance(root, CollectionNode)
-    assert isinstance(root.find("img"), MultiscaleNode)
-    assert [c.id for c in root.children()] == ["img", "labels"]
-
-
-def test_walk_and_find_are_subtree_scoped() -> None:
-    root = _build_tree()
-    assert [n.id for n in root.walk()] == ["root", "img", "labels", "nuclei"]
-    labels = root.find("labels")
-    assert labels is not None
-    assert [n.id for n in labels.walk()] == ["labels", "nuclei"]
-    assert labels.find("img") is None  # img is outside the labels subtree
-    assert root.find("nuclei").parent().id == "labels"
-
-
-def test_detached_state() -> None:
-    root = _build_tree()
-    assert root.is_detached and root.document_url is None
-
-
-def test_new_node_with_origin_url_is_document_backed() -> None:
-    node = new_node("multiscale", id="img", name="test", origin_url="/data/image.zarr")
-    assert not node.is_detached
-    assert node.document_url == "/data/image.zarr/zarr.json"  # normalized
-
-    # provenance-dependent helpers work without any IO
-    locator = node.ref()
-    assert locator.id == "img" and locator.path.path == "/data/image.zarr"
-    stub = node.ref_stub()
-    assert stub.is_reference and stub.id == "img"
-    assert stub.ref_path == "/data/image.zarr"
-
-
-def test_grafting_preserves_origin_url() -> None:
-    backed = new_node(
-        "multiscale", id="img", name="test", origin_url="/data/image.zarr"
-    )
-    root = new_node("collection", id="root", name="root").add(backed)
-    grafted = root.find("img")
-    assert grafted.document_url == "/data/image.zarr/zarr.json"
-    assert root.is_detached  # the root itself carries no origin
-
-
-def test_new_node_with_children() -> None:
-    root = new_node(
-        "collection",
-        id="root",
-        name="test",
-        children=[
-            new_node("multiscale", id="a", name="test"),
-            new_node(
-                "collection",
-                id="b",
-                name="test",
-                children=[new_node("multiscale", id="c", name="test")],
-            ),
-        ],
-    )
-    assert [n.id for n in root.walk()] == ["root", "a", "b", "c"]
-
-
-def test_new_node_rejects_children_on_a_reference_stub() -> None:
+def test_construction_mints_uuids_and_types_handles() -> None:
+    root = _tree()
+    assert isinstance(root, ngc.CollectionNode)
+    assert isinstance(root.find(mk(1)), ngc.MultiscaleNode)
+    assert [c.id for c in root.children()] == [mk(1), mk(2)]
+    fresh = ngc.new_collection(name="auto")
+    assert ngc.is_uuid(fresh.id) and fresh.name == "auto"
     with pytest.raises(ValueError):
-        new_node(
-            "multiscale",
-            name="test",
-            ref=Reference(path=ZarrPath(path="/img.zarr")),
-            children=[new_node("multiscale", id="a", name="test")],
+        ngc.new_node("collection", id="img")  # not a UUID
+
+
+def test_walk_find_and_find_by_name_are_subtree_scoped() -> None:
+    root = _tree()
+    assert [n.id for n in root.walk()] == [mk(0), mk(1), mk(2), mk(3)]
+    labels = root.find(mk(2))
+    assert labels is not None and [n.id for n in labels.walk()] == [mk(2), mk(3)]
+    assert labels.find(mk(1)) is None
+    assert root.find(mk(3)).parent().id == mk(2)
+    assert [n.id for n in root.find_by_name("labels")] == [mk(2)]
+    assert root.find_by_name("nobody") == ()
+
+
+def test_detached_state_and_origin_url() -> None:
+    root = _tree()
+    assert (
+        root.is_detached and root.document_url is None and root.extension_manifest == ()
+    )
+    node = ngc.new_node(
+        "multiscale", id=mk(1), name="img", origin_url="/data/image.zarr"
+    )
+    assert not node.is_detached and node.document_url == "/data/image.zarr/zarr.json"
+    ref = node.ref()
+    assert ref.type == "multiscale" and ref.ref == mk(1)
+    assert ref.path is not None and (ref.path.format, ref.path.href) == (
+        "absolute",
+        "/data/image.zarr",
+    )
+    assert node.ref_local().model_dump(mode="json", exclude_none=True) == {
+        "type": "multiscale",
+        "ref": mk(1),
+    }
+    stub = node.stub()
+    assert stub.is_external and stub.is_detached and stub.id == mk(1)
+    assert stub.ref_path == "/data/image.zarr" and stub.name == "img"
+    with pytest.raises(NodeStateError):
+        root.require_document_url()
+    with pytest.raises(NodeStateError):
+        root.stub()
+
+
+def test_multiscale_handle_exposes_fields() -> None:
+    ms = multiscale(4, axis_names=("z", "y", "x"), levels=3)
+    assert isinstance(ms, ngc.MultiscaleNode)
+    assert [a.name for a in ms.coordinate_systems[0].axes] == ["z", "y", "x"]
+    assert [s.path.href for s in ms.scales] == ["./s0", "./s1", "./s2"]
+    s1 = ms.scale(ms.scales[1].id)
+    assert s1 is not None and s1.coordinate_transformations[0].scale == [2.0, 2.0, 2.0]
+    assert ms.coordinate_system(mk(99)) is None
+    edited = ms.set_scales(ms.scales[:1])
+    assert len(edited.scales) == 1 and len(ms.scales) == 3
+    assert set(ms.fields) == {"coordinate_systems", "scales"}
+    assert ms.get_field("scales") == ms.fields["scales"]
+
+
+def test_add_rejects_an_embedded_multiscale() -> None:
+    root = ngc.new_collection(id=mk(0))
+    with pytest.raises(NodeStateError):
+        root.add(multiscale(4))
+    with pytest.raises(NodeStateError):
+        ngc.new_collection(children=[multiscale(4)])
+    linked = root.add(multiscale(4, path=ngc.ZarrPath(href="./ms4")))
+    assert linked.find(mk(4)).is_external
+    with pytest.raises(ValueError):
+        root.add_external(ngc.new_collection(id=mk(5)))  # not external
+
+
+def test_set_path_makes_a_leaf_external_and_back() -> None:
+    root = ngc.new_collection(id=mk(0), children=[ngc.new_collection(id=mk(5))])
+    out = root.find(mk(5)).set_path(ngc.JsonPath(href="./child.json"))
+    assert out.find(mk(5)).is_external and out.find(mk(5)).ref_path == "./child.json"
+    back = out.find(mk(5)).set_path(None)
+    assert not back.find(mk(5)).is_external
+    with pytest.raises(NodeStateError):
+        _tree().find(mk(2)).set_path(ngc.JsonPath(href="./x.json"))  # has children
+
+
+def test_new_node_rejects_children_on_an_external_node() -> None:
+    with pytest.raises(ValueError):
+        ngc.new_node(
+            "collection",
+            path=ngc.ZarrPath(href="/img.zarr"),
+            children=[ngc.new_collection(id=mk(1))],
         )
 
 
 def test_add_variadic_matches_chained_adds() -> None:
-    a, b, c = (new_node("multiscale", id=i, name="test") for i in "abc")
-    fanned = new_node("collection", id="root", name="root").add(a, b, c)
-    chained = new_node("collection", id="root", name="root").add(a).add(b).add(c)
+    a, b, c = (ngc.new_collection(id=mk(i)) for i in (1, 2, 3))
+    fanned = ngc.new_collection(id=mk(0)).add(a, b, c)
+    chained = ngc.new_collection(id=mk(0)).add(a).add(b).add(c)
     assert [n.id for n in fanned.walk()] == [n.id for n in chained.walk()]
-    assert [n.id for n in fanned.add().walk()] == [n.id for n in fanned.walk()]
-
-
-def test_add_ref_variadic_and_validates_all_stubs() -> None:
-    s1 = new_node(
-        "multiscale", id="a", name="test", ref=Reference(path=ZarrPath(path="/a.zarr"))
-    )
-    s2 = new_node(
-        "multiscale", id="b", name="test", ref=Reference(path=ZarrPath(path="/b.zarr"))
-    )
-    root = new_node("collection", id="root", name="root").add_ref(s1, s2)
-    assert [c.id for c in root.children()] == ["a", "b"]
-    assert all(c.is_reference for c in root.children())
-    with pytest.raises(ValueError):
-        root.add_ref(s1, new_node("multiscale", id="plain", name="test"))
-
-
-def test_ref_path_shortcut() -> None:
-    stub = new_node(
-        "multiscale", name="test", ref=Reference(path=ZarrPath(path="/data/img.zarr"))
-    )
-    assert stub.ref_path == "/data/img.zarr"
-    assert new_node("collection", id="root", name="root").ref_path is None
-
-
-def test_require_id_and_document_url_narrow_or_raise() -> None:
-    root = _build_tree()
-    assert root.find("img").require_id() == "img"
-    with pytest.raises(NodeStateError):
-        new_node("multiscale", name="test").require_id()
-    with pytest.raises(NodeStateError):
-        root.require_document_url()  # detached
-    with pytest.raises(NodeStateError):
-        root.ref_stub()  # needs a backing document
 
 
 def test_subtree_extracts_independent_detached_tree() -> None:
-    root = _build_tree()  # root -> {img, labels -> nuclei}
-    labels = root.find("labels").subtree()
-    assert labels.id == "labels" and labels.is_detached
-    assert [n.id for n in labels.walk()] == ["labels", "nuclei"]
-    assert labels.parent() is None  # it is its own root now
-    assert labels.find("img") is None  # img was outside the subtree
-    # editing the subtree returns the subtree root, not the original whole tree
-    edited = labels.find("nuclei").set_attrs({"x": 1})
-    assert edited.id == "labels" and edited.find("nuclei").attributes["x"] == 1
-    # the source tree is untouched
-    assert "x" not in root.find("nuclei").attributes
+    root = _tree()
+    labels = root.find(mk(2)).subtree()
+    assert labels.id == mk(2) and labels.is_detached and labels.parent() is None
+    assert [n.id for n in labels.walk()] == [mk(2), mk(3)]
+    assert labels.find(mk(1)) is None
+    edited = labels.find(mk(3)).set_trait({"type": "labels", "source": []})
+    assert edited.id == mk(2) and "labels" in edited.find(mk(3)).traits
+    assert "labels" not in root.find(mk(3)).traits
 
 
 # --------------------------------------------------------------------------- #
-# Functional edits return new handles; the source is untouched
+# Traits: lenses and edits
 # --------------------------------------------------------------------------- #
 
 
-def test_set_attr_is_immutable_and_typed() -> None:
-    root = _build_tree()
-    well = WellAttribute(column={"id": "c1"}, row={"id": "r1"})
-    edited = root.find("img").set_attr(well)  # tree-out: edited is the new root
-    assert edited.find("img")[WellAttribute].column.id == "c1"
-    # original collection untouched
-    assert root.find("img").get_attr(WellAttribute) is None
+def test_trait_lenses_and_typed_edits() -> None:
+    root = _tree()
+    well = ngc.WellTrait(row_index=0, column_index=1)
+    edited = root.find(mk(2)).set_trait(well)  # tree-out: edited is the new root
+    node = edited.find(mk(2))
+    assert node[ngc.WellTrait].column_index == 1
+    assert node.get_trait(ngc.PlateTrait) is None
+    assert node.has_trait(ngc.WellTrait) and node.has_trait("well")
+    assert ngc.WellTrait in node and "well" in node and "plate" not in node
+    assert node.traits["well"] == {"type": "well", "row_index": 0, "column_index": 1}
+    assert root.find(mk(2)).get_trait(ngc.WellTrait) is None  # original untouched
+    with pytest.raises(KeyError):
+        node[ngc.PlateTrait]
 
 
-def test_set_attr_drops_none_fields() -> None:
-    root = _build_tree()
-    well = WellAttribute(column={"id": "c1"}, row={"id": "r1"})
-    edited = root.find("img").set_attr(well)
-    # no `path: null` on the references, recursively
-    assert edited.find("img").attributes["well"] == {
-        "column": {"id": "c1"},
-        "row": {"id": "r1"},
+def test_set_trait_drops_none_fields_and_writes_snake_case() -> None:
+    root = _tree()
+    scene = ngc.SceneTrait(
+        coordinate_systems=[ngc.CoordinateSystem(id=mk(5), axes=[ngc.Axis(name="x")])]
+    )
+    edited = root.set_trait(scene)
+    assert edited.traits["scene"] == {
+        "type": "scene",
+        "coordinate_systems": [
+            {"type": "coordinate_system", "id": mk(5), "axes": [{"name": "x"}]}
+        ],
+        "coordinate_transformations": [],
     }
-    systems = CoordinateSystemsAttribute(
-        [CoordinateSystem(id="s", axes=[Axis(name="x")])]
+
+
+def test_set_traits_upserts_by_type_and_drop_traits() -> None:
+    root = _tree()
+    root = root.set_traits(
+        {"type": RENDER, "contrast_limits": [0, 1]},
+        ngc.WellTrait(row_index=0, column_index=0),
     )
-    edited = edited.find("img").set_attr(systems)
-    # no `type/unit/discrete/longName: null` on the axis
-    assert edited.find("img").attributes["coordinateSystems"] == [
-        {"id": "s", "axes": [{"name": "x"}]}
-    ]
+    assert list(root.traits) == [RENDER, "well"]
+    root = root.set_trait({"type": RENDER, "contrast_limits": [2, 3]})
+    assert list(root.traits) == [RENDER, "well"]  # replaced in place
+    assert root.traits[RENDER]["contrast_limits"] == [2, 3]
+    root = root.drop_traits(ngc.WellTrait, "missing")
+    assert list(root.traits) == [RENDER]
+    with pytest.raises(ValueError):
+        root.set_trait({"contrast_limits": [1]})  # no type
 
 
-def test_set_attrs_merge_and_rename_and_remove() -> None:
-    root = _build_tree()
-    root = root.find("img").set_attrs({"x": 1})  # each edit returns the tree root
-    root = root.find("img").rename("Raw")
-    img = root.find("img")
-    assert (
-        img.attributes["x"] == 1
-        and img.name == "Raw"
-        and img.attributes["role"] == "raw"
-    )
-    pruned = root.find("labels").remove()
-    assert pruned.find("nuclei") is None and pruned.id == "root"
-
-
-def test_set_attrs_with_drop_is_one_edit() -> None:
-    root = _build_tree()
-    root = root.find("img").set_attrs({"x": 1}, drop=["role"])
-    img = root.find("img")
-    assert img.attributes == {"x": 1}  # merged and dropped in one new tree
-
-
-def test_set_attrs_drop_wins_on_overlapping_key() -> None:
-    root = _build_tree()
-    root = root.find("img").set_attrs({"role": "new", "x": 1}, drop=["role"])
-    assert root.find("img").attributes == {"x": 1}
-
-
-def test_set_attrs_drop_accepts_attribute_classes() -> None:
-    well = WellAttribute(column={"id": "c1"}, row={"id": "r1"})
-    root = _build_tree().find("img").set_attr(well)
-    assert WellAttribute in root.find("img")
-    root = root.find("img").set_attrs({"x": 1}, drop=[WellAttribute])
-    img = root.find("img")
-    assert WellAttribute not in img and img.attributes["x"] == 1
+def test_rename_remove_and_fields() -> None:
+    root = _tree()
+    root = root.find(mk(1)).rename("Raw")
+    assert root.find(mk(1)).name == "Raw"
+    pruned = root.find(mk(2)).remove()
+    assert pruned.find(mk(3)) is None and pruned.id == mk(0)
+    with pytest.raises(ValueError):
+        root.remove()
+    ext = ngc.new_node("https://ngio.example/bench/table", id=mk(7), fields={"rows": 3})
+    assert ext.set_field("rows", 4).fields == {"rows": 4}
+    assert ext.set_fields({}).fields == {}
 
 
 # --------------------------------------------------------------------------- #
-# Validation through the handle (composition)
+# Registry and validation through the handle
 # --------------------------------------------------------------------------- #
+
+
+def test_register_node_type_requires_a_uri() -> None:
+    class TableNode(ngc.Node):
+        pass
+
+    with pytest.raises(ValueError):
+        ngc.register_node_type("fractal:table", TableNode)
+    ngc.register_node_type("https://fractal.example/ngff/table", TableNode)
+    table = ngc.new_node("https://fractal.example/ngff/table", id=mk(8))
+    assert isinstance(table, TableNode)
+    assert type(ngc.new_node("https://mobie.example/view", id=mk(9))) is ngc.Node
 
 
 def test_validate_through_handle() -> None:
-    plate = new_node(
-        "collection",
-        id="plate",
-        name="test",
-        attributes={"plate": {"columns": [{"id": "c1"}], "rows": [{"id": "r1"}]}},
+    plate = ngc.new_collection(
+        id=mk(0),
+        traits=[
+            ngc.PlateTrait(
+                rows=[ngc.RowObj(name="A")], columns=[ngc.ColumnObj(name="1")]
+            )
+        ],
+        children=[
+            ngc.new_collection(
+                id=mk(1), traits=[ngc.WellTrait(row_index=0, column_index=0)]
+            )
+        ],
     )
-    plate = plate.add(
-        new_node(
-            "collection",
-            id="A1",
-            name="test",
-            attributes={"well": {"column": {"id": "c1"}, "row": {"id": "r1"}}},
-        )
+    assert plate.find(mk(1)).validate(ngc.RECOMMENDED_VALIDATORS) == []
+    orphan = ngc.new_collection(
+        id=mk(0),
+        children=[
+            ngc.new_collection(
+                id=mk(1), traits=[ngc.WellTrait(row_index=0, column_index=0)]
+            )
+        ],
     )
-    validators = (ngc.well_under_plate, ngc.scale_matches_axes)
-    assert plate.find("A1").validate(validators) == []  # well under plate -> ok
-
-    orphan = new_node("collection", id="root", name="root")
-    orphan = orphan.add(
-        new_node(
-            "collection",
-            id="A1",
-            name="test",
-            attributes={"well": {"column": {"id": "c1"}, "row": {"id": "r1"}}},
-        )
-    )
-    errors = orphan.find("A1").validate(validators)
+    errors = orphan.find(mk(1)).validate(ngc.RECOMMENDED_VALIDATORS)
     assert [e.validator for e in errors] == ["well_under_plate"]
-    assert plate.find("A1").has(PlateAttribute) is False  # the plate is the parent
+    assert errors[0].node_uuid == mk(1)

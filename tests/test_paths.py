@@ -1,25 +1,31 @@
-"""Path mechanics: resolve / relativize are inverses keyed off one base URL.
+"""Path objects: `{type, format, href}` with explicit formats and no inference.
 
-`relativize(target, base)` rewrites an absolute local target to a path relative
-to `dirname(base)`; `resolve(rel, base)` walks it back. They must round-trip, and
-must agree for both a JSON base (the document file) and a Zarr base (the
-`zarr.json` inside the group dir). Remote / cross-root targets stay absolute.
+`relativize(href, base)` rewrites an absolute local href relative to
+`dirname(base)` and labels it `relative`; `resolve(rel, "relative", base)` walks
+it back. They must round-trip for both a JSON base (the document file) and a
+Zarr base (the `zarr.json` inside the group dir). `absolute` and `http` hrefs
+pass through verbatim by default (this package's documented deviation) and
+raise under `CORE_FORMATS`.
 """
 
 import pytest
+from pydantic import ValidationError
 
 from ngio_collections.models._paths import (
+    ALL_FORMATS,
+    CORE_FORMATS,
     DocPath,
     JsonPath,
+    UnsupportedPathFormatError,
     ZarrPath,
+    format_for_url,
+    is_http,
     meta_url,
     relativize,
     resolve,
     split_scheme,
 )
 
-# A JSON document lives at its file; a Zarr document at <group>/zarr.json. The
-# relativization base is dirname(base_url) in both cases.
 JSON_BASE = "/p/mdc/collection.json"
 ZARR_BASE = "/p/mdc/labels.zarr/zarr.json"
 
@@ -28,7 +34,6 @@ ZARR_BASE = "/p/mdc/labels.zarr/zarr.json"
 @pytest.mark.parametrize(
     "target, expected_for",
     [
-        # (absolute target, {base_url: expected relative form})
         ("/p/mdc/image.zarr", {JSON_BASE: "./image.zarr", ZARR_BASE: "../image.zarr"}),
         (
             "/p/mdc/labels.zarr/sub/x.zarr",
@@ -38,67 +43,110 @@ ZARR_BASE = "/p/mdc/labels.zarr/zarr.json"
     ],
 )
 def test_relativize_roundtrips(base, target, expected_for):
-    rel = relativize(target, base)
-    assert rel == expected_for[base]
-    # The whole point: resolve undoes relativize for the same base.
-    assert resolve(rel, base) == target
+    fmt, rel = relativize(target, base)
+    assert (fmt, rel) == ("relative", expected_for[base])
+    assert resolve(rel, "relative", base) == target
 
 
 @pytest.mark.parametrize("base", [JSON_BASE, ZARR_BASE])
 @pytest.mark.parametrize(
     "target",
-    [
-        "/other/tree/x.zarr",  # cross-root: nothing shared but "/"
-        "http://h.org/x.zarr",  # remote
-        "https://h.org/x.zarr",
-        "file:///p/mdc/image.zarr",  # file:// kept absolute (still resolves)
-    ],
+    ["/other/tree/x.zarr", "file:///p/mdc/image.zarr"],
 )
-def test_relativize_keeps_non_local_or_cross_root_absolute(base, target):
-    assert relativize(target, base) == target
-
-
-def test_intra_group_array_path_passes_through():
-    # `./0` is already relative -> untouched on write, resolves group-relative.
-    assert relativize("./0", ZARR_BASE) == "./0"
-    assert resolve("./0", ZARR_BASE) == "/p/mdc/labels.zarr/0"
-
-
-def test_resolve_walks_parents_for_both_forms():
-    assert resolve("../image.zarr", ZARR_BASE) == "/p/mdc/image.zarr"
-    assert resolve("../../top.zarr", ZARR_BASE) == "/p/top.zarr"
-    assert resolve("./image.zarr", JSON_BASE) == "/p/mdc/image.zarr"
-
-
-def test_resolve_absolute_and_remote_passthrough():
-    assert resolve("/abs/x.zarr", None) == "/abs/x.zarr"
-    assert resolve("http://h.org/x", None) == "http://h.org/x"
-    with pytest.raises(ValueError):
-        resolve("./x", None)  # relative needs a base
+def test_relativize_keeps_cross_root_and_file_urls_absolute(base, target):
+    assert relativize(target, base) == ("absolute", target)
 
 
 def test_relativize_none_base_keeps_path():
-    assert relativize("/p/mdc/image.zarr", None) == "/p/mdc/image.zarr"
+    assert relativize("/p/mdc/image.zarr", None) == ("absolute", "/p/mdc/image.zarr")
 
 
-def test_meta_url():
+def test_resolve_by_declared_format_never_by_string():
+    assert resolve("./image.zarr", "relative", JSON_BASE) == "/p/mdc/image.zarr"
+    assert resolve("../../top.zarr", "relative", ZARR_BASE) == "/p/top.zarr"
+    assert resolve("/abs/x.zarr", "absolute", None) == "/abs/x.zarr"
+    assert resolve("https://h.org/x", "http", None) == "https://h.org/x"
+    with pytest.raises(ValueError):
+        resolve("./x", "relative", None)  # relative needs a base
+
+
+def test_core_formats_opt_in_rejects_absolute_and_http():
+    assert ALL_FORMATS == {"relative", "absolute", "http"}
+    assert CORE_FORMATS == {"relative"}
+    with pytest.raises(UnsupportedPathFormatError):
+        resolve("/abs/x.zarr", "absolute", JSON_BASE, formats=CORE_FORMATS)
+    with pytest.raises(UnsupportedPathFormatError):
+        DocPath(type="zarr", format="http", href="https://h.org/x").resolve(
+            JSON_BASE, formats=CORE_FORMATS
+        )
+    assert (
+        resolve("/abs/x.zarr", "absolute", JSON_BASE, formats=ALL_FORMATS)
+        == "/abs/x.zarr"
+    )
+
+
+def test_meta_url_for_entry_locations():
     assert meta_url("/p/g.zarr") == "/p/g.zarr/zarr.json"
     assert meta_url("/p/g.zarr/") == "/p/g.zarr/zarr.json"
     assert meta_url("/p/g.zarr/zarr.json") == "/p/g.zarr/zarr.json"
     assert meta_url("/p/c.json") == "/p/c.json"
 
 
-def test_split_scheme():
+def test_docpath_meta_url_is_keyed_on_type():
+    zarr = ZarrPath(href="./raw")
+    assert zarr.meta_url(ZARR_BASE) == "/p/mdc/labels.zarr/raw/zarr.json"
+    json_doc = JsonPath(href="./child/collection.json")
+    assert json_doc.meta_url(JSON_BASE) == "/p/mdc/child/collection.json"
+    # an href that already names the metadata file is not doubled
+    assert (
+        ZarrPath(href="./raw/zarr.json").meta_url(JSON_BASE) == "/p/mdc/raw/zarr.json"
+    )
+
+
+def test_docpath_relativize_only_touches_local_absolute_paths():
+    local = DocPath(type="zarr", format="absolute", href="/p/mdc/image.zarr")
+    rel = local.relativize(ZARR_BASE)
+    assert (rel.format, rel.href) == ("relative", "../image.zarr")
+    assert rel.resolve(ZARR_BASE) == "/p/mdc/image.zarr"
+    remote = DocPath(type="zarr", format="http", href="https://h.org/x.zarr")
+    assert remote.relativize(ZARR_BASE) is remote
+    already = ZarrPath(href="./0")
+    assert already.relativize(ZARR_BASE) is already
+
+
+def test_for_url_picks_type_and_format():
+    p = DocPath.for_url("/data/image.zarr/zarr.json")
+    assert (p.type, p.format, p.href) == ("zarr", "absolute", "/data/image.zarr")
+    assert DocPath.for_url("/data/image.zarr").href == "/data/image.zarr"
+    j = DocPath.for_url("/data/c.json")
+    assert (j.type, j.format, j.href) == ("json", "absolute", "/data/c.json")
+    h = DocPath.for_url("https://h.org/ref.ome.zarr")
+    assert (h.type, h.format, h.href) == ("zarr", "http", "https://h.org/ref.ome.zarr")
+
+
+def test_docpath_rejects_inconsistent_format_and_href():
+    with pytest.raises(ValidationError):
+        DocPath(type="zarr", format="http", href="/local/path")
+    with pytest.raises(ValidationError):
+        DocPath(type="zarr", format="relative", href="https://h.org/x")
+    with pytest.raises(ValidationError):
+        DocPath.model_validate({"type": "zarr", "href": "./x"})  # format is required
+
+
+def test_convenience_subclasses_default_to_relative():
+    assert ZarrPath(href="./s0").model_dump(mode="json") == {
+        "type": "zarr",
+        "format": "relative",
+        "href": "./s0",
+    }
+    assert JsonPath(href="./c.json").type == "json"
+    assert ZarrPath(format="http", href="https://h.org/a").format == "http"
+
+
+def test_scheme_helpers():
     assert split_scheme("/p/x") == ("", "/p/x")
     assert split_scheme("file:///p/x") == ("file", "/p/x")
     assert split_scheme("https://h.org/x") == ("https", "h.org/x")
-
-
-def test_docpath_methods_and_subclasses():
-    p = ZarrPath(path="/p/mdc/image.zarr")
-    assert p.type == "zarr"
-    rel = p.relativize(ZARR_BASE)
-    assert (rel.type, rel.path) == ("zarr", "../image.zarr")
-    assert rel.resolve(ZARR_BASE) == "/p/mdc/image.zarr"
-    assert JsonPath(path="./c.json").type == "json"
-    assert DocPath(type="json", path="./c.json").type == "json"
+    assert is_http("https://h.org/x") and not is_http("/p/x")
+    assert format_for_url("https://h.org/x") == "http"
+    assert format_for_url("/p/x") == "absolute"

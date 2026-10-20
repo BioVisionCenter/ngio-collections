@@ -1,0 +1,53 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "extension_manifest": [
+        {
+          "id": "https://fractal.example/ngff/",
+          "version": "0.1",
+          "schemas": [
+            {
+              "type": "json_schema",
+              "url": "https://fractal.example/ngff/0.1/schema.json"
+            }
+          ]
+        },
+        {
+          "id": "https://mobie.example/ngff/",
+          "version": "2.0",
+          "schemas": []
+        }
+      ],
+      "type": "collection",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
+      "name": "experiment",
+      "nodes": [
+        {
+          "type": "https://fractal.example/ngff/table",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+          "name": "regionprops",
+          "columns": [
+            "area",
+            "mean"
+          ],
+          "nodes": []
+        },
+        {
+          "type": "https://mobie.example/ngff/view",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
+          "name": "view",
+          "traits": [
+            {
+              "type": "https://mobie.example/ngff/settings",
+              "opacity": 0.5
+            }
+          ],
+          "nodes": []
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

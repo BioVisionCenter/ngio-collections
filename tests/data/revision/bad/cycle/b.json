@@ -1,0 +1,18 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "id": "0192f3a0-7c1e-7b00-9c22-000000000055",
+    "nodes": [
+      {
+        "type": "collection",
+        "id": "0192f3a0-7c1e-7b00-9c22-000000000054",
+        "path": {
+          "type": "json",
+          "format": "relative",
+          "href": "./a.json"
+        }
+      }
+    ]
+  }
+}

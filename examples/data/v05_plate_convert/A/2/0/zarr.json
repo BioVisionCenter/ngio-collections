@@ -1,0 +1,133 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "multiscale",
+      "id": "dcf0acaf-5235-5cf0-aae8-5d3cf021b2fa",
+      "name": "A2_0",
+      "coordinate_systems": [
+        {
+          "type": "coordinate_system",
+          "id": "586e59a0-7ccb-563e-968a-55675a19e24e",
+          "name": "physical",
+          "axes": [
+            {
+              "name": "t",
+              "type": "time"
+            },
+            {
+              "name": "c",
+              "type": "channel"
+            },
+            {
+              "name": "z",
+              "type": "space"
+            },
+            {
+              "name": "y",
+              "type": "space",
+              "unit": "micrometer"
+            },
+            {
+              "name": "x",
+              "type": "space",
+              "unit": "micrometer"
+            }
+          ]
+        }
+      ],
+      "scales": [
+        {
+          "type": "scale",
+          "id": "943e3d9d-8ca9-5c3b-80a5-38a2336418a8",
+          "path": {
+            "type": "zarr",
+            "format": "http",
+            "href": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/2/0/0"
+          },
+          "coordinate_transformations": [
+            {
+              "input": {
+                "type": "scale",
+                "ref": "943e3d9d-8ca9-5c3b-80a5-38a2336418a8"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "586e59a0-7ccb-563e-968a-55675a19e24e"
+              },
+              "type": "scale",
+              "scale": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "type": "scale",
+          "id": "f6311291-5cd8-5fd0-83d7-cf1c1c45e1db",
+          "path": {
+            "type": "zarr",
+            "format": "http",
+            "href": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/2/0/1"
+          },
+          "coordinate_transformations": [
+            {
+              "input": {
+                "type": "scale",
+                "ref": "f6311291-5cd8-5fd0-83d7-cf1c1c45e1db"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "586e59a0-7ccb-563e-968a-55675a19e24e"
+              },
+              "type": "scale",
+              "scale": [
+                1.0,
+                1.0,
+                1.0,
+                2.0,
+                2.0
+              ]
+            }
+          ]
+        },
+        {
+          "type": "scale",
+          "id": "9fa99464-15cb-501a-b156-acccb28ae525",
+          "path": {
+            "type": "zarr",
+            "format": "http",
+            "href": "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/A/2/0/2"
+          },
+          "coordinate_transformations": [
+            {
+              "input": {
+                "type": "scale",
+                "ref": "9fa99464-15cb-501a-b156-acccb28ae525"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "586e59a0-7ccb-563e-968a-55675a19e24e"
+              },
+              "type": "scale",
+              "scale": [
+                1.0,
+                1.0,
+                1.0,
+                4.0,
+                4.0
+              ]
+            }
+          ]
+        }
+      ],
+      "nodes": []
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

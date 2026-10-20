@@ -1,39 +1,49 @@
-"""Relativize reference paths embedded inside a node's attributes (write time).
+"""Relativize path objects embedded inside a node's traits and fields (write time).
 
-A pure JSON walker: no node or IO dependency. Any object carrying the `DocPath`
-shape (`{"type": "zarr"|"json", "path": <str>}`) anywhere in an attribute value —
-e.g. `LabelsAttribute.source[*].path`, `WellAttribute.column.path` — has its
-`path` relativized against the document, while plain `path` strings (e.g.
-`ScaleTransformation.path`) are left untouched, since the match is on the
-path-object *shape*, not the key name.
+A pure JSON walker: no node or IO dependency. Any object carrying the path-object
+shape (`{"type": "zarr"|"json", "format": ..., "href": ...}`) anywhere in a value
+(`scales[*].path`, `labels.source[*].path`, a scene transform's `input.path`, …)
+is relativized against the document when it is a local absolute path, while
+plain `path` strings (e.g. `ScaleTransformation.path`) are left untouched, since
+the match is on the path-object *shape*, not the key name.
 """
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Mapping
 
 from ngio_collections._types import JSONValue
+from ngio_collections.models._paths import DocPath
 
-from ngio_collections.models._paths import relativize as _relativize_path_str
+
+def is_path_object(value: object) -> bool:
+    """Return whether `value` has the `{type, format, href}` path-object shape."""
+    return (
+        isinstance(value, Mapping)
+        and value.get("type") in ("zarr", "json")
+        and isinstance(value.get("format"), str)
+        and isinstance(value.get("href"), str)
+    )
 
 
-def relativize_attr_refs(value: JSONValue, base_url: str | None) -> JSONValue:
-    """Relativize every embedded `DocPath`-shaped object in an attribute value.
+def relativize_paths(value: JSONValue, base_url: str | None) -> JSONValue:
+    """Relativize every embedded path object in a JSON value.
 
     Args:
-        value: A JSON value drawn from a node's `attributes`.
+        value: A JSON value drawn from a node's traits or fields.
         base_url: The owning document's `url` (the relativization base).
 
     Returns:
         The value with matching path objects relativized (a new structure).
     """
     if isinstance(value, dict):
-        if value.get("type") in ("zarr", "json") and isinstance(value.get("path"), str):
-            return {
-                **value,
-                "path": _relativize_path_str(cast("str", value["path"]), base_url),
-            }
-        return {k: relativize_attr_refs(v, base_url) for k, v in value.items()}
+        if is_path_object(value):
+            try:
+                path = DocPath.model_validate(value)
+            except Exception:
+                return value  # malformed: leave it for validation to report
+            return path.relativize(base_url).model_dump(mode="json")
+        return {k: relativize_paths(v, base_url) for k, v in value.items()}
     if isinstance(value, list):
-        return [relativize_attr_refs(v, base_url) for v in value]
+        return [relativize_paths(v, base_url) for v in value]
     return value

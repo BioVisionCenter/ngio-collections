@@ -1,0 +1,31 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "collection",
+      "id": "cc046466-3f36-58e3-938e-06776649e7b5",
+      "name": "A1",
+      "traits": [
+        {
+          "type": "well",
+          "row_index": 0,
+          "column_index": 0
+        }
+      ],
+      "nodes": [
+        {
+          "type": "multiscale",
+          "id": "ab9aa7b6-9afa-5688-92bd-69268f8fad7e",
+          "name": "A1_0",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./0"
+          }
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

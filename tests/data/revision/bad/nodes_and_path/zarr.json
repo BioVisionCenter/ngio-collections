@@ -1,0 +1,23 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "collection",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000057",
+      "nodes": [
+        {
+          "type": "collection",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000058",
+          "nodes": [],
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./x"
+          }
+        }
+      ]
+    }
+  }
+}

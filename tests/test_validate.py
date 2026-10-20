@@ -1,9 +1,8 @@
-"""Tests for L4 views & validators.
+"""Tests for the trait lenses and the core / recommended validators.
 
-Covers the capability lenses (composable per-attribute reads), the two example
-validators over bounded neighbourhoods (upward `well`⊂`plate`, reference-following
-`scale` vs axes), that a node carrying several capabilities runs every validator
-(composition over inheritance), and the `raise_on_error` flag.
+Each validator gets one passing and one failing case over bounded
+neighbourhoods; the revision fixtures must validate clean except for the
+remote node that a memory store cannot resolve.
 """
 
 from __future__ import annotations
@@ -11,145 +10,286 @@ from __future__ import annotations
 import pytest
 
 import ngio_collections as ngc
-from ngio_collections.graph import NodeRecord
+import ngio_collections.api._api as aio
+from ngio_collections.graph import ROOT, NodeRecord, NodeTree
 from ngio_collections.validate import (
-    get_attribute,
-    has_attribute,
-    scale_matches_axes,
-    well_under_plate,
+    CORE_VALIDATORS,
+    RECOMMENDED_VALIDATORS,
+    get_trait,
+    has_trait,
+    read_fields,
 )
-from ngio_collections.models.attributes import PlateAttribute, WellAttribute
+from tests._builders import collection, external, multiscale, scale_id
+from tests.conftest import DATA, mk
 
-VALIDATORS = (well_under_plate, scale_matches_axes)
-
-
-def _plate() -> dict:
-    return {"plate": {"columns": [{"id": "c1"}], "rows": [{"id": "r1"}]}}
+PLATE = ngc.PlateTrait(rows=[ngc.RowObj(name="A")], columns=[ngc.ColumnObj(name="1")])
+WELL = ngc.WellTrait(row_index=0, column_index=0)
 
 
-def _well() -> dict:
-    return {"well": {"column": {"id": "c1"}, "row": {"id": "r1"}}}
+def _names(node: ngc.Node, validators=ngc.ALL_VALIDATORS) -> list[str]:
+    return [e.validator for e in node.validate(validators)]
 
 
-def _axes(*names: str) -> list[dict]:
-    return [{"name": n} for n in names]
-
-
-def _coordinate_systems(system_id: str, *axes: str) -> dict:
-    return {"coordinateSystems": [{"id": system_id, "axes": _axes(*axes)}]}
-
-
-def _scale(system_id: str, *factors: float) -> dict:
-    return {
-        "coordinateTransformations": [
-            {"type": "scale", "output": {"id": system_id}, "scale": list(factors)}
-        ]
-    }
+def _wrap(record: NodeRecord, *children: NodeRecord) -> ngc.Node:
+    """A tree straight from records, bypassing the handle's guards."""
+    tree = NodeTree.of(record)
+    for child in children:
+        tree, _ = tree.add_child(ROOT, child)
+    return ngc.wrap_node(tree, ROOT)
 
 
 # --------------------------------------------------------------------------- #
-# Capability lenses are composable
+# Lenses
 # --------------------------------------------------------------------------- #
 
 
-def test_lenses_compose_on_one_node() -> None:
+def test_lenses_compose_on_one_record() -> None:
     record = NodeRecord(
-        type="collection", name="test", attributes={**_plate(), **_well()}
+        type="collection",
+        id=mk(1),
+        traits={
+            "plate": PLATE.model_dump(mode="json"),
+            "well": WELL.model_dump(mode="json"),
+        },
     )
-    assert has_attribute(record, PlateAttribute)
-    assert has_attribute(record, WellAttribute)
-    well = get_attribute(record, WellAttribute)
-    assert well is not None and well.column.id == "c1"
+    assert has_trait(record, ngc.PlateTrait) and has_trait(record, "well")
+    well = get_trait(record, ngc.WellTrait)
+    assert well is not None and well.row_index == 0
+    assert get_trait(record, ngc.LabelsTrait) is None
+    ms = multiscale(4)
+    assert len(read_fields(ms.record, ngc.MultiscaleFields).scales) == 2
 
 
 # --------------------------------------------------------------------------- #
-# well ⊂ plate (upward)
+# The revision fixtures
 # --------------------------------------------------------------------------- #
 
 
-def test_well_under_plate_passes() -> None:
-    plate = ngc.new_node(
-        "collection", id="plate", name="test", attributes=_plate()
-    ).add(ngc.new_node("collection", id="A1", name="test", attributes=_well()))
-    assert ngc.validate(plate.find("A1"), validators=VALIDATORS) == []
-
-
-def test_well_without_plate_parent_is_flagged() -> None:
-    orphan = ngc.new_node("collection", id="root", name="root").add(
-        ngc.new_node("collection", id="A1", name="test", attributes=_well())
+async def test_revision_fixtures_validate(revision_store) -> None:
+    view = await aio.open_resolved(f"{DATA}/collection/zarr.json", revision_store)
+    errors = view.validate(ngc.ALL_VALIDATORS)
+    # the only finding: the http node cannot be resolved from a memory store
+    assert [(e.validator, e.node_uuid) for e in errors] == [
+        ("external_unresolved", mk(4))
+    ]
+    opened = await aio.open(f"{DATA}/collection/zarr.json", revision_store)
+    assert opened.validate(ngc.ALL_VALIDATORS) == []
+    plate = await aio.open_resolved(f"{DATA}/plate/zarr.json", revision_store)
+    assert plate.validate(ngc.ALL_VALIDATORS) == []
+    standalone = await aio.open_resolved(
+        f"{DATA}/standalone/collection.json", revision_store
     )
-    errors = ngc.validate(orphan.find("A1"), validators=VALIDATORS)
-    assert [e.validator for e in errors] == ["well_under_plate"]
+    assert standalone.validate(ngc.ALL_VALIDATORS) == []
+    # strict path conformance is opt-in; the fixture's http node fails it
+    assert [e.node_uuid for e in view.validate((ngc.paths_are_core,))] == [mk(4)]
 
 
 # --------------------------------------------------------------------------- #
-# scale vs axes (reference-following, searches self + ancestors)
+# Core validators
 # --------------------------------------------------------------------------- #
 
 
-def _multiscale_with_scale(*factors: float) -> ngc.Node:
-    """multiscale (defines `space` with 3 axes) → singlescale (scale=factors)."""
-    return ngc.new_node(
-        "multiscale",
-        id="img",
-        name="test",
-        attributes=_coordinate_systems("space", "z", "y", "x"),
-    ).add(
-        ngc.new_node(
-            "singlescale", id="0", name="test", attributes=_scale("space", *factors)
-        )
+def test_id_is_uuid() -> None:
+    assert _names(collection(1), CORE_VALIDATORS) == []
+    assert "id_is_uuid" in _names(_wrap(NodeRecord(type="collection", id="img")))
+    bad_scale = multiscale(4).set_field(
+        "scales",
+        [
+            {
+                "type": "scale",
+                "id": "s0",
+                "path": {"type": "zarr", "format": "relative", "href": "./s0"},
+            }
+        ],
+    )
+    assert "id_is_uuid" in _names(bad_scale)
+
+
+def test_known_types() -> None:
+    assert "known_types" in _names(ngc.new_node("singlescale", id=mk(1)))
+    assert "known_types" in _names(collection(1, traits=[{"type": "fractal:table"}]))
+    assert "known_types" not in _names(ngc.new_node("https://x.org/t", id=mk(1)))
+    assert "known_types" not in _names(
+        collection(1, traits=[{"type": "https://x.org/t"}])
     )
 
 
-def test_scale_matching_axes_passes() -> None:
-    img = _multiscale_with_scale(2.0, 2.0, 2.0)  # 3 factors, 3 axes
-    assert ngc.validate(img, validators=VALIDATORS) == []
+def test_node_fields_allowed() -> None:
+    bag = _wrap(
+        NodeRecord(type="collection", id=mk(1), fields={"attributes": {"a": 1}})
+    )
+    (error,) = [
+        e
+        for e in bag.validate((ngc.validate.__self__ if False else CORE_VALIDATORS))
+        if e.validator == "node_fields_allowed"
+    ]  # noqa: E501
+    assert "attributes" in str(error)
+    assert "node_fields_allowed" in _names(multiscale(4).set_field("datasets", []))
+    assert "node_fields_allowed" not in _names(multiscale(4))
 
 
-def test_scale_mismatching_axes_is_flagged() -> None:
-    img = _multiscale_with_scale(2.0, 2.0)  # 2 factors, 3 axes
-    errors = ngc.validate(img, validators=VALIDATORS)
-    assert len(errors) == 1
-    assert errors[0].validator == "scale_matches_axes"
-    assert errors[0].node_id == ("0",)
+def test_multiscale_is_complete() -> None:
+    assert "multiscale_is_complete" not in _names(multiscale(4))
+    assert "multiscale_is_complete" in _names(multiscale(4).set_field("scales", []))
+    assert "multiscale_is_complete" in _names(ngc.new_node("multiscale", id=mk(1)))
+    # an external entry carries no body, so nothing to check
+    assert "multiscale_is_complete" not in _names(collection(1, external(2, "./img")))
 
 
-def test_scale_resolves_coordinate_system_from_ancestor() -> None:
-    # The coordinate system lives on the multiscale ancestor, not the singlescale.
-    img = _multiscale_with_scale(2.0, 2.0, 2.0)
-    child = img.find("0")
-    assert child is not None and not child.has(ngc.CoordinateSystemsAttribute)
-    assert ngc.validate(child, validators=VALIDATORS) == []
+def test_no_embedded_multiscale() -> None:
+    embedded = _wrap(
+        NodeRecord(type="collection", id=mk(1), children=()),
+        NodeRecord(type="multiscale", id=mk(2), fields=dict(multiscale(2).fields)),
+    )
+    assert "no_embedded_multiscale" in _names(embedded)
+    assert "no_embedded_multiscale" not in _names(collection(1, external(2, "./img")))
+
+
+def test_references_resolve() -> None:
+    labels = ngc.LabelsTrait(source=[ngc.ReferenceObj(type="multiscale", ref=mk(2))])
+    ok = collection(1, external(2, "./img"), external(3, "./lbl").set_trait(labels))
+    assert "references_resolve" not in _names(ok)
+    dangling = collection(1, external(3, "./lbl").set_trait(labels))
+    assert "references_resolve" in _names(dangling)
+    wrong_kind = collection(
+        1,
+        external(2, "./img"),
+        external(3, "./lbl").set_trait(
+            ngc.LabelsTrait(source=[ngc.ReferenceObj(type="collection", ref=mk(2))])
+        ),
+    )
+    assert "references_resolve" in _names(wrong_kind, CORE_VALIDATORS)
+    # declarations nested in traits / fields resolve too
+    assert "references_resolve" not in _names(multiscale(4))
+    scene = ngc.SceneTrait(
+        coordinate_systems=[ngc.CoordinateSystem(id=mk(5), axes=[ngc.Axis(name="x")])],
+        coordinate_transformations=[
+            ngc.TranslationTransformation(
+                translation=[1.0],
+                input=ngc.ReferenceObj(
+                    type="coordinate_system",
+                    ref=mk(0x20),
+                    path=ngc.ZarrPath(href="./raw"),
+                ),
+                output=ngc.ReferenceObj(type="coordinate_system", ref=mk(5)),
+            )
+        ],
+    )
+    assert "references_resolve" not in _names(collection(1, traits=[scene]))
+
+
+async def test_extension_types_declared(revision_store) -> None:
+    opened = await aio.open(f"{DATA}/collection/zarr.json", revision_store)
+    assert "extension_types_declared" not in _names(opened)
+    undeclared = opened.set_trait({"type": "https://other.org/ngff/x", "a": 1})
+    assert "extension_types_declared" in _names(undeclared)
+    # detached trees have no document, so nothing to check against
+    assert "extension_types_declared" not in _names(
+        collection(1, traits=[{"type": "https://o.org/x"}])
+    )
+
+
+def test_paths_are_core_is_opt_in() -> None:
+    remote = multiscale(4).set_field(
+        "scales",
+        [
+            {
+                "type": "scale",
+                "id": scale_id(4, 0),
+                "path": {"type": "zarr", "format": "http", "href": "https://h.org/a/0"},
+            }
+        ],
+    )
+    assert _names(remote, (ngc.paths_are_core,)) == ["paths_are_core"]
+    absolute = collection(
+        1, ngc.new_node("multiscale", id=mk(2), path=ngc.DocPath.for_url("/abs/img"))
+    )
+    assert _names(absolute, (ngc.paths_are_core,)) == ["paths_are_core"]
+    assert _names(collection(1, external(2, "./img")), (ngc.paths_are_core,)) == []
+    assert ngc.paths_are_core not in ngc.ALL_VALIDATORS
 
 
 # --------------------------------------------------------------------------- #
-# Composition: one node, several capabilities -> several validators
+# Recommended validators
 # --------------------------------------------------------------------------- #
 
 
-def test_node_with_two_capabilities_runs_both_validators() -> None:
-    # A node that is both a `well` (no plate parent) AND carries a bad scale
-    # transform against a coordinate system it defines itself.
-    bad = {
-        **_well(),
-        **_coordinate_systems("space", "z", "y", "x"),
-        **_scale("space", 2.0, 2.0),
-    }
-    node = ngc.new_node("multiscale", id="x", name="test", attributes=bad)
-    found = {e.validator for e in ngc.validate(node, validators=VALIDATORS)}
-    assert found == {well_under_plate.__name__, scale_matches_axes.__name__}
+def test_well_under_plate_and_plate_children() -> None:
+    plate = collection(0, collection(1, traits=[WELL]), traits=[PLATE])
+    assert _names(plate, RECOMMENDED_VALIDATORS) == []
+    orphan = collection(0, collection(1, traits=[WELL]))
+    assert _names(orphan, RECOMMENDED_VALIDATORS) == ["well_under_plate"]
+    bad_child = collection(0, external(2, "./img"), traits=[PLATE])
+    assert _names(bad_child, RECOMMENDED_VALIDATORS) == ["plate_children_are_wells"]
 
 
-# --------------------------------------------------------------------------- #
-# raise_on_error re-raises the first failure instead of collecting
-# --------------------------------------------------------------------------- #
+def test_trait_applies_to() -> None:
+    labels_on_collection = collection(1, traits=[ngc.LabelsTrait()])
+    assert _names(labels_on_collection, (ngc.validate and RECOMMENDED_VALIDATORS)) == [
+        "trait_applies_to"
+    ]
+    well_on_multiscale = multiscale(4, traits=[WELL])
+    assert "trait_applies_to" in _names(well_on_multiscale, RECOMMENDED_VALIDATORS)
+    assert (
+        _names(multiscale(4, traits=[ngc.LabelsTrait()]), RECOMMENDED_VALIDATORS) == []
+    )
+
+
+def test_scale_matches_axes() -> None:
+    ok = multiscale(4, axis_names=("z", "y", "x"))
+    assert "scale_matches_axes" not in _names(ok)
+    scales = [s.model_dump(mode="json", exclude_none=True) for s in ok.scales]
+    scales[0]["coordinate_transformations"][0]["scale"] = [
+        1.0,
+        1.0,
+    ]  # 2 factors, 3 axes
+    bad = ok.set_field("scales", scales)
+    errors = bad.validate(RECOMMENDED_VALIDATORS)
+    assert [e.validator for e in errors] == ["scale_matches_axes"]
+    assert errors[0].node_uuid == mk(4)
+    scene = ngc.SceneTrait(
+        coordinate_systems=[ngc.CoordinateSystem(id=mk(5), axes=[ngc.Axis(name="x")])],
+        coordinate_transformations=[
+            ngc.ScaleTransformation(
+                scale=[1.0, 2.0],
+                input=ngc.ReferenceObj(type="coordinate_system", ref=mk(5)),
+                output=ngc.ReferenceObj(type="coordinate_system", ref=mk(5)),
+            )
+        ],
+    )
+    assert "scale_matches_axes" in _names(collection(1, traits=[scene]))
+
+
+def test_labels_source_resolves() -> None:
+    img = external(2, "./img")
+    good = collection(
+        1,
+        img,
+        external(3, "./lbl").set_trait(
+            ngc.LabelsTrait(source=[ngc.ReferenceObj(type="multiscale", ref=mk(2))])
+        ),
+    )
+    assert "labels_source_resolves" not in _names(good)
+    wrong_type = collection(
+        1,
+        img,
+        external(3, "./lbl").set_trait(
+            ngc.LabelsTrait(source=[ngc.ReferenceObj(type="collection", ref=mk(2))])
+        ),
+    )
+    assert "labels_source_resolves" in _names(wrong_type, RECOMMENDED_VALIDATORS)
+    missing = collection(
+        1,
+        external(3, "./lbl").set_trait(
+            ngc.LabelsTrait(source=[ngc.ReferenceObj(type="multiscale", ref=mk(9))])
+        ),
+    )
+    assert "labels_source_resolves" in _names(missing, RECOMMENDED_VALIDATORS)
 
 
 def test_raise_on_error_reraises_first_failure() -> None:
-    orphan = ngc.new_node("collection", id="root", name="root").add(
-        ngc.new_node("collection", id="A1", name="test", attributes=_well())
-    )
+    orphan = collection(0, collection(1, traits=[WELL]))
     with pytest.raises(ngc.ValidationError) as exc_info:
-        ngc.validate(orphan.find("A1"), validators=VALIDATORS, raise_on_error=True)
+        orphan.validate(RECOMMENDED_VALIDATORS, raise_on_error=True)
     assert exc_info.value.validator == "well_under_plate"
-    assert exc_info.value.node_id == ("A1",)
+    assert exc_info.value.node_id == (mk(1),) and exc_info.value.node_uuid == mk(1)

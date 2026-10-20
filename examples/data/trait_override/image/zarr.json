@@ -1,0 +1,77 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "extension_manifest": [
+        {
+          "id": "https://napari.org/ngff/",
+          "version": "1.0",
+          "schemas": []
+        }
+      ],
+      "type": "multiscale",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+      "name": "image",
+      "traits": [
+        {
+          "type": "https://napari.org/ngff/rendering",
+          "contrast_limits": [
+            9,
+            9
+          ],
+          "gamma": 2.0
+        },
+        {
+          "type": "labels",
+          "source": [],
+          "label_attributes": []
+        }
+      ],
+      "coordinate_systems": [
+        {
+          "type": "coordinate_system",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000020",
+          "axes": [
+            {
+              "name": "y"
+            },
+            {
+              "name": "x"
+            }
+          ]
+        }
+      ],
+      "scales": [
+        {
+          "type": "scale",
+          "id": "0192f3a0-7c1e-7b00-9c22-00000000000c",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./s0"
+          },
+          "coordinate_transformations": [
+            {
+              "input": {
+                "type": "scale",
+                "ref": "0192f3a0-7c1e-7b00-9c22-00000000000c"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000020"
+              },
+              "type": "scale",
+              "scale": [
+                1.0,
+                1.0
+              ]
+            }
+          ]
+        }
+      ],
+      "nodes": []
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

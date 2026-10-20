@@ -1,0 +1,169 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "extension_manifest": [
+        {
+          "id": "https://napari.org/ngff/",
+          "version": "1.0",
+          "schemas": [
+            {
+              "type": "json_schema",
+              "url": "https://napari.org/ngff/1.0/schema.json"
+            }
+          ],
+          "homepage": "https://napari.org/ngff/"
+        }
+      ],
+      "type": "collection",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
+      "name": "hela-nuclei-experiment",
+      "traits": [
+        {
+          "type": "scene",
+          "coordinate_systems": [
+            {
+              "type": "coordinate_system",
+              "id": "0192f3a0-7c1e-7b00-9c22-000000000005",
+              "axes": [
+                {
+                  "name": "z",
+                  "type": "space",
+                  "unit": "micrometer"
+                },
+                {
+                  "name": "y",
+                  "type": "space",
+                  "unit": "micrometer"
+                },
+                {
+                  "name": "x",
+                  "type": "space",
+                  "unit": "micrometer"
+                }
+              ]
+            }
+          ],
+          "coordinate_transformations": [
+            {
+              "type": "translation",
+              "translation": [
+                0,
+                0,
+                100
+              ],
+              "input": {
+                "type": "coordinate_system",
+                "path": {
+                  "type": "zarr",
+                  "format": "relative",
+                  "href": "./raw"
+                },
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000020"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000005"
+              }
+            },
+            {
+              "type": "translation",
+              "translation": [
+                0,
+                0,
+                100
+              ],
+              "input": {
+                "type": "coordinate_system",
+                "path": {
+                  "type": "zarr",
+                  "format": "relative",
+                  "href": "./nuclei"
+                },
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000021"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000005"
+              }
+            }
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+          "name": "raw",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./raw"
+          },
+          "traits": [
+            {
+              "type": "https://napari.org/ngff/rendering",
+              "contrast_limits": [
+                0,
+                1500
+              ]
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
+          "name": "nuclei",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./nuclei"
+          },
+          "traits": [
+            {
+              "type": "labels",
+              "source": [
+                {
+                  "type": "multiscale",
+                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
+                }
+              ],
+              "label_attributes": [
+                {
+                  "label_value": 1,
+                  "rgba": [
+                    255,
+                    0,
+                    0,
+                    255
+                  ]
+                },
+                {
+                  "label_value": 2,
+                  "rgba": [
+                    0,
+                    255,
+                    0,
+                    255
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000004",
+          "name": "published-reference",
+          "path": {
+            "type": "zarr",
+            "format": "http",
+            "href": "https://example.org/data/reference.ome.zarr"
+          }
+        }
+      ]
+    }
+  }
+}
