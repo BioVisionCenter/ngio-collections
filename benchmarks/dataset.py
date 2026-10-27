@@ -52,7 +52,11 @@ SCALE_LEVELS = 3
 
 TABLE_TYPE = "https://ngio.example/bench/table"
 BENCH_EXTENSION = ngc.ExtensionManifestEntry(
-    id="https://ngio.example/bench/", version="1.0"
+    id="https://ngio.example/bench/",
+    version="1.0",
+    schemas=[
+        ngc.SchemaRef(type="jsonschema", url="https://ngio.example/bench/1.0.json")
+    ],
 )
 NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 

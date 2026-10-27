@@ -167,7 +167,7 @@ def test_extension_manifest_registry_and_derivation() -> None:
         version="1.0",
         schemas=[
             ngc.SchemaRef(
-                type="json_schema", url="https://napari.org/ngff/1.0/schema.json"
+                type="jsonschema", url="https://napari.org/ngff/1.0/schema.json"
             )
         ],
     )
@@ -190,6 +190,34 @@ def test_extension_manifest_registry_and_derivation() -> None:
     ]
     assert entries[0]["schemas"][0]["url"].endswith("schema.json")
     assert manifest_entries(["https://nobody.org/x"], registry=registry) == []
+
+
+def test_extension_manifest_entry_round_trips_the_upstream_fields() -> None:
+    wire = {
+        "id": "https://viewer-a.example.com/settings/",
+        "version": "0.1",
+        "schemas": [{"type": "linkml", "url": "https://viewer-a.example.com/s.yaml"}],
+        "name": "Viewer-A settings",
+        "description": "Display settings for Viewer A.",
+        "must_understand": True,
+        "homepage": "https://viewer-a.example.com/",
+        "unknown": "ignored",
+    }
+    entry = ngc.ExtensionManifestEntry.from_dict(wire)
+    assert entry.name == "Viewer-A settings" and entry.must_understand is True
+    assert entry.to_dict() == {k: v for k, v in wire.items() if k != "unknown"}
+    # optional fields are omitted when unset; `must_understand` defaults to False
+    minimal = ngc.ExtensionManifestEntry.from_dict(
+        {"id": "https://x.org/", "version": "1"}
+    )
+    assert minimal.must_understand is False
+    assert minimal.to_dict() == {"id": "https://x.org/", "version": "1", "schemas": []}
+    with pytest.raises(ValueError, match="must_understand"):
+        ngc.ExtensionManifestEntry.from_dict(
+            {"id": "https://x.org/", "version": "1", "must_understand": "yes"}
+        )
+    with pytest.raises(ValueError, match="`name`"):
+        ngc.ExtensionManifestEntry(id="https://x.org/", version="1", name=3)  # type: ignore[arg-type]
 
 
 def test_dataclass_locators_work_as_pydantic_fields() -> None:

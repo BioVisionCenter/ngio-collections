@@ -13,7 +13,11 @@ import pytest
 import ngio_collections as ngc
 import ngio_collections.api._api as aio
 from ngio_collections.api import MemoryStore
-from ngio_collections.models import ExtensionManifestEntry, ExtensionRegistry
+from ngio_collections.models import (
+    ExtensionManifestEntry,
+    ExtensionRegistry,
+    SchemaRef,
+)
 from ngio_collections.models._errors import NodeStateError
 from ngio_collections.resolve import EmbeddedMultiscaleError, IdMismatchError
 from tests._builders import collection, multiscale
@@ -22,9 +26,12 @@ from tests.conftest import DATA, mk, requires_pydantic
 RENDER = "https://napari.org/ngff/rendering"
 
 
-NAPARI = ExtensionRegistry(
-    [ExtensionManifestEntry(id="https://napari.org/ngff/", version="1.0")]
+NAPARI_ENTRY = ExtensionManifestEntry(
+    id="https://napari.org/ngff/",
+    version="1.0",
+    schemas=[SchemaRef(type="jsonschema", url="https://napari.org/ngff/1.0.json")],
 )
+NAPARI = ExtensionRegistry([NAPARI_ENTRY])
 
 
 async def _image_and_collection(store: MemoryStore) -> tuple[ngc.Node, ngc.Node]:
@@ -127,14 +134,11 @@ async def test_entry_and_target_must_share_the_uuid() -> None:
 @requires_pydantic  # validators / `.scales` read through the typed models
 async def test_manifest_is_derived_from_the_registry_and_exposed() -> None:
     store = MemoryStore()
-    registry = ExtensionRegistry(
-        [ExtensionManifestEntry(id="https://napari.org/ngff/", version="1.0")]
-    )
     stub = (await aio.create(f"{DATA}/raw", multiscale(2), store)).set_trait(
         {"type": RENDER, "contrast_limits": [0, 1]}
     )
     await aio.create(
-        f"{DATA}/zarr.json", collection(1).add_external(stub), store, registry=registry
+        f"{DATA}/zarr.json", collection(1).add_external(stub), store, registry=NAPARI
     )
     doc = (await store.get(f"{DATA}/zarr.json"))["attributes"]["ome"]
     assert [e["id"] for e in doc["extension_manifest"]] == ["https://napari.org/ngff/"]

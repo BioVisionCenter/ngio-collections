@@ -16,7 +16,12 @@ documents, and the upstream draft it amends). In short:
 
 - nodes are `{type, id, name?, traits?}`; `attributes` is gone, every piece of
   metadata is a typed **trait** (a keyword for built-in traits, a URI for
-  extensions), and extensions are declared per document in `extension_manifest`;
+  extensions), and extensions are declared per document in `extension_manifest`
+  as `{id, version, schemas, name?, description?, must_understand?, homepage?}`
+  with `schemas` a non-empty list of `{type: jsonschema | linkml, url}`
+  (the manifest fields follow the upstream draft at `ome/rfc8-revision1`
+  commit 1ce8f23, which has since adopted list traits, UUID ids and the
+  manifest; `must_understand` is upstream-only, the proposal omits it);
 - **ids are required UUIDs** (v7 minted by `new_id()`), names are optional and
   free-form;
 - references are typed, `{type, ref, path?}`; paths are `{type, format, href}`;
@@ -133,14 +138,29 @@ a bug worth reporting rather than a reason to deep-import.
 - **Multiscales are never embedded, even in memory.** `add()` refuses a
   multiscale without a `path`; the way to link an image is `create` then
   `add_external`.
+- **Custom path types are not supported.** The upstream draft makes the path
+  `type` an extension point (a URI-typed path such as its `OMEROPath` example);
+  `DocPath` here is closed to `zarr` and `json`.
+- **`must_understand` is honoured through the process registry.** A custom type
+  of a `must_understand` extension is a validation finding unless the extension
+  was passed to `register_extension`; nothing is skipped or rejected on read.
 
 ## Feedback to the RFC
 
 Points this implementation surfaced, for the revision's authors:
 
 - `traits` as a *list* keyed implicitly by `type` is harder to use than a dict
-  keyed by type (the upstream draft's shape): same-type duplicates are
-  unspecified and the §3.1 override rule is keyed by type anyway.
+  keyed by type: same-type duplicates are unspecified and the §3.1 override
+  rule is keyed by type anyway (this package rejects duplicates).
+- The upstream draft's examples put an informational `name` inside references
+  (`{type, ref, name, path?}`) while its schema table says a reference MUST NOT
+  carry other fields; `ReferenceObj` follows the table and rejects `name`.
+- `mustUnderstand` is in the upstream manifest but the proposal (§4.1) excludes
+  it; this package follows upstream. The schema kind is spelled `jsonschema`
+  upstream and `json_schema` in the proposal's examples; upstream is used here.
+- The upstream multiscale table still types `traits` as a required object, and
+  `extensionManifest` / `extension_manifest` casing waits on the snake_case
+  sub-RFC (snake_case here, as in the proposal).
 - Without any free-form field, scratch metadata needs a URI trait and a
   manifest entry; one built-in opaque trait would absorb that.
 - "No conflict rules needed" (§8.1) is only half true: the trait-combination

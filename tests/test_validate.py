@@ -11,6 +11,7 @@ import pytest
 
 import ngio_collections as ngc
 import ngio_collections.api._api as aio
+from ngio_collections.api import MemoryStore
 from ngio_collections.graph import ROOT, NodeRecord, NodeTree
 from ngio_collections.validate import (
     CORE_VALIDATORS,
@@ -190,6 +191,64 @@ async def test_extension_types_declared(revision_store) -> None:
     assert "extension_types_declared" not in _names(
         collection(1, traits=[{"type": "https://o.org/x"}])
     )
+
+
+def _with_manifest(entries: list[dict], store: MemoryStore) -> str:
+    """Write a collection using one napari trait under a given manifest; return its URL."""
+    url = f"{DATA}/m/zarr.json"
+    store._data[url] = {
+        "zarr_format": 3,
+        "node_type": "group",
+        "attributes": {
+            "ome": {
+                "version": "0.x",
+                "extension_manifest": entries,
+                "type": "collection",
+                "id": mk(0x40),
+                "traits": [{"type": "https://napari.org/ngff/rendering", "opacity": 1}],
+            }
+        },
+    }
+    return url
+
+
+def _napari(**extra) -> dict:
+    return {
+        "id": "https://napari.org/ngff/",
+        "version": "1.0",
+        "schemas": [{"type": "jsonschema", "url": "https://napari.org/ngff/1.0.json"}],
+        **extra,
+    }
+
+
+async def test_manifest_well_formed() -> None:
+    store = MemoryStore()
+    good = await aio.open(_with_manifest([_napari()], store), store)
+    assert "manifest_well_formed" not in _names(good)
+    for bad in (
+        [_napari(), _napari()],  # duplicate id
+        [_napari(schemas=[])],  # no schema
+        [_napari(schemas=[{"type": "json_schema", "url": "https://x"}])],  # kind
+        [_napari(must_understand="yes")],  # malformed entry
+    ):
+        node = await aio.open(_with_manifest(bad, store), store)
+        assert _names(node, CORE_VALIDATORS).count("manifest_well_formed") == 1, bad
+    # a document without a manifest has nothing to check
+    assert "manifest_well_formed" not in _names(collection(1))
+
+
+async def test_must_understand_supported(monkeypatch) -> None:
+    from ngio_collections.api._extensions import EXTENSIONS
+
+    monkeypatch.setattr(EXTENSIONS, "_by_id", dict(EXTENSIONS._by_id))
+    store = MemoryStore()
+    relaxed = await aio.open(_with_manifest([_napari()], store), store)
+    assert "must_understand_supported" not in _names(relaxed)
+    strict_url = _with_manifest([_napari(must_understand=True)], store)
+    strict = await aio.open(strict_url, store)
+    assert _names(strict, CORE_VALIDATORS).count("must_understand_supported") == 1
+    ngc.register_extension(_napari(must_understand=True))
+    assert "must_understand_supported" not in _names(await aio.open(strict_url, store))
 
 
 def test_paths_are_core_is_opt_in() -> None:

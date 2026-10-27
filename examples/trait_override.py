@@ -26,7 +26,15 @@ VISIBLE = "https://napari.org/ngff/visible"
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
     image_url, url = str(base / "image"), str(base / "zarr.json")
-    ngc.register_extension({"id": "https://napari.org/ngff/", "version": "1.0"})
+    ngc.register_extension(
+        {
+            "id": "https://napari.org/ngff/",
+            "version": "1.0",
+            "schemas": [
+                {"type": "jsonschema", "url": "https://napari.org/ngff/1.0/schema.json"}
+            ],
+        }
+    )
 
     cs, sc = uid(0x20), uid(0xC)
     image = ngc.new_multiscale(

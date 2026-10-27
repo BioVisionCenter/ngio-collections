@@ -40,13 +40,21 @@ def main() -> None:
             "version": "0.1",
             "schemas": [
                 {
-                    "type": "json_schema",
+                    "type": "jsonschema",
                     "url": "https://fractal.example/ngff/0.1/schema.json",
                 }
             ],
         }
     )
-    ngc.register_extension({"id": "https://mobie.example/ngff/", "version": "2.0"})
+    ngc.register_extension(
+        {
+            "id": "https://mobie.example/ngff/",
+            "version": "2.0",
+            "schemas": [
+                {"type": "linkml", "url": "https://mobie.example/ngff/2.0.yaml"}
+            ],
+        }
+    )
     ngc.register_node_type(TABLE, TableNode)
     try:
         ngc.register_node_type("fractal:table", TableNode)

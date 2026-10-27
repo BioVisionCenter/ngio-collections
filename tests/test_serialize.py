@@ -12,7 +12,7 @@ import pytest
 
 from ngio_collections.api import MemoryStore
 from ngio_collections.graph import ROOT, NodeRecord, NodeTree
-from ngio_collections.models import ExtensionRegistry
+from ngio_collections.models import ExtensionManifestEntry, ExtensionRegistry, SchemaRef
 from ngio_collections.models._paths import DocPath, ZarrPath
 from ngio_collections.resolve import (
     EmbeddedMultiscaleError,
@@ -28,6 +28,11 @@ from tests.conftest import DATA, mk
 
 RENDER = "https://napari.org/ngff/rendering"
 WELL = {"type": "well", "row_index": 0, "column_index": 0}
+NAPARI = ExtensionManifestEntry(
+    id="https://napari.org/ngff/",
+    version="1.0",
+    schemas=[SchemaRef(type="jsonschema", url="https://napari.org/ngff/1.0.json")],
+)
 
 
 def _sample() -> NodeTree:
@@ -199,25 +204,15 @@ def test_used_extension_types_stop_at_document_boundaries() -> None:
         if False
         else ExtensionRegistry()
     )
-    from ngio_collections.models import ExtensionManifestEntry
-
-    registry.register(
-        ExtensionManifestEntry(id="https://napari.org/ngff/", version="1.0")
-    )
-    assert derive_manifest(c, registry=registry) == [
-        {"id": "https://napari.org/ngff/", "version": "1.0", "schemas": []}
-    ]
+    registry.register(NAPARI)
+    assert derive_manifest(c, registry=registry) == [NAPARI.to_dict()]
     # an unknown URI is left undeclared, never a failure
     assert derive_manifest(c) == []
 
 
 async def test_write_derives_and_preserves_manifest_entries() -> None:
-    from ngio_collections.models import ExtensionManifestEntry
-
     store = MemoryStore()
-    registry = ExtensionRegistry(
-        [ExtensionManifestEntry(id="https://napari.org/ngff/", version="1.0")]
-    )
+    registry = ExtensionRegistry([NAPARI])
     url = await write_document(store, f"{DATA}/c.json", _sample(), registry=registry)
     written = (await store.get(url))["ome"]
     assert written["extension_manifest"][0]["id"] == "https://napari.org/ngff/"

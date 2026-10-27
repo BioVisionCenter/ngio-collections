@@ -63,7 +63,7 @@ def main() -> None:
             "version": "1.0",
             "schemas": [
                 {
-                    "type": "json_schema",
+                    "type": "jsonschema",
                     "url": "https://napari.org/ngff/1.0/schema.json",
                 }
             ],

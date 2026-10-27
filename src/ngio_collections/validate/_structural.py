@@ -14,6 +14,12 @@ index lookups its own references need, so one node costs O(neighbourhood):
   that type (§7.2). References carrying a `path` are not checked here.
 - `extension_types_declared`: every URI type is covered by the document's
   `extension_manifest` (§4).
+- `manifest_well_formed`: at each document root, the manifest parses, its ids
+  are unique and every entry lists at least one `jsonschema` / `linkml` schema
+  (upstream "Extension manifest" section).
+- `must_understand_supported`: a URI type from a `must_understand` extension is
+  only acceptable when this process registered the extension (upstream "The
+  `mustUnderstand` flag").
 - `external_unresolved`: in a fully resolved view, no node is left external.
 - `paths_are_core` (opt-in): every path object uses the `relative` format, the
   only core one (§7.3). Not bundled: this package resolves all formats.
@@ -30,7 +36,11 @@ from ngio_collections._optional import require_pydantic
 from ngio_collections._types import JSONValue
 from ngio_collections.graph import find_declaration, iter_declarations
 from ngio_collections.models._ids import is_uuid
-from ngio_collections.models._manifest import ExtensionManifestEntry, is_extension_type
+from ngio_collections.models._manifest import (
+    SCHEMA_TYPES,
+    ExtensionManifestEntry,
+    is_extension_type,
+)
 from ngio_collections.models._vocabulary import BUILTIN_TRAIT_TYPES
 from ngio_collections.resolve import is_path_object
 from ngio_collections.validate._engine import ValidationError
@@ -169,12 +179,19 @@ def references_resolve(node: Node) -> None:
 
 
 def _manifest_entries(node: Node, url: str | None) -> list[ExtensionManifestEntry]:
-    """Return the parsed manifest of the document at `url` in the node's tree."""
+    """Return the parsed manifest of the document at `url` in the node's tree.
+
+    Malformed entries are skipped here; `manifest_well_formed` reports them.
+    """
     if url is None:
         return []
-    return [
-        ExtensionManifestEntry.from_dict(e) for e in node.tree.manifests.get(url, ())
-    ]
+    entries: list[ExtensionManifestEntry] = []
+    for raw in node.tree.manifests.get(url, ()):
+        try:
+            entries.append(ExtensionManifestEntry.from_dict(raw))
+        except ValueError:
+            continue
+    return entries
 
 
 def _require_declared(
@@ -214,6 +231,94 @@ def extension_types_declared(node: Node) -> None:
     for trait_type in node.traits:
         if trait_type not in edge.traits:
             _require_declared(trait_type, own_entries, str(own_url))
+
+
+def manifest_well_formed(node: Node) -> None:
+    """At a document root, the `extension_manifest` meets the spec's MUSTs.
+
+    Runs on the node that opens a document (the tree root, or a node whose
+    document differs from its parent's). Every entry must parse, extension ids
+    must be unique within the manifest, and every entry must list at least one
+    schema of a known kind (`jsonschema` or `linkml`).
+    """
+    url = node.document_url
+    if url is None:
+        return
+    parent = node.parent()
+    if parent is not None and parent.document_url == url:
+        return
+    seen: set[str] = set()
+    for raw in node.tree.manifests.get(url, ()):
+        try:
+            entry = ExtensionManifestEntry.from_dict(raw)
+        except ValueError as exc:
+            raise ValidationError(
+                f"malformed `extension_manifest` entry: {exc}"
+            ) from exc
+        if entry.id in seen:
+            raise ValidationError(
+                f"extension {entry.id!r} is declared twice in the "
+                f"`extension_manifest` of {url!r}"
+            )
+        seen.add(entry.id)
+        if not entry.schemas:
+            raise ValidationError(
+                f"extension {entry.id!r} lists no schema; the manifest entry "
+                "needs at least one"
+            )
+        for schema in entry.schemas:
+            if schema.type not in SCHEMA_TYPES:
+                raise ValidationError(
+                    f"extension {entry.id!r} lists a schema of unknown kind "
+                    f"{schema.type!r}; known kinds are {sorted(SCHEMA_TYPES)}"
+                )
+
+
+def _require_understood(
+    type_name: str, entries: list[ExtensionManifestEntry], registered: set[str]
+) -> None:
+    """Raise if `type_name` belongs to a `must_understand` extension not in `registered`."""
+    if not is_extension_type(type_name):
+        return
+    for entry in entries:
+        if (
+            entry.must_understand
+            and entry.covers(type_name)
+            and (entry.id not in registered)
+        ):
+            raise ValidationError(
+                f"extension type {type_name!r} belongs to {entry.id!r}, which is "
+                "flagged `must_understand` but is not registered in this process "
+                "(`register_extension`)"
+            )
+
+
+def must_understand_supported(node: Node) -> None:
+    """URI types of `must_understand` extensions are understood by this process.
+
+    "Understood" means the extension is registered in the default registry
+    (`EXTENSIONS`, via `register_extension`). The declaring-entry / target split
+    follows `extension_types_declared`.
+    """
+    if node.is_detached:
+        return
+    from ngio_collections.api._extensions import EXTENSIONS
+
+    registered = {entry.id for entry in EXTENSIONS}
+    own_entries = _manifest_entries(node, node.document_url)
+    edge = node.record.edge
+    if edge is None:
+        for type_name in (node.type, *node.traits):
+            _require_understood(type_name, own_entries, registered)
+        return
+    entry_entries = _manifest_entries(node, edge.origin_url)
+    _require_understood(node.type, entry_entries, registered)
+    _require_understood(node.type, own_entries, registered)
+    for trait_type in edge.traits:
+        _require_understood(trait_type, entry_entries, registered)
+    for trait_type in node.traits:
+        if trait_type not in edge.traits:
+            _require_understood(trait_type, own_entries, registered)
 
 
 def external_unresolved(node: Node) -> None:
@@ -264,6 +369,8 @@ CORE_VALIDATORS = (
     no_embedded_multiscale,
     references_resolve,
     extension_types_declared,
+    manifest_well_formed,
+    must_understand_supported,
     external_unresolved,
 )
 """The structural checks every revision-1 document must pass."""

@@ -6,7 +6,12 @@
         {
           "id": "https://napari.org/ngff/",
           "version": "1.0",
-          "schemas": []
+          "schemas": [
+            {
+              "type": "jsonschema",
+              "url": "https://napari.org/ngff/1.0/schema.json"
+            }
+          ]
         }
       ],
       "type": "collection",

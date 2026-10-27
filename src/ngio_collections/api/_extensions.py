@@ -24,9 +24,14 @@ def register_extension(
 ) -> ExtensionManifestEntry:
     """Register an extension so documents using its URI types declare it.
 
+    Registering an extension also marks it as understood by this process: the
+    `must_understand_supported` validator accepts custom types of a
+    `must_understand` extension only when the extension is registered here.
+
     Args:
-        entry: The manifest entry (`id`, `version`, `schemas`, `homepage?`), as
-            a model or a plain mapping.
+        entry: The manifest entry (`id`, `version`, `schemas`, `name?`,
+            `description?`, `must_understand?`, `homepage?`), as a model or a
+            plain mapping.
         registry: The registry to add it to (the default one unless testing).
 
     Returns:
