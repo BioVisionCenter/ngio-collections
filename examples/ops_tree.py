@@ -3,7 +3,7 @@
 Ids are UUIDs (`new_id()` mints a UUIDv7); names are free-form and need not be
 unique, so `find` takes a UUID and `find_by_name` returns a tuple.
 
-Run with: pixi run python examples/ops_tree.py
+Run with: pixi run --environment dev python examples/ops_tree.py
 """
 
 import ngio_collections as ngc
@@ -21,10 +21,11 @@ def main() -> None:
     )
     root = root.find(uid(2)).add_external(entry)
     try:
-        root.add(ngc.new_multiscale(coordinate_systems=[], scales=[]))
+        root.add(ngc.new_multiscale(id=uid(9), coordinate_systems=[], scales=[]))
     except ngc.NodeStateError as error:
-        print("embedding refused:", str(error)[:60], "...")
+        print("embedding refused:", error)
 
+    # No id given: `new_id()` mints a UUIDv7 for each.
     root = root.add(
         ngc.new_collection(name="scratch"), ngc.new_collection(name="scratch")
     )

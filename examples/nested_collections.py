@@ -5,7 +5,7 @@ its own document (a `.json` file or a Zarr group). `externalize` moves an
 embedded collection into its own document and leaves its declaring entry
 behind; a typed `ReferenceObj` with a `path` can then be opened directly.
 
-Run with: pixi run python examples/nested_collections.py
+Run with: pixi run --environment dev python examples/nested_collections.py
 """
 
 from pathlib import Path
@@ -22,20 +22,23 @@ def main() -> None:
     labels = ngc.new_collection(id=uid(3), name="labels").add_external(stub)
     root = ngc.new_collection(id=uid(1), name="root").add(labels)  # labels embedded
     ngc.create(url, root, overwrite=True)
-    print("embedded :", [(n.name, n.is_external) for n in ngc.open(url).walk()])
+    opened = ngc.open(url)
+    print("embedded :", [(n.name, n.is_external) for n in opened.walk()])
 
     # Split the labels collection into a standalone JSON document.
-    opened = ngc.open(url)
-    updated = ngc.externalize(
-        opened.find(uid(3)), str(base / "labels.json"), overwrite=True
-    )
-    print("external :", [(n.name, n.is_external, n.ref_path) for n in updated.walk()])
+    ngc.externalize(opened.find(uid(3)), str(base / "labels.json"), overwrite=True)
+    reopened = ngc.open(url)
+    print("external :", [(n.name, n.is_external, n.ref_path) for n in reopened.walk()])
 
     # A typed reference to the labels collection, resolved from the root document.
-    entry = updated.find(uid(3))
+    entry = reopened.find(uid(3))
     ref = ngc.ReferenceObj(type="collection", ref=entry.id, path=entry.path)
-    labels_doc = ngc.open_ref(ref, updated.document_url)
-    print("open_ref :", labels_doc.document_url, [n.name for n in labels_doc.walk()])
+    labels_doc = ngc.open_ref(ref, reopened.document_url)
+    print(
+        "open_ref :",
+        Path(labels_doc.document_url).name,
+        [n.name for n in labels_doc.walk()],
+    )
     print("resolved :", [n.name for n in ngc.open_resolved(url).walk()])
 
 

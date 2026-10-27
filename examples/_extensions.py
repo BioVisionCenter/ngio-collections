@@ -26,6 +26,7 @@ from pathlib import Path
 
 import ngio_collections as ngc
 
+# Served once this branch is on `main`; until then the ids are just identifiers.
 BASE = "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/"
 HOMEPAGE = (
     "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
@@ -59,7 +60,7 @@ TRAINING_ENTRY = {
 }
 
 
-def register_examples() -> None:
+def register_extensions() -> None:
     """Register both extensions so written documents declare them automatically."""
     ngc.register_extension(FRACTAL_ENTRY)
     ngc.register_extension(TRAINING_ENTRY)
@@ -74,7 +75,8 @@ class TableNode(ngc.Node):
 
     def csv_url(self) -> str:
         """The absolute location of the CSV (the data path, resolved)."""
-        assert self.path is not None, "a table node always carries a CSV path"
+        if self.path is None:
+            raise ValueError("a table node always carries a CSV path")
         return self.path.resolve(self.document_url)
 
 

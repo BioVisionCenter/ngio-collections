@@ -2,8 +2,8 @@
 
 Each example writes under `examples/data/<example>/`; the entry document is the
 `zarr.json` or `collection.json` at that directory's root. Every entry is
-resolved and checked with `ALL_VALIDATORS`. The one tolerated finding is an
-`http` node that cannot be resolved offline (`remote_collection`).
+resolved and checked with `ALL_VALIDATORS`. The one tolerated finding is the
+placeholder remote (`example.org`) of `remote_collection`, which never resolves.
 
 When `jsonschema` is installed, every node and trait of an example extension
 type (see `_extensions.py`) is also checked against its schema in `schemas/`,
@@ -13,8 +13,6 @@ Run with: NGC_OFFLINE=1 pixi run python examples/validate_all.py
 """
 
 import json
-import os
-import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -26,7 +24,7 @@ HERE = Path(__file__).parent
 
 try:
     from jsonschema import Draft202012Validator
-except ImportError:  # pragma: no cover - the schema step is optional
+except ImportError:  # the schema step is optional
     Draft202012Validator = None
 
 
@@ -88,7 +86,7 @@ def validate_entry(url: str) -> list[str]:
             and node.path.format == "http"
         ):
             findings.append(
-                f"  (tolerated) remote node {node.name!r} not resolved offline"
+                f"  (tolerated) placeholder remote {node.name!r} never resolves"
             )
             continue
         findings.append(f"  FAIL {error.validator} on {error.node_uuid}: {error}")
@@ -96,14 +94,12 @@ def validate_entry(url: str) -> list[str]:
 
 
 def main() -> int:
-    env = {**os.environ}
     for script in sorted(HERE.glob("*.py")):
         if script.name == Path(__file__).name or script.name.startswith("_"):
-            continue  # helpers (`_ids.py`, `_extensions.py`) are not examples
-        cmd = f"{sys.executable} {script}"
+            continue  # helpers (`_ids.py`, `_images.py`, ...) are not examples
         print(f"running {script.name}")
         result = subprocess.run(
-            shlex.split(cmd), capture_output=True, encoding="utf-8", env=env
+            [sys.executable, str(script)], capture_output=True, encoding="utf-8"
         )
         if result.returncode != 0:
             print(result.stdout)
@@ -116,7 +112,9 @@ def main() -> int:
             entry = example_dir / name
             if entry.exists():
                 findings = validate_entry(str(entry))
-                print(f"{entry.relative_to(HERE)}: {'ok' if not findings else ''}")
+                print(
+                    f"{entry.relative_to(HERE)}: {'ok' if not findings else 'findings'}"
+                )
                 for line in findings:
                     print(line)
                 failed |= any(line.startswith("  FAIL") for line in findings)

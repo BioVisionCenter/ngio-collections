@@ -4,7 +4,7 @@
 trait through its model, `set_trait` upserts (a model or a mapping carrying
 `type`), `drop_traits` removes by type or model class.
 
-Run with: pixi run python examples/ops_traits.py
+Run with: pixi run --environment dev python examples/ops_traits.py
 """
 
 import ngio_collections as ngc
@@ -23,12 +23,19 @@ def main() -> None:
         "| has well:",
         node.has_trait(ngc.WellTrait),
     )
-    print("membership  :", ngc.PlateTrait in node, "plate" in node, "well" in node)
+    print(
+        "membership  :",
+        f"PlateTrait={ngc.PlateTrait in node}",
+        f"'plate'={'plate' in node}",
+        f"'well'={'well' in node}",
+    )
 
     # Upsert: a mapping carrying `type` (extension traits always look like this)
     # and a model are interchangeable; a later set of the same type replaces.
     node = node.set_trait({"type": "well", "row_index": 0, "column_index": 0})
-    print("after set   :", list(node.traits), node[ngc.WellTrait].column_index)
+    print(
+        "after set   :", list(node.traits), "column:", node[ngc.WellTrait].column_index
+    )
     node = node.set_trait(ngc.WellTrait(row_index=0, column_index=1))
     print("replaced    :", node.traits["well"])
     node = node.drop_traits(ngc.WellTrait)

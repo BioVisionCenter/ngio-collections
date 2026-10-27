@@ -119,7 +119,16 @@
                 "type": "zarr",
                 "format": "relative",
                 "href": "./A/1/0"
-              }
+              },
+              "traits": [
+                {
+                  "type": "acquisition",
+                  "acquisition": {
+                    "type": "acquisition",
+                    "ref": "0192f3a0-7c1e-7b00-9c22-00000000000b"
+                  }
+                }
+              ]
             },
             {
               "type": "multiscale",
@@ -129,7 +138,16 @@
                 "type": "zarr",
                 "format": "relative",
                 "href": "./A/1/1"
-              }
+              },
+              "traits": [
+                {
+                  "type": "acquisition",
+                  "acquisition": {
+                    "type": "acquisition",
+                    "ref": "0192f3a0-7c1e-7b00-9c22-00000000000b"
+                  }
+                }
+              ]
             }
           ]
         }

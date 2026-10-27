@@ -15,6 +15,16 @@
             "format": "relative",
             "href": "./image"
           }
+        },
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
+          "name": "nuclei",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./nuclei"
+          }
         }
       ]
     }

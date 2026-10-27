@@ -9,9 +9,9 @@ and from which inputs. Three things to see:
   from the traits the document actually uses when it is written;
 * the trait sits on the collection's *entry*, so the image document is never
   touched;
-* an undeclared URI type is a validation finding, never a write error.
+* an undeclared URI type is a validation finding.
 
-Run with: pixi run python examples/extension_provenance.py
+Run with: pixi run --environment dev python examples/extension_provenance.py
 """
 
 from pathlib import Path
@@ -29,7 +29,7 @@ def main() -> None:
 
     raw = ngc.create(str(base / "raw"), image(2, "raw"), overwrite=True)
     nuclei = ngc.create(str(base / "nuclei"), image(3, "nuclei"), overwrite=True)
-    nuclei = nuclei.set_trait(
+    nuclei = nuclei.set_trait(  # on the entry, not in nuclei/zarr.json
         {
             "type": PROVENANCE,
             "task": "cellpose-segmentation",

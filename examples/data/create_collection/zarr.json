@@ -96,7 +96,38 @@
             "type": "zarr",
             "format": "relative",
             "href": "./nuclei"
-          }
+          },
+          "traits": [
+            {
+              "type": "labels",
+              "source": [
+                {
+                  "type": "multiscale",
+                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
+                }
+              ],
+              "label_attributes": [
+                {
+                  "label_value": 1,
+                  "rgba": [
+                    255,
+                    0,
+                    0,
+                    255
+                  ]
+                },
+                {
+                  "label_value": 2,
+                  "rgba": [
+                    0,
+                    255,
+                    0,
+                    255
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     }

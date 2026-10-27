@@ -14,7 +14,7 @@ path like any other (`format` + `href`) but never opens the CSV as a node
 document: the node stays a leaf in a resolved view, and that is not a finding.
 `register_node_type` gives such nodes a typed handle (`TableNode`).
 
-Run with: pixi run python examples/extension_plate_training.py
+Run with: pixi run --environment dev python examples/extension_plate_training.py
 """
 
 from pathlib import Path
@@ -25,7 +25,7 @@ from _extensions import (
     DATASET,
     TABLE,
     TableNode,
-    register_examples,
+    register_extensions,
     register_table_handle,
 )
 from _ids import uid
@@ -35,7 +35,7 @@ from _images import image
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
     url = str(base / "zarr.json")
-    register_examples()
+    register_extensions()
     register_table_handle()
 
     well_dir = base / "A" / "1"
@@ -47,7 +47,6 @@ def main() -> None:
         ),
         overwrite=True,
     )
-    well_dir.mkdir(parents=True, exist_ok=True)
     (well_dir / "regionprops.csv").write_text(
         "label,area,mean_intensity\n1,120,0.82\n2,98,0.64\n"
     )
@@ -82,13 +81,12 @@ def main() -> None:
     ngc.create(url, root, overwrite=True)
 
     opened = ngc.open(url)
-    print(
-        "manifest  :", [e["id"].rsplit("/", 2)[-2] for e in opened.extension_manifest]
-    )
+    print("manifest  :", [e["name"] for e in opened.extension_manifest])
     print("dataset   :", opened.traits[DATASET]["samples"][0]["split"])
-    table = opened.find(uid(0xC))
-    assert isinstance(table, TableNode)
-    print("table     :", table.columns, Path(table.csv_url()).relative_to(base))
+    table = opened.find(uid(0xC))  # a `TableNode`, thanks to `register_table_handle`
+    print(
+        "table     :", type(table).__name__, table.columns, Path(table.csv_url()).name
+    )
 
     # A data path is never fetched: the table stays external in a resolved view.
     view = ngc.open_resolved(url)
@@ -97,10 +95,6 @@ def main() -> None:
         "resolved  : external =", node.is_external, "document =", node.path.is_document
     )
     print("validation:", view.validate(ngc.ALL_VALIDATORS))
-    print(
-        "strict    :",
-        [(e.validator, e.node_uuid[-4:]) for e in view.validate((ngc.paths_are_core,))],
-    )
 
 
 if __name__ == "__main__":

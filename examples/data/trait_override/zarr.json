@@ -14,7 +14,24 @@
             "type": "zarr",
             "format": "relative",
             "href": "./image"
-          }
+          },
+          "traits": [
+            {
+              "type": "labels",
+              "source": [],
+              "label_attributes": [
+                {
+                  "label_value": 1,
+                  "rgba": [
+                    0,
+                    0,
+                    255,
+                    255
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     }

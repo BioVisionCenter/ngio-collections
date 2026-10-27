@@ -2,7 +2,7 @@
 
     experiment (collection, scene trait)
     ├── raw     -> ./raw     (multiscale, its own zarr.json)
-    └── nuclei  -> ./nuclei  (multiscale, labels trait pointing at raw)
+    └── nuclei  -> ./nuclei  (multiscale; labels trait on its entry, as in the spec)
 
 Under RFC-8 revision 1 a multiscale is never embedded in a collection: each
 image is written as its own document first (`create` returns its declaring
@@ -10,7 +10,7 @@ entry, a stub carrying the same UUID) and the collection only links it with
 `add_external`. This is the one example that assembles a multiscale by hand;
 the others import a ready-made image from `_images.py`.
 
-Run with: pixi run python examples/create_collection.py
+Run with: pixi run --environment dev python examples/create_collection.py
 """
 
 from pathlib import Path
@@ -61,9 +61,14 @@ def main() -> None:
         build_multiscale(uid(2), uid(0x20), [uid(0xC), uid(0xD)], "raw"),
         overwrite=True,
     )
-    nuclei_node = build_multiscale(
-        uid(3), uid(0x21), [uid(0xE), uid(0xF)], "nuclei"
-    ).set_trait(
+    nuclei = ngc.create(
+        str(base / "nuclei"),
+        build_multiscale(uid(3), uid(0x21), [uid(0xE), uid(0xF)], "nuclei"),
+        overwrite=True,
+    )
+    # The labels trait sits on nuclei's ENTRY in the collection, as in the spec's
+    # collection.json; the image document itself carries no traits.
+    nuclei = nuclei.set_trait(
         ngc.LabelsTrait(
             source=[ngc.ReferenceObj(type="multiscale", ref=uid(2))],
             label_attributes=[
@@ -72,16 +77,15 @@ def main() -> None:
             ],
         )
     )
-    nuclei = ngc.create(str(base / "nuclei"), nuclei_node, overwrite=True)
 
     # 2. The collection links them and places both in one scene.
     scene = ngc.SceneTrait(
         coordinate_systems=[
-            ngc.CoordinateSystem(id=uid(5), axes=axes_czyx()[1:]),
+            ngc.CoordinateSystem(id=uid(5), axes=axes_czyx()[1:]),  # spatial: z, y, x
         ],
         coordinate_transformations=[
             ngc.TranslationTransformation(
-                translation=[0, 0, 100],
+                translation=[0, 0, 100],  # the spec's values; both images alike
                 input=ngc.ReferenceObj(
                     type="coordinate_system", ref=cs, path=ngc.ZarrPath(href=href)
                 ),
@@ -99,8 +103,7 @@ def main() -> None:
     print(f"wrote {url}\n")
     print(Path(url).read_text())
     view = ngc.open_resolved(url)
-    print("resolved:", [(n.name, n.is_external, list(n.traits)) for n in view.walk()])
-    print("validation:", view.validate(ngc.ALL_VALIDATORS))
+    print("resolved:", [(n.name, list(n.traits)) for n in view.walk()])
 
 
 if __name__ == "__main__":

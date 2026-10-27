@@ -6,7 +6,7 @@ generated documents are reproducible: node `uid(n)`, coordinate system
 `system_id(n)`, scale `level` `uid(0x30 + 0x10 * level + n)`.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import ngio_collections as ngc
 from _ids import uid
@@ -24,7 +24,7 @@ def image(
     axes: Sequence[str] = ("y", "x"),
     levels: int = 1,
     scale_paths: Sequence[ngc.ZarrPath] | None = None,
-    traits: Sequence = (),
+    traits: Sequence[ngc.BaseTrait | Mapping[str, object]] = (),
 ) -> ngc.Node:
     """A multiscale `uid(n)` with `levels` resolutions (factor `2**level` per axis)."""
     system = ngc.CoordinateSystem(

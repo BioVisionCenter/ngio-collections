@@ -5,15 +5,6 @@
       "type": "multiscale",
       "id": "0192f3a0-7c1e-7b00-9c22-000000000009",
       "name": "fov0",
-      "traits": [
-        {
-          "type": "acquisition",
-          "acquisition": {
-            "type": "acquisition",
-            "ref": "0192f3a0-7c1e-7b00-9c22-00000000000b"
-          }
-        }
-      ],
       "coordinate_systems": [
         {
           "type": "coordinate_system",

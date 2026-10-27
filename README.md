@@ -112,8 +112,9 @@ whole tree. Each script has one job:
   scene), and the one place a multiscale is assembled by hand; the others take
   an image from `_images.py`.
 - `open_resolved_inspect.py`: `open` vs `open_resolved`, portable references,
-  the read-only view, `delete` with cascade.
-- `open_edit_save.py`: edit names and fields in two documents, one `save` each.
+  the read-only view.
+- `open_edit_save.py`: edit names and fields in two documents, one `save` each,
+  then `delete` with cascade.
 - `trait_override.py`: traits on the entry vs. in the image document, and
   which wins on `open_resolved`.
 - `nested_collections.py`: embedded vs. external collections, `externalize`,

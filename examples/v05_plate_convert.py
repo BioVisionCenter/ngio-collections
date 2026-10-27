@@ -11,11 +11,11 @@ plate and its wells become collections with the provisional HCS traits.
     ├── zarr.json          plate collection (plate trait)
     └── A/1/zarr.json      well collection  (well trait) -> A/1/0/zarr.json, ...
 
-Set NGC_OFFLINE=1 to skip (CI). Run with: pixi run python examples/v05_plate_convert.py
+Set NGC_OFFLINE=1 to skip (CI). Run with: pixi run --environment dev python examples/v05_plate_convert.py
 """
 
+import asyncio
 import os
-import sys
 from pathlib import Path
 
 import ngio_collections as ngc
@@ -23,6 +23,12 @@ from _ids import uid_for
 
 PLATE_URL = "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/"
 MAX_ROWS, MAX_COLS = 1, 2  # keep the demo small
+HTTP = ngc.HttpStore()
+
+
+def read(url: str) -> dict:
+    """The `ome` metadata of a remote v0.5 group (the store API is async)."""
+    return asyncio.run(HTTP.get(url + "zarr.json"))["attributes"]["ome"]
 
 
 def convert_multiscale(image_url: str, ome: dict, name: str) -> ngc.Node:
@@ -68,13 +74,6 @@ def main() -> None:
         print("NGC_OFFLINE set: skipping the IDR conversion")
         return
     base = Path(__file__).parent / "data" / Path(__file__).stem
-    http = ngc.HttpStore()
-
-    def read(url: str) -> dict:
-        import asyncio
-
-        return asyncio.run(http.get(url + "zarr.json"))["attributes"]["ome"]
-
     plate_ome = read(PLATE_URL)["plate"]
     rows = [r["name"] for r in plate_ome["rows"][:MAX_ROWS]]
     columns = [c["name"] for c in plate_ome["columns"][:MAX_COLS]]
@@ -122,17 +121,18 @@ def main() -> None:
 
     view = ngc.open_resolved(url)
     first = next(n for n in view.walk() if n.type == "multiscale")
-    assert isinstance(first, ngc.MultiscaleNode)
+    assert isinstance(
+        first, ngc.MultiscaleNode
+    )  # narrows the type for the access below
     print("wrote", url)
     print("first image scales:", [s.path.href for s in first.scales][:2], "...")
     print("validation:", view.validate(ngc.ALL_VALIDATORS))
     print(
-        "strict paths:",
+        "images with non-core (http) scale paths:",
         len(view.validate((ngc.paths_are_core,))),
-        "non-core path(s), as intended",
+        "(as intended)",
     )
-    return None
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

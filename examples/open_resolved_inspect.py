@@ -1,12 +1,11 @@
-"""`open` vs `open_resolved`, portable references, validation and `delete`.
+"""`open` vs `open_resolved`: external entries, spliced-in bodies, a read-only view.
 
 `open` reads one document: cross-document nodes stay *external* (declaring
 entries with a `path`). `open_resolved` follows the paths into one read-only
 view: each image's body (`coordinate_systems`, `scales`) is spliced in and its
-entry's traits combine with its own. `delete(cascade=True)` removes an entry
-*and* the document it points at.
+entry's traits combine with its own.
 
-Run with: pixi run python examples/open_resolved_inspect.py
+Run with: pixi run --environment dev python examples/open_resolved_inspect.py
 """
 
 from pathlib import Path
@@ -43,21 +42,21 @@ def main() -> None:
         [(n.name, n.is_external, n.document_url) for n in view.walk()],
     )
     nuclei = view.find(uid(3))
-    assert isinstance(nuclei, ngc.MultiscaleNode)
+    assert isinstance(
+        nuclei, ngc.MultiscaleNode
+    )  # narrows the type for the access below
     print("nuclei scales :", [s.path.href for s in nuclei.scales])
+    print("nuclei traits :", list(nuclei.traits))
+    # A reference usable from another document: the path is `absolute` because
+    # this document is local; `ref_local()` is the same-document form.
     print("portable ref  :", nuclei.ref().to_dict())
-    print("validation    :", view.validate(ngc.ALL_VALIDATORS))
+    print("local ref     :", nuclei.ref_local().to_dict())
 
     # A resolved view is read-only; edits go through `open` + `save`.
     try:
         ngc.save(view)
     except ngc.NodeStateError as error:
         print("save(view)    :", error)
-
-    # Drop the labels image: the entry from the collection and its document.
-    affected = ngc.delete(opened.find(uid(3)), cascade=True)
-    print("deleted       :", affected)
-    print("after delete  :", [n.name for n in ngc.open_resolved(url).walk()])
 
 
 if __name__ == "__main__":

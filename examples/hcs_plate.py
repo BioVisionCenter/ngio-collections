@@ -2,16 +2,17 @@
 
     plate-001 (collection, plate trait: rows A/B, columns 1/2, acquisition t0)
     └── A1 (collection, well + scene traits)
-        ├── fov0 -> ./A/1/0 (multiscale, acquisition trait)
-        └── fov1 -> ./A/1/1
+        ├── fov0 -> ./A/1/0 (multiscale; acquisition trait on its entry)
+        └── fov1 -> ./A/1/1 (multiscale; acquisition trait on its entry)
 
 HCS is deferred to a sub-RFC; `PlateTrait` / `WellTrait` / `AcquisitionTrait`
 follow the revision's example and are marked provisional. Note the well is an
 *embedded* collection (nested collections may be inlined; only multiscales may
-not), and that `acquisition` on an image is a typed reference to the
-acquisition *declared* in the plate trait.
+not), and that `acquisition` on an image's entry is a typed reference to the
+acquisition *declared* in the plate trait. The generated document mirrors
+`rfc8-revision1/examples/plate.json`.
 
-Run with: pixi run python examples/hcs_plate.py
+Run with: pixi run --environment dev python examples/hcs_plate.py
 """
 
 from pathlib import Path
@@ -24,19 +25,18 @@ from _images import image, system_id
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
 
+    fov0 = ngc.create(
+        str(base / "A" / "1" / "0"), image(9, "fov0", levels=2), overwrite=True
+    )
+    fov1 = ngc.create(
+        str(base / "A" / "1" / "1"), image(0xA, "fov1", levels=2), overwrite=True
+    )
+    # The acquisition trait goes on each ENTRY in the plate document (as in the
+    # spec), not into the image documents.
     acquisition = ngc.AcquisitionTrait(
         acquisition=ngc.ReferenceObj(type="acquisition", ref=uid(0xB))
     )
-    fov0 = ngc.create(
-        str(base / "A" / "1" / "0"),
-        image(9, "fov0", levels=2, traits=[acquisition]),
-        overwrite=True,
-    )
-    fov1 = ngc.create(
-        str(base / "A" / "1" / "1"),
-        image(0xA, "fov1", levels=2, traits=[acquisition]),
-        overwrite=True,
-    )
+    fov0, fov1 = fov0.set_trait(acquisition), fov1.set_trait(acquisition)
 
     scene = ngc.SceneTrait(
         coordinate_systems=[
@@ -79,14 +79,13 @@ def main() -> None:
     url = str(base / "zarr.json")
     ngc.create(url, root, overwrite=True)
 
-    print(f"wrote {url}\n")
-    print(Path(url).read_text())
+    print(f"wrote {url}")
     view = ngc.open_resolved(url)
-    print(
-        "fov0 acquisition:",
-        view.find(uid(9))[ngc.AcquisitionTrait].acquisition.ref == uid(0xB),
-    )
-    print("validation:", view.validate(ngc.ALL_VALIDATORS))
+    # The entry's typed reference resolves to the acquisition the plate declares.
+    ref = view.find(uid(9))[ngc.AcquisitionTrait].acquisition
+    (acquired,) = [a for a in view[ngc.PlateTrait].acquisitions if a.id == ref.ref]
+    print("fov0 acquisition:", acquired.name)
+    print("validation      :", view.validate(ngc.ALL_VALIDATORS))
 
 
 if __name__ == "__main__":

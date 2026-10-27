@@ -4,7 +4,7 @@ A multiscale can carry traits in two places (RFC-8 revision 1 §3.1):
 
 * in its **own document** (`open()` the image, `set_trait`, `save()`);
 * on the **entry** that declares it in a collection (`set_trait` on the stub
-  `create()` returned, or on the entry in an opened collection).
+  `create()` returned, or on the entry in an opened collection, as here).
 
 On `open_resolved()` the two lists combine: traits of different types are
 united, and when both carry a trait of the *same* type the collection's entry
@@ -12,7 +12,7 @@ wins, as a whole object. Here a labels image colours label 1 red; a collection
 recolours it blue on the entry alone, so you never need write access to the
 image to annotate it.
 
-Run with: pixi run python examples/trait_override.py
+Run with: pixi run --environment dev python examples/trait_override.py
 """
 
 from pathlib import Path
@@ -34,8 +34,6 @@ def main() -> None:
     stub = ngc.create(
         image_url, image(2, "nuclei", traits=[labels([255, 0, 0, 255])]), overwrite=True
     )
-    # Decorate the ENTRY: a labels trait of the same type overrides the image's.
-    stub = stub.set_trait(labels([0, 0, 255, 255]))
     root = ngc.new_collection(id=uid(1), name="root").add_external(stub)
     ngc.create(url, root, overwrite=True)
 
@@ -43,18 +41,18 @@ def main() -> None:
         node = ngc.open_resolved(url).find(uid(2))
         print(f"{label:<20}", node[ngc.LabelsTrait].label_attributes[0].rgba)
 
+    show("image only")  # red: the image's own trait
+
+    # Decorate the ENTRY in the collection (open, not open_resolved: views are
+    # read-only): a labels trait of the same type overrides the image's.
+    root = ngc.open(url)
+    ngc.save(root.find(uid(2)).set_trait(labels([0, 0, 255, 255])))
     show("entry overrides")  # blue: the entry wins as a whole object
 
     # Edit the IMAGE document: its own colour changes, but the entry still wins.
     ngc.save(ngc.open(image_url).set_trait(labels([0, 255, 0, 255])))
-    show("image edited")  # still blue
+    show("image edited")  # still blue; the image document alone says green
 
-    # Edit the ENTRY in the collection (open, not open_resolved: views are read-only).
-    root = ngc.open(url)
-    ngc.save(root.find(uid(2)).drop_traits(ngc.LabelsTrait))
-    show("entry trait dropped")  # green: the image's own trait shows through
-
-    print("validation:", ngc.open_resolved(url).validate(ngc.ALL_VALIDATORS))
     print("\ncollection document:\n" + Path(url).read_text())
 
 

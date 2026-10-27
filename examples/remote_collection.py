@@ -10,7 +10,7 @@ No network here: the "remote" document lives in a `MemoryStore` behind
 `RoutedStore`, which dispatches `http(s)://` URLs to one backend and local
 paths to another (the default store does the same with `HttpStore`).
 
-Run with: pixi run python examples/remote_collection.py
+Run with: pixi run --environment dev python examples/remote_collection.py
 """
 
 from pathlib import Path
@@ -52,14 +52,10 @@ def main() -> None:
     store = ngc.RoutedStore(http=remote)  # local paths go to LocalStore
     view = ngc.open_resolved(url, store)
     node = view.find(uid(4))
-    assert isinstance(node, ngc.MultiscaleNode)
-    print(
-        "resolved (deviation):",
-        not node.is_external,
-        [s.path.href for s in node.scales],
-    )
+    assert isinstance(node, ngc.MultiscaleNode)  # narrows the type for the access below
+    print("external (deviation):", node.is_external, [s.path.href for s in node.scales])
     strict = ngc.open_resolved(url, store, formats=ngc.CORE_FORMATS)
-    print("resolved (strict)   :", not strict.find(uid(4)).is_external)
+    print("external (strict)   :", strict.find(uid(4)).is_external)
     print(
         "paths_are_core      :",
         [(e.validator, e.node_uuid[-4:]) for e in view.validate((ngc.paths_are_core,))],
