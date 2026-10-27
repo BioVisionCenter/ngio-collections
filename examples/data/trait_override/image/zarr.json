@@ -2,49 +2,40 @@
   "attributes": {
     "ome": {
       "version": "0.x",
-      "extension_manifest": [
-        {
-          "id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/",
-          "version": "0.1",
-          "schemas": [
-            {
-              "type": "jsonschema",
-              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance.schema.json"
-            },
-            {
-              "type": "jsonschema",
-              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table.schema.json"
-            }
-          ],
-          "name": "Fractal",
-          "homepage": "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
-        }
-      ],
       "type": "multiscale",
       "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
-      "name": "image",
+      "name": "nuclei",
       "traits": [
-        {
-          "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance",
-          "task": "cellpose-segmentation",
-          "version": "0.4.1-rerun"
-        },
         {
           "type": "labels",
           "source": [],
-          "label_attributes": []
+          "label_attributes": [
+            {
+              "label_value": 1,
+              "rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
         }
       ],
       "coordinate_systems": [
         {
           "type": "coordinate_system",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000020",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000022",
           "axes": [
             {
-              "name": "y"
+              "name": "y",
+              "type": "space",
+              "unit": "micrometer"
             },
             {
-              "name": "x"
+              "name": "x",
+              "type": "space",
+              "unit": "micrometer"
             }
           ]
         }
@@ -52,7 +43,7 @@
       "scales": [
         {
           "type": "scale",
-          "id": "0192f3a0-7c1e-7b00-9c22-00000000000c",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000032",
           "path": {
             "type": "zarr",
             "format": "relative",
@@ -62,11 +53,11 @@
             {
               "input": {
                 "type": "scale",
-                "ref": "0192f3a0-7c1e-7b00-9c22-00000000000c"
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000032"
               },
               "output": {
                 "type": "coordinate_system",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000020"
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000022"
               },
               "type": "scale",
               "scale": [

@@ -8,13 +8,17 @@
       "coordinate_systems": [
         {
           "type": "coordinate_system",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000020",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000022",
           "axes": [
             {
-              "name": "y"
+              "name": "y",
+              "type": "space",
+              "unit": "micrometer"
             },
             {
-              "name": "x"
+              "name": "x",
+              "type": "space",
+              "unit": "micrometer"
             }
           ]
         }
@@ -22,7 +26,7 @@
       "scales": [
         {
           "type": "scale",
-          "id": "0192f3a0-7c1e-7b00-9c22-00000000000c",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000032",
           "path": {
             "type": "zarr",
             "format": "relative",
@@ -32,11 +36,11 @@
             {
               "input": {
                 "type": "scale",
-                "ref": "0192f3a0-7c1e-7b00-9c22-00000000000c"
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000032"
               },
               "output": {
                 "type": "coordinate_system",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000020"
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000022"
               },
               "type": "scale",
               "scale": [

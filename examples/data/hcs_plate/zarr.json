@@ -70,7 +70,7 @@
                 {
                   "input": {
                     "type": "coordinate_system",
-                    "ref": "0192f3a0-7c1e-7b00-9c22-000000000022",
+                    "ref": "0192f3a0-7c1e-7b00-9c22-000000000029",
                     "path": {
                       "type": "zarr",
                       "format": "relative",
@@ -90,7 +90,7 @@
                 {
                   "input": {
                     "type": "coordinate_system",
-                    "ref": "0192f3a0-7c1e-7b00-9c22-000000000023",
+                    "ref": "0192f3a0-7c1e-7b00-9c22-00000000002a",
                     "path": {
                       "type": "zarr",
                       "format": "relative",

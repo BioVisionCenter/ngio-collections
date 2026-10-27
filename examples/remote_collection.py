@@ -17,6 +17,7 @@ from pathlib import Path
 
 import ngio_collections as ngc
 from _ids import uid
+from _images import image
 
 REMOTE = "https://example.org/data/reference.ome.zarr"
 
@@ -25,27 +26,11 @@ def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
     url = str(base / "zarr.json")
 
-    # The published image, as it would exist on a server (remote arrays as scales too).
-    cs, sc = uid(0x20), uid(0xC)
-    remote_image = ngc.new_multiscale(
-        id=uid(4),
-        name="published-reference",
-        coordinate_systems=[
-            ngc.CoordinateSystem(id=cs, axes=[ngc.Axis(name="y"), ngc.Axis(name="x")])
-        ],
-        scales=[
-            ngc.Scale(
-                id=sc,
-                path=ngc.ZarrPath(format="http", href=f"{REMOTE}/0"),
-                coordinate_transformations=[
-                    ngc.ScaleTransformation(
-                        scale=[1.0, 1.0],
-                        input=ngc.ReferenceObj(type="scale", ref=sc),
-                        output=ngc.ReferenceObj(type="coordinate_system", ref=cs),
-                    )
-                ],
-            )
-        ],
+    # The published image, as it would exist on a server: its arrays are remote too.
+    remote_image = image(
+        4,
+        "published-reference",
+        scale_paths=[ngc.ZarrPath(format="http", href=f"{REMOTE}/0")],
     )
     remote = ngc.MemoryStore()
     ngc.create(REMOTE, remote_image, remote)

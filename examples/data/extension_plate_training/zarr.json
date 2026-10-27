@@ -1,0 +1,126 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "extension_manifest": [
+        {
+          "id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/",
+          "version": "0.1",
+          "schemas": [
+            {
+              "type": "jsonschema",
+              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/dataset.schema.json"
+            }
+          ],
+          "name": "Training dataset",
+          "homepage": "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
+        },
+        {
+          "id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/",
+          "version": "0.1",
+          "schemas": [
+            {
+              "type": "jsonschema",
+              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance.schema.json"
+            },
+            {
+              "type": "jsonschema",
+              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table.schema.json"
+            }
+          ],
+          "name": "Fractal",
+          "homepage": "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
+        }
+      ],
+      "type": "collection",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000006",
+      "name": "plate-001",
+      "traits": [
+        {
+          "type": "plate",
+          "rows": [
+            {
+              "name": "A"
+            }
+          ],
+          "columns": [
+            {
+              "name": "1"
+            }
+          ],
+          "acquisitions": []
+        },
+        {
+          "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/dataset",
+          "task": "segmentation",
+          "samples": [
+            {
+              "image": {
+                "type": "multiscale",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000009"
+              },
+              "labels": {
+                "type": "multiscale",
+                "ref": "0192f3a0-7c1e-7b00-9c22-00000000000a"
+              },
+              "split": "train"
+            }
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "type": "collection",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000007",
+          "name": "A1",
+          "traits": [
+            {
+              "type": "well",
+              "row_index": 0,
+              "column_index": 0
+            }
+          ],
+          "nodes": [
+            {
+              "type": "multiscale",
+              "id": "0192f3a0-7c1e-7b00-9c22-000000000009",
+              "name": "fov0",
+              "path": {
+                "type": "zarr",
+                "format": "relative",
+                "href": "./A/1/0"
+              }
+            },
+            {
+              "type": "multiscale",
+              "id": "0192f3a0-7c1e-7b00-9c22-00000000000a",
+              "name": "nuclei",
+              "path": {
+                "type": "zarr",
+                "format": "relative",
+                "href": "./A/1/nuclei"
+              }
+            },
+            {
+              "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table",
+              "id": "0192f3a0-7c1e-7b00-9c22-00000000000c",
+              "name": "regionprops",
+              "path": {
+                "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/csv",
+                "format": "relative",
+                "href": "./A/1/regionprops.csv"
+              },
+              "columns": [
+                "label",
+                "area",
+                "mean_intensity"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

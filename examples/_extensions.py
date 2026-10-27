@@ -14,8 +14,10 @@ RFC-8 revision 1 (§4):
 
 Their ids are raw GitHub URLs into this repository's `examples/schemas/`, where
 small JSON Schema files describe each type. They are illustrative and may
-change; nothing should depend on them. `validate_all.py` checks the example
-documents against the schemas when `jsonschema` is installed.
+change; nothing should depend on them. Two examples use them:
+`extension_provenance.py` (the trait alone) and `extension_plate_training.py`
+(all three on an HCS plate). `validate_all.py` checks the example documents
+against the schemas when `jsonschema` is installed.
 """
 
 from __future__ import annotations

@@ -2,24 +2,6 @@
   "attributes": {
     "ome": {
       "version": "0.x",
-      "extension_manifest": [
-        {
-          "id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/",
-          "version": "0.1",
-          "schemas": [
-            {
-              "type": "jsonschema",
-              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance.schema.json"
-            },
-            {
-              "type": "jsonschema",
-              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table.schema.json"
-            }
-          ],
-          "name": "Fractal",
-          "homepage": "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
-        }
-      ],
       "type": "collection",
       "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
       "name": "experiment",
@@ -32,14 +14,7 @@
             "type": "zarr",
             "format": "relative",
             "href": "./image"
-          },
-          "traits": [
-            {
-              "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance",
-              "task": "acquisition-import",
-              "version": "1.0"
-            }
-          ]
+          }
         }
       ]
     }

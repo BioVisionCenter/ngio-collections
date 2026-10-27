@@ -13,30 +13,7 @@ from pathlib import Path
 
 import ngio_collections as ngc
 from _ids import uid
-
-
-def image(n: int, name: str) -> ngc.Node:
-    cs, sc = uid(0x20 + n), uid(0x30 + n)
-    return ngc.new_multiscale(
-        id=uid(n),
-        name=name,
-        coordinate_systems=[
-            ngc.CoordinateSystem(id=cs, axes=[ngc.Axis(name="y"), ngc.Axis(name="x")])
-        ],
-        scales=[
-            ngc.Scale(
-                id=sc,
-                path=ngc.ZarrPath(href="./s0"),
-                coordinate_transformations=[
-                    ngc.ScaleTransformation(
-                        scale=[1.0, 1.0],
-                        input=ngc.ReferenceObj(type="scale", ref=sc),
-                        output=ngc.ReferenceObj(type="coordinate_system", ref=cs),
-                    )
-                ],
-            )
-        ],
-    )
+from _images import image
 
 
 def main() -> None:

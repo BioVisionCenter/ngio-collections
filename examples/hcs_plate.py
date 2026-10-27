@@ -18,50 +18,23 @@ from pathlib import Path
 
 import ngio_collections as ngc
 from _ids import uid
-
-
-def build_fov(ms_id: str, cs_id: str, scale_ids: list[str], name: str) -> ngc.Node:
-    system = ngc.CoordinateSystem(
-        id=cs_id,
-        axes=[ngc.Axis(name=a, type="space", unit="micrometer") for a in ("y", "x")],
-    )
-    scales = [
-        ngc.Scale(
-            id=sid,
-            path=ngc.ZarrPath(href=f"./s{level}"),
-            coordinate_transformations=[
-                ngc.ScaleTransformation(
-                    scale=[0.1 * 2**level] * 2,
-                    input=ngc.ReferenceObj(type="scale", ref=sid),
-                    output=ngc.ReferenceObj(type="coordinate_system", ref=cs_id),
-                )
-            ],
-        )
-        for level, sid in enumerate(scale_ids)
-    ]
-    acquisition = ngc.AcquisitionTrait(
-        acquisition=ngc.ReferenceObj(type="acquisition", ref=uid(0xB))
-    )
-    return ngc.new_multiscale(
-        id=ms_id,
-        name=name,
-        coordinate_systems=[system],
-        scales=scales,
-        traits=[acquisition],
-    )
+from _images import image, system_id
 
 
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
 
+    acquisition = ngc.AcquisitionTrait(
+        acquisition=ngc.ReferenceObj(type="acquisition", ref=uid(0xB))
+    )
     fov0 = ngc.create(
         str(base / "A" / "1" / "0"),
-        build_fov(uid(9), uid(0x22), [uid(0x30), uid(0x31)], "fov0"),
+        image(9, "fov0", levels=2, traits=[acquisition]),
         overwrite=True,
     )
     fov1 = ngc.create(
         str(base / "A" / "1" / "1"),
-        build_fov(uid(0xA), uid(0x23), [uid(0x32), uid(0x33)], "fov1"),
+        image(0xA, "fov1", levels=2, traits=[acquisition]),
         overwrite=True,
     )
 
@@ -83,7 +56,10 @@ def main() -> None:
                 ),
                 output=ngc.ReferenceObj(type="coordinate_system", ref=uid(8)),
             )
-            for cs, href, dx in ((uid(0x22), "./A/1/0", 0), (uid(0x23), "./A/1/1", 820))
+            for cs, href, dx in (
+                (system_id(9), "./A/1/0", 0),
+                (system_id(0xA), "./A/1/1", 820),
+            )
         ],
     )
     well = ngc.new_collection(

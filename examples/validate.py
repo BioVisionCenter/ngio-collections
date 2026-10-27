@@ -17,36 +17,12 @@ Run with: pixi run python examples/validate.py
 
 import ngio_collections as ngc
 from _ids import uid
+from _images import image
 
 
 def report(label: str, node: ngc.Node, validators=ngc.ALL_VALIDATORS) -> None:
     errors = ngc.validate(node, validators)
     print(f"{label:<22}", [(e.validator, str(e)[:48]) for e in errors] or "ok")
-
-
-def image(n: int) -> ngc.Node:
-    cs, sc = uid(0x20 + n), uid(0x30 + n)
-    return ngc.new_multiscale(
-        id=uid(n),
-        coordinate_systems=[
-            ngc.CoordinateSystem(
-                id=cs, axes=[ngc.Axis(name="z"), ngc.Axis(name="y"), ngc.Axis(name="x")]
-            )
-        ],
-        scales=[
-            ngc.Scale(
-                id=sc,
-                path=ngc.ZarrPath(href="./s0"),
-                coordinate_transformations=[
-                    ngc.ScaleTransformation(
-                        scale=[1.0, 1.0, 1.0],
-                        input=ngc.ReferenceObj(type="scale", ref=sc),
-                        output=ngc.ReferenceObj(type="coordinate_system", ref=cs),
-                    )
-                ],
-            )
-        ],
-    )
 
 
 def main() -> None:
@@ -78,7 +54,7 @@ def main() -> None:
         ngc.new_node("singlescale", id=uid(1), traits=[{"type": "fractal:table"}]),
     )
 
-    good = image(3)
+    good = image(3, axes=("z", "y", "x"))
     report("complete multiscale", good)
     bad_scales = [s.model_dump(mode="json", exclude_none=True) for s in good.scales]
     bad_scales[0]["coordinate_transformations"][0]["scale"] = [

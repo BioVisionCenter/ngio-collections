@@ -12,33 +12,13 @@ from pathlib import Path
 
 import ngio_collections as ngc
 from _ids import uid
+from _images import image
 
 
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
     url = str(base / "zarr.json")
-    cs, sc = uid(0x20), uid(0xC)
-    image = ngc.new_multiscale(
-        id=uid(2),
-        name="nuclei",
-        coordinate_systems=[
-            ngc.CoordinateSystem(id=cs, axes=[ngc.Axis(name="y"), ngc.Axis(name="x")])
-        ],
-        scales=[
-            ngc.Scale(
-                id=sc,
-                path=ngc.ZarrPath(href="./s0"),
-                coordinate_transformations=[
-                    ngc.ScaleTransformation(
-                        scale=[1.0, 1.0],
-                        input=ngc.ReferenceObj(type="scale", ref=sc),
-                        output=ngc.ReferenceObj(type="coordinate_system", ref=cs),
-                    )
-                ],
-            )
-        ],
-    )
-    stub = ngc.create(str(base / "nuclei"), image, overwrite=True)
+    stub = ngc.create(str(base / "nuclei"), image(2, "nuclei"), overwrite=True)
     labels = ngc.new_collection(id=uid(3), name="labels").add_external(stub)
     root = ngc.new_collection(id=uid(1), name="root").add(labels)  # labels embedded
     ngc.create(url, root, overwrite=True)

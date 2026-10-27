@@ -25,18 +25,37 @@
       "name": "experiment",
       "nodes": [
         {
-          "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table",
+          "type": "multiscale",
           "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
-          "name": "regionprops",
+          "name": "raw",
           "path": {
-            "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/csv",
+            "type": "zarr",
             "format": "relative",
-            "href": "./regionprops.csv"
+            "href": "./raw"
+          }
+        },
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
+          "name": "nuclei",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./nuclei"
           },
-          "columns": [
-            "label",
-            "area",
-            "mean_intensity"
+          "traits": [
+            {
+              "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance",
+              "task": "cellpose-segmentation",
+              "version": "0.4.2",
+              "timestamp": "2026-10-27T10:00:00Z",
+              "inputs": [
+                {
+                  "type": "multiscale",
+                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
+                }
+              ]
+            }
           ]
         }
       ]

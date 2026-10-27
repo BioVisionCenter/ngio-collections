@@ -69,7 +69,6 @@ def main() -> None:
         return
     base = Path(__file__).parent / "data" / Path(__file__).stem
     http = ngc.HttpStore()
-    plate_ome = ngc.open  # placeholder to keep flake-free; replaced below
 
     def read(url: str) -> dict:
         import asyncio

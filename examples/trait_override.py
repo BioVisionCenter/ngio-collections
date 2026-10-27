@@ -8,8 +8,9 @@ A multiscale can carry traits in two places (RFC-8 revision 1 §3.1):
 
 On `open_resolved()` the two lists combine: traits of different types are
 united, and when both carry a trait of the *same* type the collection's entry
-wins, as a whole object. The entry is written into the collection document
-only, so you never need write access to the image to annotate it.
+wins, as a whole object. Here a labels image colours label 1 red; a collection
+recolours it blue on the entry alone, so you never need write access to the
+image to annotate it.
 
 Run with: pixi run python examples/trait_override.py
 """
@@ -17,70 +18,41 @@ Run with: pixi run python examples/trait_override.py
 from pathlib import Path
 
 import ngio_collections as ngc
-from _extensions import PROVENANCE, register_examples
 from _ids import uid
+from _images import image
 
 
-def provenance(version: str) -> dict:
-    return {"type": PROVENANCE, "task": "cellpose-segmentation", "version": version}
+def labels(rgba: list[int]) -> ngc.LabelsTrait:
+    return ngc.LabelsTrait(label_attributes=[ngc.LabelObj(label_value=1, rgba=rgba)])
 
 
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
     image_url, url = str(base / "image"), str(base / "zarr.json")
-    register_examples()
 
-    cs, sc = uid(0x20), uid(0xC)
-    image = ngc.new_multiscale(
-        id=uid(2),
-        name="image",
-        coordinate_systems=[
-            ngc.CoordinateSystem(id=cs, axes=[ngc.Axis(name="y"), ngc.Axis(name="x")])
-        ],
-        scales=[
-            ngc.Scale(
-                id=sc,
-                path=ngc.ZarrPath(href="./s0"),
-                coordinate_transformations=[
-                    ngc.ScaleTransformation(
-                        scale=[1.0, 1.0],
-                        input=ngc.ReferenceObj(type="scale", ref=sc),
-                        output=ngc.ReferenceObj(type="coordinate_system", ref=cs),
-                    )
-                ],
-            )
-        ],
-        traits=[
-            provenance("0.4.1"),  # the image's own record of how it was made
-            ngc.LabelsTrait(),  # only in the image document
-        ],
+    # The image's own document says label 1 is red.
+    stub = ngc.create(
+        image_url, image(2, "nuclei", traits=[labels([255, 0, 0, 255])]), overwrite=True
     )
-    stub = ngc.create(image_url, image, overwrite=True)
-
-    # Decorate the ENTRY: a provenance trait of the same type overrides the image's.
-    stub = stub.set_trait(provenance("0.4.2"))
+    # Decorate the ENTRY: a labels trait of the same type overrides the image's.
+    stub = stub.set_trait(labels([0, 0, 255, 255]))
     root = ngc.new_collection(id=uid(1), name="root").add_external(stub)
     ngc.create(url, root, overwrite=True)
 
     def show(label: str) -> None:
         node = ngc.open_resolved(url).find(uid(2))
-        traits = {
-            k.rsplit("/", 1)[-1]: {kk: vv for kk, vv in v.items() if kk != "type"}
-            for k, v in node.traits.items()
-        }
-        print(f"{label:<20}", traits)
+        print(f"{label:<20}", node[ngc.LabelsTrait].label_attributes[0].rgba)
 
-    show("entry overrides")  # provenance: entry wins whole; labels survives
+    show("entry overrides")  # blue: the entry wins as a whole object
 
-    # Edit the IMAGE document: its own provenance changes, but the entry still wins.
-    img = ngc.open(image_url).set_trait(provenance("0.4.1-rerun"))
-    ngc.save(img)
-    show("image edited")
+    # Edit the IMAGE document: its own colour changes, but the entry still wins.
+    ngc.save(ngc.open(image_url).set_trait(labels([0, 255, 0, 255])))
+    show("image edited")  # still blue
 
     # Edit the ENTRY in the collection (open, not open_resolved: views are read-only).
     root = ngc.open(url)
-    ngc.save(root.find(uid(2)).drop_traits(PROVENANCE))
-    show("entry trait dropped")  # the image's own provenance shows through
+    ngc.save(root.find(uid(2)).drop_traits(ngc.LabelsTrait))
+    show("entry trait dropped")  # green: the image's own trait shows through
 
     print("validation:", ngc.open_resolved(url).validate(ngc.ALL_VALIDATORS))
     print("\ncollection document:\n" + Path(url).read_text())

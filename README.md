@@ -100,22 +100,43 @@ documents under `examples/data/`. The simplest way to run them is with
 [pixi](https://pixi.prefix.dev/latest/):
 
 ```bash
-pixi run python examples/create_collection.py
+pixi run --environment dev python examples/create_collection.py
 ```
 
 The pattern every example follows: create each image as its own document
 (`create` returns its declaring entry), link the entries into a collection with
 `add_external`, then `open` to edit one document or `open_resolved` to read the
-whole tree.
+whole tree. Each script has one job:
 
-The examples share three small extensions (`examples/_extensions.py`), one per
-extension point: a Fractal *provenance* trait (pure metadata), a *training
-dataset* trait on a collection (samples as references to its own entries), and
-a Fractal *table* node whose CSV is located by a custom path type. Their ids
-are raw GitHub URLs into `examples/schemas/`, where a minimal JSON Schema
-describes each type; they are illustrative and may change. `validate_all.py`
-checks every example document against those schemas when `jsonschema` is
-installed (the library itself never evaluates schemas).
+- `create_collection.py`: the revision's `collection.json` (two images, labels,
+  scene), and the one place a multiscale is assembled by hand; the others take
+  an image from `_images.py`.
+- `open_resolved_inspect.py`: `open` vs `open_resolved`, portable references,
+  the read-only view, `delete` with cascade.
+- `open_edit_save.py`: edit names and fields in two documents, one `save` each.
+- `trait_override.py`: traits on the entry vs. in the image document, and
+  which wins on `open_resolved`.
+- `nested_collections.py`: embedded vs. external collections, `externalize`,
+  `open_ref`.
+- `hcs_plate.py`: the provisional plate / well / acquisition traits.
+- `remote_collection.py`: the `http` path deviation and strict mode.
+- `v05_plate_convert.py`: an IDR v0.5 plate converted to local documents
+  (network; skipped with `NGC_OFFLINE=1`).
+- `ops_tree.py`, `ops_traits.py`: the in-memory API.
+- `extension_provenance.py`: the smallest extension, one metadata trait on an
+  entry and the manifest derived from it.
+- `extension_plate_training.py`: several extension points on one plate: a
+  training-dataset trait, a Fractal table node and its custom CSV path type.
+- `validate.py`: the validator bundles and a custom validator.
+
+The two extension examples share three small extensions
+(`examples/_extensions.py`): a Fractal *provenance* trait (pure metadata), a
+*training dataset* trait on a collection (samples as references to its own
+entries), and a Fractal *table* node whose CSV is located by a custom path
+type. Their ids are raw GitHub URLs into `examples/schemas/`, where a minimal
+JSON Schema describes each type; they are illustrative and may change.
+`validate_all.py` checks every example document against those schemas when
+`jsonschema` is installed (the library itself never evaluates schemas).
 
 ## Public surface
 

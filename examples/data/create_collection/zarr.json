@@ -2,36 +2,6 @@
   "attributes": {
     "ome": {
       "version": "0.x",
-      "extension_manifest": [
-        {
-          "id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/",
-          "version": "0.1",
-          "schemas": [
-            {
-              "type": "jsonschema",
-              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/dataset.schema.json"
-            }
-          ],
-          "name": "Training dataset",
-          "homepage": "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
-        },
-        {
-          "id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/",
-          "version": "0.1",
-          "schemas": [
-            {
-              "type": "jsonschema",
-              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance.schema.json"
-            },
-            {
-              "type": "jsonschema",
-              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table.schema.json"
-            }
-          ],
-          "name": "Fractal",
-          "homepage": "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
-        }
-      ],
       "type": "collection",
       "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
       "name": "hela-nuclei-experiment",
@@ -105,23 +75,6 @@
               ]
             }
           ]
-        },
-        {
-          "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/dataset",
-          "task": "segmentation",
-          "samples": [
-            {
-              "image": {
-                "type": "multiscale",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
-              },
-              "labels": {
-                "type": "multiscale",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000003"
-              },
-              "split": "train"
-            }
-          ]
         }
       ],
       "nodes": [
@@ -143,21 +96,7 @@
             "type": "zarr",
             "format": "relative",
             "href": "./nuclei"
-          },
-          "traits": [
-            {
-              "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance",
-              "task": "cellpose-segmentation",
-              "version": "0.4.2",
-              "timestamp": "2026-10-27T10:00:00Z",
-              "inputs": [
-                {
-                  "type": "multiscale",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
-                }
-              ]
-            }
-          ]
+          }
         }
       ]
     }

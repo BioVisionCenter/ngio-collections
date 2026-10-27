@@ -17,7 +17,7 @@
       "coordinate_systems": [
         {
           "type": "coordinate_system",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000023",
+          "id": "0192f3a0-7c1e-7b00-9c22-00000000002a",
           "axes": [
             {
               "name": "y",
@@ -35,7 +35,7 @@
       "scales": [
         {
           "type": "scale",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000032",
+          "id": "0192f3a0-7c1e-7b00-9c22-00000000003a",
           "path": {
             "type": "zarr",
             "format": "relative",
@@ -45,23 +45,23 @@
             {
               "input": {
                 "type": "scale",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000032"
+                "ref": "0192f3a0-7c1e-7b00-9c22-00000000003a"
               },
               "output": {
                 "type": "coordinate_system",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000023"
+                "ref": "0192f3a0-7c1e-7b00-9c22-00000000002a"
               },
               "type": "scale",
               "scale": [
-                0.1,
-                0.1
+                1.0,
+                1.0
               ]
             }
           ]
         },
         {
           "type": "scale",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000033",
+          "id": "0192f3a0-7c1e-7b00-9c22-00000000004a",
           "path": {
             "type": "zarr",
             "format": "relative",
@@ -71,16 +71,16 @@
             {
               "input": {
                 "type": "scale",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000033"
+                "ref": "0192f3a0-7c1e-7b00-9c22-00000000004a"
               },
               "output": {
                 "type": "coordinate_system",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000023"
+                "ref": "0192f3a0-7c1e-7b00-9c22-00000000002a"
               },
               "type": "scale",
               "scale": [
-                0.2,
-                0.2
+                2.0,
+                2.0
               ]
             }
           ]
