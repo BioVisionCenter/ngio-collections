@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance.schema.json",
+  "title": "Fractal provenance trait",
+  "description": "Which task produced this node, from which inputs. Illustrative example extension; may change.",
+  "type": "object",
+  "required": ["type", "task"],
+  "properties": {
+    "type": {
+      "const": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance"
+    },
+    "task": { "type": "string", "description": "Name of the task that produced the node." },
+    "version": { "type": "string", "description": "Version of the task." },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "inputs": {
+      "type": "array",
+      "description": "Typed references to the nodes the task read.",
+      "items": { "$ref": "#/$defs/reference" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "reference": {
+      "type": "object",
+      "required": ["type", "ref"],
+      "properties": {
+        "type": { "type": "string" },
+        "ref": { "type": "string", "format": "uuid" },
+        "path": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,7 +1,7 @@
 """Relativize path objects embedded inside a node's traits and fields (write time).
 
 A pure JSON walker: no node or IO dependency. Any object carrying the path-object
-shape (`{"type": "zarr"|"json", "format": ..., "href": ...}`) anywhere in a value
+shape (`{"type": "zarr"|"json"|<URI>, "format": ..., "href": ...}`) anywhere in a value
 (`scales[*].path`, `labels.source[*].path`, a scene transform's `input.path`, …)
 is relativized against the document when it is a local absolute path, while
 plain `path` strings (e.g. `ScaleTransformation.path`) are left untouched, since
@@ -13,14 +13,21 @@ from __future__ import annotations
 from typing import Mapping
 
 from ngio_collections._types import JSONValue
-from ngio_collections.models._paths import DocPath
+from ngio_collections.models._manifest import is_extension_type
+from ngio_collections.models._paths import BUILTIN_PATH_TYPES, DocPath
 
 
 def is_path_object(value: object) -> bool:
-    """Return whether `value` has the `{type, format, href}` path-object shape."""
+    """Return whether `value` has the `{type, format, href}` path-object shape.
+
+    The `type` is a built-in path type or an extension URI (a data path).
+    """
+    if not isinstance(value, Mapping):
+        return False
+    type_ = value.get("type")
     return (
-        isinstance(value, Mapping)
-        and value.get("type") in ("zarr", "json")
+        isinstance(type_, str)
+        and (type_ in BUILTIN_PATH_TYPES or is_extension_type(type_))
         and isinstance(value.get("format"), str)
         and isinstance(value.get("href"), str)
     )

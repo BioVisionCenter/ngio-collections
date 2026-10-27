@@ -4,15 +4,32 @@
       "version": "0.x",
       "extension_manifest": [
         {
-          "id": "https://napari.org/ngff/",
-          "version": "1.0",
+          "id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/",
+          "version": "0.1",
           "schemas": [
             {
               "type": "jsonschema",
-              "url": "https://napari.org/ngff/1.0/schema.json"
+              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/dataset.schema.json"
             }
           ],
-          "homepage": "https://napari.org/ngff/"
+          "name": "Training dataset",
+          "homepage": "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
+        },
+        {
+          "id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/",
+          "version": "0.1",
+          "schemas": [
+            {
+              "type": "jsonschema",
+              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance.schema.json"
+            },
+            {
+              "type": "jsonschema",
+              "url": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table.schema.json"
+            }
+          ],
+          "name": "Fractal",
+          "homepage": "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
         }
       ],
       "type": "collection",
@@ -88,6 +105,23 @@
               ]
             }
           ]
+        },
+        {
+          "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/dataset",
+          "task": "segmentation",
+          "samples": [
+            {
+              "image": {
+                "type": "multiscale",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
+              },
+              "labels": {
+                "type": "multiscale",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000003"
+              },
+              "split": "train"
+            }
+          ]
         }
       ],
       "nodes": [
@@ -99,16 +133,7 @@
             "type": "zarr",
             "format": "relative",
             "href": "./raw"
-          },
-          "traits": [
-            {
-              "type": "https://napari.org/ngff/rendering",
-              "contrast_limits": [
-                0,
-                1500
-              ]
-            }
-          ]
+          }
         },
         {
           "type": "multiscale",
@@ -118,7 +143,21 @@
             "type": "zarr",
             "format": "relative",
             "href": "./nuclei"
-          }
+          },
+          "traits": [
+            {
+              "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance",
+              "task": "cellpose-segmentation",
+              "version": "0.4.2",
+              "timestamp": "2026-10-27T10:00:00Z",
+              "inputs": [
+                {
+                  "type": "multiscale",
+                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
+                }
+              ]
+            }
+          ]
         }
       ]
     }

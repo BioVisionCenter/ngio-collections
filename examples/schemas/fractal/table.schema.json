@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table.schema.json",
+  "title": "Fractal table node",
+  "description": "A node whose payload is a CSV table, located by the custom path type `.../fractal/csv`. Illustrative example extension; may change.",
+  "type": "object",
+  "required": ["type", "id", "path"],
+  "properties": {
+    "type": {
+      "const": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table"
+    },
+    "id": { "type": "string", "format": "uuid" },
+    "name": { "type": "string" },
+    "path": {
+      "type": "object",
+      "description": "Where the CSV lives: a data path, never opened as a node document.",
+      "required": ["type", "format", "href"],
+      "properties": {
+        "type": {
+          "const": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/csv"
+        },
+        "format": { "enum": ["relative", "absolute", "http"] },
+        "href": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "columns": {
+      "type": "array",
+      "description": "Column names, in file order.",
+      "items": { "type": "string" }
+    },
+    "traits": { "type": "array" }
+  },
+  "additionalProperties": false
+}

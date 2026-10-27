@@ -14,6 +14,14 @@ resolve, so a collection or multiscale document can point at existing local or
 remote data (a published image, remote arrays as scales) without bundling it.
 ``CORE_FORMATS`` exists so callers who want strict conformance can opt in
 (``resolve(..., formats=CORE_FORMATS)``, or the ``paths_are_core`` validator).
+
+**Types.** ``type`` is an extension point (upstream "Path" interface): besides
+the built-in ``zarr`` (a group whose metadata is ``<dir>/zarr.json``) and
+``json`` (the document itself), a URI type declared by an extension is accepted.
+Such a path *locates data*: it resolves and relativizes like any other, is
+declared in the manifest, but is never fetched or opened as a node document
+(``is_document`` is false and ``meta_url`` refuses it). The shape stays closed to
+``{type, format, href}``; extra keys an extension defines are not kept.
 """
 
 from __future__ import annotations
@@ -24,13 +32,16 @@ from typing import Literal, Mapping, cast, get_args
 from urllib.parse import urljoin
 
 from ngio_collections._types import JSONValue
+from ngio_collections.models._manifest import is_extension_type
 
 ZARR_METADATA_FILE = "zarr.json"
 
 PathType = Literal["zarr", "json"]
+"""The built-in path types; `DocPath.type` also admits extension URIs."""
 PathFormat = Literal["relative", "absolute", "http"]
 
-_PATH_TYPES: frozenset[str] = frozenset(get_args(PathType))
+BUILTIN_PATH_TYPES: frozenset[str] = frozenset(get_args(PathType))
+"""The path types that locate a node document (`zarr`, `json`)."""
 _PATH_FORMATS: frozenset[str] = frozenset(get_args(PathFormat))
 
 ALL_FORMATS: frozenset[str] = frozenset({"relative", "absolute", "http"})
@@ -174,24 +185,28 @@ class DocPath:
     frozen stdlib dataclass (no pydantic): construct it directly, via the
     `ZarrPath` / `JsonPath` convenience subclasses, or with `from_dict`; it is
     also accepted as a field of the pydantic value models. Unknown keys are not
-    kept: the shape is closed.
+    kept: the shape is closed. `type` is a built-in (`zarr`, `json`) or an
+    extension URI; only the built-ins locate a document (`is_document`).
     """
 
-    type: PathType
+    type: str
     format: PathFormat
     href: str
 
     def __post_init__(self) -> None:
-        """Check the literals and reject inconsistent `format` / `href` pairings.
+        """Check the vocabularies and reject inconsistent `format` / `href` pairings.
 
         Raises:
-            ValueError: If `type` or `format` is not a known literal, `href` is
-                not a string, an `http` path has no `http(s)://` href, or a
-                `relative` path carries a URL href.
+            ValueError: If `type` is neither a built-in nor a URI, `format` is
+                not a known literal, `href` is not a string, an `http` path has
+                no `http(s)://` href, or a `relative` path carries a URL href.
         """
-        if self.type not in _PATH_TYPES:
+        if not isinstance(self.type, str) or (
+            self.type not in BUILTIN_PATH_TYPES and not is_extension_type(self.type)
+        ):
             raise ValueError(
-                f"path type must be one of {sorted(_PATH_TYPES)}, got {self.type!r}"
+                f"path type must be one of {sorted(BUILTIN_PATH_TYPES)} or an "
+                f"extension URI, got {self.type!r}"
             )
         if self.format not in _PATH_FORMATS:
             raise ValueError(
@@ -228,14 +243,17 @@ class DocPath:
             raise ValueError(f"path object {dict(data)!r} needs string type and format")
         if not isinstance(href, str):
             raise ValueError(f"path href must be a string, got {href!r}")
-        # `__post_init__` checks the literals; the casts only satisfy the checker.
-        return cls(
-            type=cast(PathType, type_), format=cast(PathFormat, format_), href=href
-        )
+        # `__post_init__` checks the vocabularies; the cast only satisfies the checker.
+        return cls(type=type_, format=cast(PathFormat, format_), href=href)
 
     def to_dict(self) -> dict[str, JSONValue]:
         """Return the wire form `{type, format, href}`."""
         return {"type": self.type, "format": self.format, "href": self.href}
+
+    @property
+    def is_document(self) -> bool:
+        """Whether this path locates a node document (`zarr` / `json`) rather than data."""
+        return self.type in BUILTIN_PATH_TYPES
 
     def resolve(
         self, base_url: str | None, *, formats: frozenset[str] = ALL_FORMATS
@@ -251,7 +269,15 @@ class DocPath:
         Keyed on the declared `type`, never on the string: a `zarr` path locates a
         group directory whose metadata is `<dir>/zarr.json`; a `json` path locates
         the document itself.
+
+        Raises:
+            ValueError: If the path's `type` is an extension URI: such a path
+                locates data, not a document (use `resolve`).
         """
+        if not self.is_document:
+            raise ValueError(
+                f"path type {self.type!r} locates data, not a node document"
+            )
         url = self.resolve(base_url, formats=formats)
         if self.type == "json" or url.endswith("/" + ZARR_METADATA_FILE):
             return url

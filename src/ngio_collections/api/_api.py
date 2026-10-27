@@ -354,7 +354,8 @@ async def delete(
     its UUID, so it is correct for a resolved node too, whose in-memory position
     is not its document position. If the node is its document's root, the file
     is deleted. With `cascade`, an external node's target document is deleted as
-    well (data deletion must be asked for explicitly). Idempotent.
+    well (data deletion must be asked for explicitly); data a URI-typed path
+    locates is never deleted. Idempotent.
 
     Returns:
         The URLs of the documents written or deleted.
@@ -368,7 +369,7 @@ async def delete(
     url = node.document_url
     assert url is not None
     affected: list[str] = []
-    if cascade and node.record.path is not None:
+    if cascade and node.record.path is not None and node.record.path.is_document:
         target = node.record.path.meta_url(url)
         await _writable(store).delete(target)
         affected.append(target)

@@ -238,6 +238,8 @@ class _Builder:
         leave = _Resolved(stub, None, doc, depth, ancestors)
         if depth == 0:
             return leave  # hop budget exhausted
+        if not stub.path.is_document:
+            return leave  # a URI-typed path locates data; the node is whole
         try:
             target_url = stub.path.meta_url(doc.url, formats=self.formats)
         except UnsupportedPathFormatError:

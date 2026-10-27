@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/dataset.schema.json",
+  "title": "Training dataset trait",
+  "description": "A collection trait listing training samples as references to the collection's own entries. Illustrative example extension; may change.",
+  "type": "object",
+  "required": ["type", "samples"],
+  "properties": {
+    "type": {
+      "const": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/training/dataset"
+    },
+    "task": { "type": "string", "description": "What the dataset trains, e.g. `segmentation`." },
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["image", "split"],
+        "properties": {
+          "image": { "$ref": "#/$defs/reference" },
+          "labels": { "$ref": "#/$defs/reference" },
+          "split": { "enum": ["train", "val", "test"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "reference": {
+      "type": "object",
+      "required": ["type", "ref"],
+      "properties": {
+        "type": { "type": "string" },
+        "ref": { "type": "string", "format": "uuid" },
+        "path": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

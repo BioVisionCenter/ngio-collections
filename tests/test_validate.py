@@ -251,6 +251,57 @@ async def test_must_understand_supported(monkeypatch) -> None:
     assert "must_understand_supported" not in _names(await aio.open(strict_url, store))
 
 
+async def test_uri_path_types_are_data_declared_and_non_core() -> None:
+    ext = "https://ext.example/fractal/"
+    table, csv = ext + "table", ext + "csv"
+    store = MemoryStore()
+    url = f"{DATA}/t/zarr.json"
+
+    def write(manifest: list[dict]) -> None:
+        store._data[url] = {
+            "zarr_format": 3,
+            "node_type": "group",
+            "attributes": {
+                "ome": {
+                    "version": "0.x",
+                    "extension_manifest": manifest,
+                    "type": "collection",
+                    "id": mk(0x50),
+                    "nodes": [
+                        {
+                            "type": table,
+                            "id": mk(0x51),
+                            "path": {
+                                "type": csv,
+                                "format": "relative",
+                                "href": "./t.csv",
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+
+    entry = {
+        "id": ext,
+        "version": "0.1",
+        "schemas": [{"type": "jsonschema", "url": ext}],
+    }
+    write([entry])
+    view = await aio.open_resolved(url, store)
+    node = view.find(mk(0x51))
+    assert node is not None and node.is_external and not node.path.is_document
+    # the data path is never fetched, so the node is not "unresolved"
+    assert "external_unresolved" not in _names(view)
+    assert "extension_types_declared" not in _names(view)
+    assert _names(node, (ngc.paths_are_core,)) == ["paths_are_core"]
+    write([])  # the path type is a URI type: it must be declared like any other
+    undeclared = await aio.open(url, store)
+    assert _names(undeclared.find(mk(0x51)), CORE_VALIDATORS) == [
+        "extension_types_declared"
+    ]
+
+
 def test_paths_are_core_is_opt_in() -> None:
     remote = multiscale(4).set_field(
         "scales",

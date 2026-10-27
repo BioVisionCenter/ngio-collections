@@ -3,9 +3,9 @@
 A pure walk over the part of a `NodeTree` that one document serializes: the
 subtree under `root_id`, stopping at document boundaries (external records and
 resolved boundary records contribute their own declaring entry, not the target's
-subtree). URI-typed node types and trait types are the extension points the
-revision names; the manifest entries come from the extensions the process has
-registered plus any entries the document already declared.
+subtree). URI-typed node types, trait types and path types are the extension
+points; the manifest entries come from the extensions the process has registered
+plus any entries the document already declared.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def _document_records(tree: NodeTree, root_id: NodeId) -> Iterator[NodeId]:
 
 
 def used_extension_types(tree: NodeTree, root_id: NodeId = ROOT) -> tuple[str, ...]:
-    """Return every URI-typed node / trait type the document at `root_id` uses.
+    """Return every URI-typed node / trait / path type the document at `root_id` uses.
 
     Resolved boundary records contribute the traits of their declaring entry
     (`edge.traits`), which is what the document actually stores.
@@ -44,6 +44,8 @@ def used_extension_types(tree: NodeTree, root_id: NodeId = ROOT) -> tuple[str, .
         record = tree.record(node_id)
         if is_extension_type(record.type):
             used.setdefault(record.type)
+        if record.path is not None and is_extension_type(record.path.type):
+            used.setdefault(record.path.type)
         traits = record.edge.traits if record.edge is not None else record.traits
         for trait_type in traits:
             if is_extension_type(trait_type):

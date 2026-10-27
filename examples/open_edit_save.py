@@ -11,9 +11,8 @@ Run with: pixi run python examples/open_edit_save.py
 from pathlib import Path
 
 import ngio_collections as ngc
+from _extensions import PROVENANCE, register_examples
 from _ids import uid
-
-RENDERING = "https://napari.org/ngff/rendering"
 
 
 def image(ms_id: str, cs_id: str, scale_id: str) -> ngc.Node:
@@ -44,15 +43,7 @@ def image(ms_id: str, cs_id: str, scale_id: str) -> ngc.Node:
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
     image_url, url = str(base / "image"), str(base / "zarr.json")
-    ngc.register_extension(
-        {
-            "id": "https://napari.org/ngff/",
-            "version": "1.0",
-            "schemas": [
-                {"type": "jsonschema", "url": "https://napari.org/ngff/1.0/schema.json"}
-            ],
-        }
-    )
+    register_examples()
     stub = ngc.create(image_url, image(uid(2), uid(0x20), uid(0xC)), overwrite=True)
     root = ngc.new_collection(id=uid(1), name="experiment").add_external(stub)
     ngc.create(url, root, overwrite=True)
@@ -61,7 +52,7 @@ def main() -> None:
     root = ngc.open(url)
     root = root.find(uid(2)).rename("Raw image")
     root = root.find(uid(2)).set_trait(
-        {"type": RENDERING, "contrast_limits": [0, 1500]}
+        {"type": PROVENANCE, "task": "acquisition-import", "version": "1.0"}
     )
     ngc.save(root)
 
@@ -77,7 +68,7 @@ def main() -> None:
     node = view.find(uid(2))
     assert isinstance(node, ngc.MultiscaleNode)
     print("entry name wins   :", node.name)
-    print("trait on the entry:", node.traits[RENDERING])
+    print("trait on the entry:", node.traits[PROVENANCE])
     print("image system name :", node.coordinate_systems[0].name)
     print("validation        :", view.validate(ngc.ALL_VALIDATORS))
     print("\n" + Path(url).read_text())

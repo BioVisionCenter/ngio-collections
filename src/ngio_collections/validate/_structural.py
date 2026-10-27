@@ -12,8 +12,8 @@ index lookups its own references need, so one node costs O(neighbourhood):
 - `no_embedded_multiscale`: a multiscale inside a collection is external (§8.1).
 - `references_resolve`: a same-document `{type, ref}` points at a declaration of
   that type (§7.2). References carrying a `path` are not checked here.
-- `extension_types_declared`: every URI type is covered by the document's
-  `extension_manifest` (§4).
+- `extension_types_declared`: every URI type (node, trait or path type) is
+  covered by the document's `extension_manifest` (§4).
 - `manifest_well_formed`: at each document root, the manifest parses, its ids
   are unique and every entry lists at least one `jsonschema` / `linkml` schema
   (upstream "Extension manifest" section).
@@ -22,7 +22,8 @@ index lookups its own references need, so one node costs O(neighbourhood):
   `mustUnderstand` flag").
 - `external_unresolved`: in a fully resolved view, no node is left external.
 - `paths_are_core` (opt-in): every path object uses the `relative` format, the
-  only core one (§7.3). Not bundled: this package resolves all formats.
+  only core one (§7.3), and a built-in path type. Not bundled: this package
+  resolves all formats and accepts URI path types.
 
 All but `multiscale_is_complete` (which validates through the pydantic
 `MultiscaleFields` model) run without pydantic.
@@ -41,6 +42,7 @@ from ngio_collections.models._manifest import (
     ExtensionManifestEntry,
     is_extension_type,
 )
+from ngio_collections.models._paths import BUILTIN_PATH_TYPES
 from ngio_collections.models._vocabulary import BUILTIN_TRAIT_TYPES
 from ngio_collections.resolve import is_path_object
 from ngio_collections.validate._engine import ValidationError
@@ -194,6 +196,14 @@ def _manifest_entries(node: Node, url: str | None) -> list[ExtensionManifestEntr
     return entries
 
 
+def _entry_types(node: Node) -> tuple[str, ...]:
+    """The types a node's declaring entry carries besides traits: its type and path type."""
+    path = node.record.path
+    if path is not None and is_extension_type(path.type):
+        return (node.type, path.type)
+    return (node.type,)
+
+
 def _require_declared(
     type_name: str, entries: list[ExtensionManifestEntry], where: str
 ) -> None:
@@ -208,11 +218,12 @@ def _require_declared(
 
 
 def extension_types_declared(node: Node) -> None:
-    """Every URI node / trait type is declared by the document that uses it.
+    """Every URI node / trait / path type is declared by the document that uses it.
 
-    A resolved boundary node spans two documents: the traits of its declaring
-    entry are checked against the declaring document's manifest, the target's
-    own traits against the target document's, and the node type against both.
+    A resolved boundary node spans two documents: the traits and path type of
+    its declaring entry are checked against the declaring document's manifest,
+    the target's own traits against the target document's, and the node type
+    against both.
     """
     if node.is_detached:
         return
@@ -220,11 +231,12 @@ def extension_types_declared(node: Node) -> None:
     own_entries = _manifest_entries(node, own_url)
     edge = node.record.edge
     if edge is None:
-        for type_name in (node.type, *node.traits):
+        for type_name in (*_entry_types(node), *node.traits):
             _require_declared(type_name, own_entries, str(own_url))
         return
     entry_entries = _manifest_entries(node, edge.origin_url)
-    _require_declared(node.type, entry_entries, str(edge.origin_url))
+    for type_name in _entry_types(node):
+        _require_declared(type_name, entry_entries, str(edge.origin_url))
     _require_declared(node.type, own_entries, str(own_url))
     for trait_type in edge.traits:
         _require_declared(trait_type, entry_entries, str(edge.origin_url))
@@ -308,11 +320,12 @@ def must_understand_supported(node: Node) -> None:
     own_entries = _manifest_entries(node, node.document_url)
     edge = node.record.edge
     if edge is None:
-        for type_name in (node.type, *node.traits):
+        for type_name in (*_entry_types(node), *node.traits):
             _require_understood(type_name, own_entries, registered)
         return
     entry_entries = _manifest_entries(node, edge.origin_url)
-    _require_understood(node.type, entry_entries, registered)
+    for type_name in _entry_types(node):
+        _require_understood(type_name, entry_entries, registered)
     _require_understood(node.type, own_entries, registered)
     for trait_type in edge.traits:
         _require_understood(trait_type, entry_entries, registered)
@@ -322,10 +335,15 @@ def must_understand_supported(node: Node) -> None:
 
 
 def external_unresolved(node: Node) -> None:
-    """In a resolved view, a node still external could not be resolved."""
+    """In a resolved view, a node still external could not be resolved.
+
+    A node whose path is URI-typed locates data and is never resolved; it is
+    not reported.
+    """
     if node.tree.mode != "resolved" or node.parent() is None:
         return
-    if node.is_external:
+    path = node.record.path
+    if node.is_external and (path is None or path.is_document):
         raise ValidationError(
             f"external node {node.id!r} ({node.ref_path!r}) could not be resolved: "
             "missing document, type or id mismatch, cycle, or unsupported path format"
@@ -346,19 +364,28 @@ def _walk_path_objects(value: object) -> Iterator[Mapping[str, JSONValue]]:
 
 
 def paths_are_core(node: Node) -> None:
-    """Opt-in: every path object on the node uses the core `relative` format."""
+    """Opt-in: every path object on the node uses the core `relative` format and a built-in type."""
     path = node.record.path
-    if path is not None and path.format != "relative":
-        raise ValidationError(
-            f"node path uses non-core format {path.format!r} (href {path.href!r})"
-        )
+    if path is not None:
+        _require_core_path(path.type, path.format, path.href, "node path")
     for container in (node.record.fields, node.record.traits):
         for obj in _walk_path_objects(dict(container)):
-            if obj.get("format") != "relative":
-                raise ValidationError(
-                    f"path object uses non-core format {obj.get('format')!r} "
-                    f"(href {obj.get('href')!r})"
-                )
+            _require_core_path(
+                str(obj.get("type")),
+                str(obj.get("format")),
+                str(obj.get("href")),
+                "path object",
+            )
+
+
+def _require_core_path(type_: str, format_: str, href: str, what: str) -> None:
+    """Raise unless the path uses a built-in type and the `relative` format."""
+    if type_ not in BUILTIN_PATH_TYPES:
+        raise ValidationError(f"{what} uses non-core type {type_!r} (href {href!r})")
+    if format_ != "relative":
+        raise ValidationError(
+            f"{what} uses non-core format {format_!r} (href {href!r})"
+        )
 
 
 CORE_VALIDATORS = (

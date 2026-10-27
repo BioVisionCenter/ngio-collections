@@ -10,7 +10,11 @@ document (`coordinate_systems` + `scales`; never embedded, `add()` refuses it).
 Manifest entries carry `must_understand`; `register_extension` is what marks an
 extension as understood (`must_understand_supported` validator).
 Deliberate deviation: `absolute` and `http` paths resolve (spec: `relative`
-only); keep it stated in the README and `models/_paths.py`.
+only); keep it stated in the README and `models/_paths.py`. `DocPath.type`
+also admits extension URIs as *data* paths (closed shape, never fetched as a
+document; `is_document` is false). The example extensions and their JSON
+Schemas live in `examples/_extensions.py` and `examples/schemas/`; the library
+never evaluates schemas.
 
 ## Commands
 

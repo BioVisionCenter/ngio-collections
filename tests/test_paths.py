@@ -12,6 +12,7 @@ import pytest
 
 from ngio_collections.models._paths import (
     ALL_FORMATS,
+    BUILTIN_PATH_TYPES,
     CORE_FORMATS,
     DocPath,
     JsonPath,
@@ -131,9 +132,25 @@ def test_docpath_rejects_inconsistent_format_and_href():
     with pytest.raises(ValueError):
         DocPath.from_dict({"type": "zarr", "href": "./x"})  # format is required
     with pytest.raises(ValueError):
-        DocPath(type="tiff", format="relative", href="./x")  # type: ignore[arg-type]
+        DocPath(type="tiff", format="relative", href="./x")  # not a URI either
     with pytest.raises(ValueError):
         DocPath.from_dict("./x")  # type: ignore[arg-type]
+
+
+def test_docpath_accepts_extension_uri_types_as_data_paths():
+    csv = "https://ext.example/fractal/csv"
+    assert BUILTIN_PATH_TYPES == {"zarr", "json"}
+    data = DocPath.from_dict({"type": csv, "format": "relative", "href": "./t.csv"})
+    assert data.type == csv and not data.is_document
+    assert ZarrPath(href="./s0").is_document and JsonPath(href="./c.json").is_document
+    # it resolves and relativizes like any path, but is not a document
+    assert data.resolve(JSON_BASE) == "/p/mdc/t.csv"
+    with pytest.raises(ValueError):
+        data.meta_url(JSON_BASE)
+    absolute = DocPath(type=csv, format="absolute", href="/p/mdc/tables/t.csv")
+    rel = absolute.relativize(JSON_BASE)
+    assert (rel.type, rel.format, rel.href) == (csv, "relative", "./tables/t.csv")
+    assert data.to_dict() == {"type": csv, "format": "relative", "href": "./t.csv"}
 
 
 def test_docpath_dict_round_trip_is_a_closed_shape():

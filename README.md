@@ -108,6 +108,15 @@ The pattern every example follows: create each image as its own document
 `add_external`, then `open` to edit one document or `open_resolved` to read the
 whole tree.
 
+The examples share three small extensions (`examples/_extensions.py`), one per
+extension point: a Fractal *provenance* trait (pure metadata), a *training
+dataset* trait on a collection (samples as references to its own entries), and
+a Fractal *table* node whose CSV is located by a custom path type. Their ids
+are raw GitHub URLs into `examples/schemas/`, where a minimal JSON Schema
+describes each type; they are illustrative and may change. `validate_all.py`
+checks every example document against those schemas when `jsonschema` is
+installed (the library itself never evaluates schemas).
+
 ## Public surface
 
 Everything supported for downstream use is importable from the top level:
@@ -138,9 +147,13 @@ a bug worth reporting rather than a reason to deep-import.
 - **Multiscales are never embedded, even in memory.** `add()` refuses a
   multiscale without a `path`; the way to link an image is `create` then
   `add_external`.
-- **Custom path types are not supported.** The upstream draft makes the path
-  `type` an extension point (a URI-typed path such as its `OMEROPath` example);
-  `DocPath` here is closed to `zarr` and `json`.
+- **Custom path types are accepted as data locators.** The upstream draft makes
+  the path `type` an extension point (its `OMEROPath` example). Here a
+  URI-typed path keeps the closed `{type, format, href}` shape (extra keys an
+  extension defines are not kept), resolves and relativizes like any path, must
+  be declared in the manifest, and is never fetched or opened as a node
+  document (`DocPath.is_document` is false). The examples use one for a CSV
+  table; `paths_are_core` flags them.
 - **`must_understand` is honoured through the process registry.** A custom type
   of a `must_understand` extension is a validation finding unless the extension
   was passed to `register_extension`; nothing is skipped or rejected on read.

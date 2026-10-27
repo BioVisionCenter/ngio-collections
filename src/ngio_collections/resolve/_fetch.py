@@ -40,14 +40,17 @@ def reference_targets(
     resolved against `doc.url` and normalised to its metadata-file URL, so the
     yielded keys match the ones `fetch_all` caches under. Malformed paths and
     paths in a format outside `formats` are skipped (the build re-resolves and
-    reports them).
+    reports them), as are URI-typed paths, which locate data, not documents.
     """
     for node_dict in _walk_nodes(doc.root):
         path = node_dict.get("path")
         if path is None:
             continue
         try:
-            yield DocPath.from_dict(path).meta_url(doc.url, formats=formats)
+            doc_path = DocPath.from_dict(path)
+            if not doc_path.is_document:
+                continue
+            yield doc_path.meta_url(doc.url, formats=formats)
         except Exception:
             continue
 
@@ -70,7 +73,10 @@ def trait_reference_targets(
                 if not isinstance(path, Mapping):
                     continue
                 try:
-                    yield DocPath.from_dict(path).meta_url(doc.url, formats=formats)
+                    doc_path = DocPath.from_dict(path)
+                    if not doc_path.is_document:
+                        continue
+                    yield doc_path.meta_url(doc.url, formats=formats)
                 except Exception:
                     continue
 

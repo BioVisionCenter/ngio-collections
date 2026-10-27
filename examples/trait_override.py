@@ -17,24 +17,18 @@ Run with: pixi run python examples/trait_override.py
 from pathlib import Path
 
 import ngio_collections as ngc
+from _extensions import PROVENANCE, register_examples
 from _ids import uid
 
-RENDERING = "https://napari.org/ngff/rendering"
-VISIBLE = "https://napari.org/ngff/visible"
+
+def provenance(version: str) -> dict:
+    return {"type": PROVENANCE, "task": "cellpose-segmentation", "version": version}
 
 
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
     image_url, url = str(base / "image"), str(base / "zarr.json")
-    ngc.register_extension(
-        {
-            "id": "https://napari.org/ngff/",
-            "version": "1.0",
-            "schemas": [
-                {"type": "jsonschema", "url": "https://napari.org/ngff/1.0/schema.json"}
-            ],
-        }
-    )
+    register_examples()
 
     cs, sc = uid(0x20), uid(0xC)
     image = ngc.new_multiscale(
@@ -57,21 +51,14 @@ def main() -> None:
             )
         ],
         traits=[
-            {
-                "type": RENDERING,
-                "contrast_limits": [0, 4000],
-                "gamma": 1.0,
-            },  # the image's own default
+            provenance("0.4.1"),  # the image's own record of how it was made
             ngc.LabelsTrait(),  # only in the image document
         ],
     )
     stub = ngc.create(image_url, image, overwrite=True)
 
-    # Decorate the ENTRY: overrides the rendering trait, adds a visibility trait.
-    stub = stub.set_traits(
-        {"type": RENDERING, "contrast_limits": [0, 1500]},
-        {"type": VISIBLE, "visible": False},
-    )
+    # Decorate the ENTRY: a provenance trait of the same type overrides the image's.
+    stub = stub.set_trait(provenance("0.4.2"))
     root = ngc.new_collection(id=uid(1), name="root").add_external(stub)
     ngc.create(url, root, overwrite=True)
 
@@ -83,21 +70,17 @@ def main() -> None:
         }
         print(f"{label:<20}", traits)
 
-    show(
-        "entry overrides"
-    )  # rendering: entry wins whole; labels survives; visible added
+    show("entry overrides")  # provenance: entry wins whole; labels survives
 
-    # Edit the IMAGE document: its own rendering trait changes, but the entry still wins.
-    img = ngc.open(image_url).set_trait(
-        {"type": RENDERING, "contrast_limits": [9, 9], "gamma": 2.0}
-    )
+    # Edit the IMAGE document: its own provenance changes, but the entry still wins.
+    img = ngc.open(image_url).set_trait(provenance("0.4.1-rerun"))
     ngc.save(img)
     show("image edited")
 
     # Edit the ENTRY in the collection (open, not open_resolved: views are read-only).
     root = ngc.open(url)
-    ngc.save(root.find(uid(2)).drop_traits(RENDERING))
-    show("entry trait dropped")  # the image's own rendering trait shows through
+    ngc.save(root.find(uid(2)).drop_traits(PROVENANCE))
+    show("entry trait dropped")  # the image's own provenance shows through
 
     print("validation:", ngc.open_resolved(url).validate(ngc.ALL_VALIDATORS))
     print("\ncollection document:\n" + Path(url).read_text())

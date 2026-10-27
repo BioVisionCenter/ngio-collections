@@ -210,6 +210,34 @@ def test_used_extension_types_stop_at_document_boundaries() -> None:
     assert derive_manifest(c) == []
 
 
+def test_uri_path_types_are_used_types_and_relativized() -> None:
+    ext = "https://ext.example/fractal/"
+    table, csv = ext + "table", ext + "csv"
+    c = NodeTree.of(NodeRecord(type="collection", id=mk(0), children=()))
+    c, _ = c.add_child(
+        ROOT,
+        NodeRecord(
+            type=table,
+            id=mk(1),
+            path=DocPath(type=csv, format="absolute", href=f"{DATA}/tables/t.csv"),
+            fields={
+                "sidecar": {"type": csv, "format": "absolute", "href": f"{DATA}/s.csv"}
+            },
+        ),
+    )
+    assert used_extension_types(c) == (table, csv)
+    entry = ExtensionManifestEntry(
+        id=ext,
+        version="0.1",
+        schemas=[SchemaRef(type="jsonschema", url=ext + "s.json")],
+    )
+    assert derive_manifest(c, registry=ExtensionRegistry([entry])) == [entry.to_dict()]
+    # the node path and the path object inside a field both relativize on write
+    (node,) = payload(c, base_url=f"{DATA}/c.json", relativize=True)["nodes"]
+    assert node["path"] == {"type": csv, "format": "relative", "href": "./tables/t.csv"}
+    assert node["sidecar"] == {"type": csv, "format": "relative", "href": "./s.csv"}
+
+
 async def test_write_derives_and_preserves_manifest_entries() -> None:
     store = MemoryStore()
     registry = ExtensionRegistry([NAPARI])

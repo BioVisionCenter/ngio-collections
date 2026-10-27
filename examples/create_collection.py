@@ -1,15 +1,16 @@
 """Build the revision's `collection.json` example: two images and a scene.
 
-    experiment (collection, scene trait)
-    ├── raw     -> ./raw     (multiscale, its own zarr.json; napari rendering trait on the entry)
-    └── nuclei  -> ./nuclei  (multiscale, labels trait pointing at raw)
+    experiment (collection, scene trait + training-dataset trait)
+    ├── raw     -> ./raw     (multiscale, its own zarr.json)
+    └── nuclei  -> ./nuclei  (multiscale, labels trait pointing at raw;
+                              provenance trait on the entry)
 
 Under RFC-8 revision 1 a multiscale is never embedded in a collection: each
 image is written as its own document first (`create` returns its declaring
 entry, a stub carrying the same UUID) and the collection only links it with
-`add_external`. The extension trait on the `raw` entry is declared in the
-collection's `extension_manifest` automatically, because the extension was
-registered with `register_extension`.
+`add_external`. The two extension traits (see `_extensions.py`) are declared in
+the collection's `extension_manifest` automatically, because the extensions
+were registered with `register_extension`.
 
 Run with: pixi run python examples/create_collection.py
 """
@@ -17,9 +18,8 @@ Run with: pixi run python examples/create_collection.py
 from pathlib import Path
 
 import ngio_collections as ngc
+from _extensions import DATASET, PROVENANCE, register_examples
 from _ids import uid
-
-RENDERING = "https://napari.org/ngff/rendering"
 
 
 def axes_czyx() -> list[ngc.Axis]:
@@ -57,19 +57,7 @@ def build_multiscale(
 
 def main() -> None:
     base = Path(__file__).parent / "data" / Path(__file__).stem
-    ngc.register_extension(
-        {
-            "id": "https://napari.org/ngff/",
-            "version": "1.0",
-            "schemas": [
-                {
-                    "type": "jsonschema",
-                    "url": "https://napari.org/ngff/1.0/schema.json",
-                }
-            ],
-            "homepage": "https://napari.org/ngff/",
-        }
-    )
+    register_examples()
 
     # 1. Each image is its own document.
     raw = ngc.create(
@@ -91,7 +79,28 @@ def main() -> None:
     nuclei = ngc.create(str(base / "nuclei"), nuclei_node, overwrite=True)
 
     # 2. The collection links them; traits on the entries override the images'.
-    raw = raw.set_trait({"type": RENDERING, "contrast_limits": [0, 1500]})
+    # Provenance is pure metadata on the *entry*: the image document is untouched.
+    nuclei = nuclei.set_trait(
+        {
+            "type": PROVENANCE,
+            "task": "cellpose-segmentation",
+            "version": "0.4.2",
+            "timestamp": "2026-10-27T10:00:00Z",
+            "inputs": [{"type": "multiscale", "ref": uid(2)}],
+        }
+    )
+    # The training-dataset trait pairs the collection's own entries by reference.
+    dataset = {
+        "type": DATASET,
+        "task": "segmentation",
+        "samples": [
+            {
+                "image": {"type": "multiscale", "ref": uid(2)},
+                "labels": {"type": "multiscale", "ref": uid(3)},
+                "split": "train",
+            }
+        ],
+    }
     scene = ngc.SceneTrait(
         coordinate_systems=[
             ngc.CoordinateSystem(id=uid(5), axes=axes_czyx()[1:]),
@@ -108,7 +117,7 @@ def main() -> None:
         ],
     )
     root = ngc.new_collection(
-        id=uid(1), name="hela-nuclei-experiment", traits=[scene]
+        id=uid(1), name="hela-nuclei-experiment", traits=[scene, dataset]
     ).add_external(raw, nuclei)
     url = str(base / "zarr.json")
     ngc.create(url, root, overwrite=True)
