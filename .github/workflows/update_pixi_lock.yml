@@ -1,0 +1,79 @@
+name: Update pixi.lock
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run at 6:01 on the first day of each month
+    - cron: 1 6 1 * *
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  pixi-update:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    name: Update pixi.lock
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: write       # Needed to make commits
+      pull-requests: write  # Needed to write a new PR
+
+    steps:
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true  # Needed to make commits
+
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          run-install: false
+
+      - name: Update lockfiles
+        id: update-lockfile
+        shell: bash
+        run: |
+          set -o pipefail
+          pixi update --json > diff.json
+          echo "difflines=$(cat diff.json | jq '.environment' | wc -l)" >> $GITHUB_OUTPUT
+          cat diff.json | pixi exec pixi-diff-to-markdown > diff.md
+
+      # Note that this action only runs on main
+      - name: Commit updates
+        if: ${{ steps.update-lockfile.outputs.difflines != 1 }}
+        run: |
+          git config user.email "pixi-update-lock@example.org"
+          git config user.name "pixi-update-lock bot"
+          git switch "$BRANCH_NAME" || git switch -c "$BRANCH_NAME"
+          git add pixi.lock
+          git commit -m 'Update pixi.lock' || echo "Commit failed (perhaps it was empty)"
+          git push --set-upstream origin "$BRANCH_NAME" --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_NAME: "update-pixi-lock"
+
+      # Create dedicated label for the target version
+      - run: gh label create "pixi" --force
+        if: ${{ steps.update-lockfile.outputs.difflines != 1 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Check whether the same PR already exists, so that we do not recreate it
+      - run: |
+          echo number=$(gh pr list --label "pixi" --json number --jq '.[].number' | wc -l) >> $GITHUB_OUTPUT
+        id: existing-pr
+        if: ${{ steps.update-lockfile.outputs.difflines != 1 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - run: gh pr create --title "Update pixi.lock" --body-file diff.md --base main --head update-pixi-lock --label pixi --draft
+        if: ${{ steps.existing-pr.outputs.number == 0 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - run: echo "There is already an existing 'pixi' PR. Skip creating a new one."
+        if: ${{ steps.existing-pr.outputs.number != 0 }}
