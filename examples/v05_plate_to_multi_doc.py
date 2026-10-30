@@ -11,10 +11,12 @@ import requests
 
 import ngio_collections as ngc
 
-MAX_ROWS = 2
-MAX_COLS = 3
+# Use smaller numbers if you want to convert fewer wells for testing
+MAX_ROWS = 100
+MAX_COLS = 100
 
-plate_url = "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/"
+# plate_url = "https://livingobjects.ebi.ac.uk/idr/zarr/v0.5/idr0010/76-45.ome.zarr/"
+plate_url = "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/"
 
 
 def single_scales(prefix: str, paths: list[str]) -> tuple[ngc.Node, ...]:

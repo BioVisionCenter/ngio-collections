@@ -1,0 +1,1256 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.x",
+      "type": "collection",
+      "name": "wellD12",
+      "id": "wellD12",
+      "nodes": [
+        {
+          "type": "multiscale",
+          "name": "D12_field0",
+          "id": "D12_field0",
+          "attributes": {
+            "coordinateSystems": [
+              {
+                "id": "D12_field0_space",
+                "axes": [
+                  {
+                    "name": "c",
+                    "type": "channel"
+                  },
+                  {
+                    "name": "y",
+                    "type": "space",
+                    "unit": "micrometer"
+                  },
+                  {
+                    "name": "x",
+                    "type": "space",
+                    "unit": "micrometer"
+                  }
+                ]
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "type": "singlescale",
+              "name": "D12_field0_scale0",
+              "id": "D12_field0_scale0",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field0_scale0"
+                    },
+                    "output": {
+                      "id": "D12_field0_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      0.645,
+                      0.645
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/0/0"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field0_scale1",
+              "id": "D12_field0_scale1",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field0_scale1"
+                    },
+                    "output": {
+                      "id": "D12_field0_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      1.29,
+                      1.29
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/0/1"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field0_scale2",
+              "id": "D12_field0_scale2",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field0_scale2"
+                    },
+                    "output": {
+                      "id": "D12_field0_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      2.58,
+                      2.58
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/0/2"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field0_scale3",
+              "id": "D12_field0_scale3",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field0_scale3"
+                    },
+                    "output": {
+                      "id": "D12_field0_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      5.16,
+                      5.16
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/0/3"
+              }
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "name": "D12_field1",
+          "id": "D12_field1",
+          "attributes": {
+            "coordinateSystems": [
+              {
+                "id": "D12_field1_space",
+                "axes": [
+                  {
+                    "name": "c",
+                    "type": "channel"
+                  },
+                  {
+                    "name": "y",
+                    "type": "space",
+                    "unit": "micrometer"
+                  },
+                  {
+                    "name": "x",
+                    "type": "space",
+                    "unit": "micrometer"
+                  }
+                ]
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "type": "singlescale",
+              "name": "D12_field1_scale0",
+              "id": "D12_field1_scale0",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field1_scale0"
+                    },
+                    "output": {
+                      "id": "D12_field1_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      0.645,
+                      0.645
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/1/0"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field1_scale1",
+              "id": "D12_field1_scale1",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field1_scale1"
+                    },
+                    "output": {
+                      "id": "D12_field1_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      1.29,
+                      1.29
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/1/1"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field1_scale2",
+              "id": "D12_field1_scale2",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field1_scale2"
+                    },
+                    "output": {
+                      "id": "D12_field1_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      2.58,
+                      2.58
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/1/2"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field1_scale3",
+              "id": "D12_field1_scale3",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field1_scale3"
+                    },
+                    "output": {
+                      "id": "D12_field1_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      5.16,
+                      5.16
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/1/3"
+              }
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "name": "D12_field2",
+          "id": "D12_field2",
+          "attributes": {
+            "coordinateSystems": [
+              {
+                "id": "D12_field2_space",
+                "axes": [
+                  {
+                    "name": "c",
+                    "type": "channel"
+                  },
+                  {
+                    "name": "y",
+                    "type": "space",
+                    "unit": "micrometer"
+                  },
+                  {
+                    "name": "x",
+                    "type": "space",
+                    "unit": "micrometer"
+                  }
+                ]
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "type": "singlescale",
+              "name": "D12_field2_scale0",
+              "id": "D12_field2_scale0",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field2_scale0"
+                    },
+                    "output": {
+                      "id": "D12_field2_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      0.645,
+                      0.645
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/2/0"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field2_scale1",
+              "id": "D12_field2_scale1",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field2_scale1"
+                    },
+                    "output": {
+                      "id": "D12_field2_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      1.29,
+                      1.29
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/2/1"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field2_scale2",
+              "id": "D12_field2_scale2",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field2_scale2"
+                    },
+                    "output": {
+                      "id": "D12_field2_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      2.58,
+                      2.58
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/2/2"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field2_scale3",
+              "id": "D12_field2_scale3",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field2_scale3"
+                    },
+                    "output": {
+                      "id": "D12_field2_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      5.16,
+                      5.16
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/2/3"
+              }
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "name": "D12_field3",
+          "id": "D12_field3",
+          "attributes": {
+            "coordinateSystems": [
+              {
+                "id": "D12_field3_space",
+                "axes": [
+                  {
+                    "name": "c",
+                    "type": "channel"
+                  },
+                  {
+                    "name": "y",
+                    "type": "space",
+                    "unit": "micrometer"
+                  },
+                  {
+                    "name": "x",
+                    "type": "space",
+                    "unit": "micrometer"
+                  }
+                ]
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "type": "singlescale",
+              "name": "D12_field3_scale0",
+              "id": "D12_field3_scale0",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field3_scale0"
+                    },
+                    "output": {
+                      "id": "D12_field3_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      0.645,
+                      0.645
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/3/0"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field3_scale1",
+              "id": "D12_field3_scale1",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field3_scale1"
+                    },
+                    "output": {
+                      "id": "D12_field3_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      1.29,
+                      1.29
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/3/1"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field3_scale2",
+              "id": "D12_field3_scale2",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field3_scale2"
+                    },
+                    "output": {
+                      "id": "D12_field3_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      2.58,
+                      2.58
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/3/2"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field3_scale3",
+              "id": "D12_field3_scale3",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field3_scale3"
+                    },
+                    "output": {
+                      "id": "D12_field3_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      5.16,
+                      5.16
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/3/3"
+              }
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "name": "D12_field4",
+          "id": "D12_field4",
+          "attributes": {
+            "coordinateSystems": [
+              {
+                "id": "D12_field4_space",
+                "axes": [
+                  {
+                    "name": "c",
+                    "type": "channel"
+                  },
+                  {
+                    "name": "y",
+                    "type": "space",
+                    "unit": "micrometer"
+                  },
+                  {
+                    "name": "x",
+                    "type": "space",
+                    "unit": "micrometer"
+                  }
+                ]
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "type": "singlescale",
+              "name": "D12_field4_scale0",
+              "id": "D12_field4_scale0",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field4_scale0"
+                    },
+                    "output": {
+                      "id": "D12_field4_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      0.645,
+                      0.645
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/4/0"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field4_scale1",
+              "id": "D12_field4_scale1",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field4_scale1"
+                    },
+                    "output": {
+                      "id": "D12_field4_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      1.29,
+                      1.29
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/4/1"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field4_scale2",
+              "id": "D12_field4_scale2",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field4_scale2"
+                    },
+                    "output": {
+                      "id": "D12_field4_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      2.58,
+                      2.58
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/4/2"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field4_scale3",
+              "id": "D12_field4_scale3",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field4_scale3"
+                    },
+                    "output": {
+                      "id": "D12_field4_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      5.16,
+                      5.16
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/4/3"
+              }
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "name": "D12_field5",
+          "id": "D12_field5",
+          "attributes": {
+            "coordinateSystems": [
+              {
+                "id": "D12_field5_space",
+                "axes": [
+                  {
+                    "name": "c",
+                    "type": "channel"
+                  },
+                  {
+                    "name": "y",
+                    "type": "space",
+                    "unit": "micrometer"
+                  },
+                  {
+                    "name": "x",
+                    "type": "space",
+                    "unit": "micrometer"
+                  }
+                ]
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "type": "singlescale",
+              "name": "D12_field5_scale0",
+              "id": "D12_field5_scale0",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field5_scale0"
+                    },
+                    "output": {
+                      "id": "D12_field5_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      0.645,
+                      0.645
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/5/0"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field5_scale1",
+              "id": "D12_field5_scale1",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field5_scale1"
+                    },
+                    "output": {
+                      "id": "D12_field5_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      1.29,
+                      1.29
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/5/1"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field5_scale2",
+              "id": "D12_field5_scale2",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field5_scale2"
+                    },
+                    "output": {
+                      "id": "D12_field5_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      2.58,
+                      2.58
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/5/2"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field5_scale3",
+              "id": "D12_field5_scale3",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field5_scale3"
+                    },
+                    "output": {
+                      "id": "D12_field5_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      5.16,
+                      5.16
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/5/3"
+              }
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "name": "D12_field6",
+          "id": "D12_field6",
+          "attributes": {
+            "coordinateSystems": [
+              {
+                "id": "D12_field6_space",
+                "axes": [
+                  {
+                    "name": "c",
+                    "type": "channel"
+                  },
+                  {
+                    "name": "y",
+                    "type": "space",
+                    "unit": "micrometer"
+                  },
+                  {
+                    "name": "x",
+                    "type": "space",
+                    "unit": "micrometer"
+                  }
+                ]
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "type": "singlescale",
+              "name": "D12_field6_scale0",
+              "id": "D12_field6_scale0",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field6_scale0"
+                    },
+                    "output": {
+                      "id": "D12_field6_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      0.645,
+                      0.645
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/6/0"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field6_scale1",
+              "id": "D12_field6_scale1",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field6_scale1"
+                    },
+                    "output": {
+                      "id": "D12_field6_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      1.29,
+                      1.29
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/6/1"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field6_scale2",
+              "id": "D12_field6_scale2",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field6_scale2"
+                    },
+                    "output": {
+                      "id": "D12_field6_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      2.58,
+                      2.58
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/6/2"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field6_scale3",
+              "id": "D12_field6_scale3",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field6_scale3"
+                    },
+                    "output": {
+                      "id": "D12_field6_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      5.16,
+                      5.16
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/6/3"
+              }
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "name": "D12_field7",
+          "id": "D12_field7",
+          "attributes": {
+            "coordinateSystems": [
+              {
+                "id": "D12_field7_space",
+                "axes": [
+                  {
+                    "name": "c",
+                    "type": "channel"
+                  },
+                  {
+                    "name": "y",
+                    "type": "space",
+                    "unit": "micrometer"
+                  },
+                  {
+                    "name": "x",
+                    "type": "space",
+                    "unit": "micrometer"
+                  }
+                ]
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "type": "singlescale",
+              "name": "D12_field7_scale0",
+              "id": "D12_field7_scale0",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field7_scale0"
+                    },
+                    "output": {
+                      "id": "D12_field7_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      0.645,
+                      0.645
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/7/0"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field7_scale1",
+              "id": "D12_field7_scale1",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field7_scale1"
+                    },
+                    "output": {
+                      "id": "D12_field7_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      1.29,
+                      1.29
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/7/1"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field7_scale2",
+              "id": "D12_field7_scale2",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field7_scale2"
+                    },
+                    "output": {
+                      "id": "D12_field7_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      2.58,
+                      2.58
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/7/2"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field7_scale3",
+              "id": "D12_field7_scale3",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field7_scale3"
+                    },
+                    "output": {
+                      "id": "D12_field7_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      5.16,
+                      5.16
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/7/3"
+              }
+            }
+          ]
+        },
+        {
+          "type": "multiscale",
+          "name": "D12_field8",
+          "id": "D12_field8",
+          "attributes": {
+            "coordinateSystems": [
+              {
+                "id": "D12_field8_space",
+                "axes": [
+                  {
+                    "name": "c",
+                    "type": "channel"
+                  },
+                  {
+                    "name": "y",
+                    "type": "space",
+                    "unit": "micrometer"
+                  },
+                  {
+                    "name": "x",
+                    "type": "space",
+                    "unit": "micrometer"
+                  }
+                ]
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "type": "singlescale",
+              "name": "D12_field8_scale0",
+              "id": "D12_field8_scale0",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field8_scale0"
+                    },
+                    "output": {
+                      "id": "D12_field8_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      0.645,
+                      0.645
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/8/0"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field8_scale1",
+              "id": "D12_field8_scale1",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field8_scale1"
+                    },
+                    "output": {
+                      "id": "D12_field8_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      1.29,
+                      1.29
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/8/1"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field8_scale2",
+              "id": "D12_field8_scale2",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field8_scale2"
+                    },
+                    "output": {
+                      "id": "D12_field8_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      2.58,
+                      2.58
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/8/2"
+              }
+            },
+            {
+              "type": "singlescale",
+              "name": "D12_field8_scale3",
+              "id": "D12_field8_scale3",
+              "attributes": {
+                "coordinateTransformations": [
+                  {
+                    "input": {
+                      "id": "D12_field8_scale3"
+                    },
+                    "output": {
+                      "id": "D12_field8_space"
+                    },
+                    "type": "scale",
+                    "scale": [
+                      1.0,
+                      5.16,
+                      5.16
+                    ]
+                  }
+                ]
+              },
+              "path": {
+                "type": "zarr",
+                "path": "https://livingobjects.ebi.ac.uk/idr/share/ome2024-ngff-challenge/idr0036/20591.ome.zarr/D/12/8/3"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}
