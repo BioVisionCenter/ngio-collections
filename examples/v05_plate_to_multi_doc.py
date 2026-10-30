@@ -82,7 +82,11 @@ def build_collection(base_path: Path) -> ngc.Node:
     plate = ngc.new_node("collection", id="plate", name="plate", attributes=plate_attrs)
 
     # Only process the first 3 wells for demonstration purposes.
-    for well_json in plate_json["wells"]:
+    wells_json = plate_json["wells"]
+    # sort wells by columnIndex and rowIndex
+    wells_json.sort(key=lambda w: (w["rowIndex"], w["columnIndex"]))
+
+    for well_json in wells_json:
         well_path = well_json["path"]
         rowname, colname = well_path.split("/")[-2:]
         if rowname not in row_names:
