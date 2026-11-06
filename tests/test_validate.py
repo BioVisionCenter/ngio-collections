@@ -201,11 +201,15 @@ def _with_manifest(entries: list[dict], store: MemoryStore) -> str:
         "node_type": "group",
         "attributes": {
             "ome": {
-                "version": "0.x",
+                "version": "0.9dev42",
                 "extension_manifest": entries,
-                "type": "collection",
-                "id": mk(0x40),
-                "traits": [{"type": "https://napari.org/ngff/rendering", "opacity": 1}],
+                "root": {
+                    "type": "collection",
+                    "id": mk(0x40),
+                    "traits": [
+                        {"type": "https://napari.org/ngff/rendering", "opacity": 1}
+                    ],
+                },
             }
         },
     }
@@ -263,22 +267,24 @@ async def test_uri_path_types_are_data_declared_and_non_core() -> None:
             "node_type": "group",
             "attributes": {
                 "ome": {
-                    "version": "0.x",
+                    "version": "0.9dev42",
                     "extension_manifest": manifest,
-                    "type": "collection",
-                    "id": mk(0x50),
-                    "nodes": [
-                        {
-                            "type": table,
-                            "id": mk(0x51),
-                            "path": {
-                                "type": csv,
-                                "format": "relative",
-                                "href": "./t.csv",
-                            },
-                        }
-                    ],
-                }
+                    "root": {
+                        "type": "collection",
+                        "id": mk(0x50),
+                        "nodes": [
+                            {
+                                "type": table,
+                                "id": mk(0x51),
+                                "path": {
+                                    "type": csv,
+                                    "format": "relative",
+                                    "href": "./t.csv",
+                                },
+                            }
+                        ],
+                    },
+                },
             },
         }
 

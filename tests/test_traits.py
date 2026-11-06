@@ -21,7 +21,7 @@ ValidationError = pytest.importorskip("pydantic").ValidationError
 
 def test_plate_trait_follows_the_revision_example() -> None:
     plate_doc = json.loads((FIXTURES / "plate" / "zarr.json").read_text())
-    (plate_raw,) = plate_doc["attributes"]["ome"]["traits"]
+    (plate_raw,) = plate_doc["attributes"]["ome"]["root"]["traits"]
     plate = ngc.PlateTrait.model_validate(plate_raw)
     assert [r.name for r in plate.rows] == ["A", "B"]
     assert [c.name for c in plate.columns] == ["1", "2"]
@@ -116,7 +116,7 @@ def test_reference_obj_is_typed_uuid_and_closed() -> None:
 
 def test_multiscale_fields_validate_the_revision_example() -> None:
     raw = json.loads((FIXTURES / "collection" / "raw" / "zarr.json").read_text())
-    ome = raw["attributes"]["ome"]
+    ome = raw["attributes"]["ome"]["root"]
     fields = ngc.MultiscaleFields.model_validate(
         {k: v for k, v in ome.items() if k in ("coordinate_systems", "scales")}
     )

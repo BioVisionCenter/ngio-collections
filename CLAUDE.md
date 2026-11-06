@@ -7,6 +7,9 @@ Targets **RFC-8 revision 1** (the proposal in `rfc8-revision1/`): typed
 `traits` (no `attributes`), UUID ids, `{type, ref, path?}` references,
 `{type, format, href}` paths, and multiscales that are always their own
 document (`coordinate_systems` + `scales`; never embedded, `add()` refuses it).
+Envelope deviation: the `ome` payload is `{version: "0.9dev42",
+extension_manifest?, root}` with the node under `root` (matches `rfc8_model`;
+`resolve/_document.py` is the one place that knows this).
 Manifest entries carry `must_understand`; `register_extension` is what marks an
 extension as understood (`must_understand_supported` validator).
 Deliberate deviation: `absolute` and `http` paths resolve (spec: `relative`

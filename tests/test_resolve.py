@@ -102,14 +102,12 @@ def test_malformed_nodes_are_rejected() -> None:
 
 
 def test_node_fields_and_traits_are_split() -> None:
-    entry = _doc(
-        "image", _image(1, {"type": "labels", "source": []}, name="raw", version="0.x")
-    )
+    entry = _doc("image", _image(1, {"type": "labels", "source": []}, name="raw"))
     c = build(entry.url, {entry.url: entry}, inline=False)
     root = c.record(ROOT)
     assert root.name == "raw"
     assert list(root.traits) == ["labels"]
-    assert set(root.fields) == {"coordinate_systems", "scales", "version"}
+    assert set(root.fields) == {"coordinate_systems", "scales"}
     assert c.declarations(mk(0xC)) == (ROOT,) and c.declarations(mk(0x20)) == (ROOT,)
 
 
@@ -304,22 +302,27 @@ def test_unsupported_format_leaves_node_external_under_core_formats() -> None:
 
 
 def test_document_strips_version_and_manifest() -> None:
+    root = {"type": "collection", "id": mk(1), "nodes": []}
     content = {
         "attributes": {
             "ome": {
-                "version": "0.x",
+                "version": "0.9dev42",
                 "extension_manifest": [{"id": "https://x.org/", "version": "1"}],
-                "type": "collection",
-                "id": mk(1),
-                "nodes": [],
+                "root": root,
             }
         }
     }
     doc = Document.from_content("/data/c.zarr", content)
     assert doc.kind == "zarr" and doc.url == "/data/c.zarr/zarr.json"
     assert doc.ref_url == "/data/c.zarr"
-    assert set(doc.root) == {"type", "id", "nodes"}
+    assert doc.root == root
     assert doc.extension_manifest == ({"id": "https://x.org/", "version": "1"},)
+
+
+def test_document_without_root_is_not_an_ome_document() -> None:
+    content = {"ome": {"version": "0.9dev42", "type": "collection", "id": mk(1)}}
+    with pytest.raises(ValueError):
+        Document.from_content("/data/c.json", content)
 
 
 # --------------------------------------------------------------------------- #

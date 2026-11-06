@@ -1,83 +1,85 @@
 {
   "attributes": {
     "ome": {
-      "version": "0.x",
-      "type": "multiscale",
-      "id": "0192f3a0-7c1e-7b00-9c22-000000000009",
-      "name": "fov0",
-      "coordinate_systems": [
-        {
-          "type": "coordinate_system",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000029",
-          "axes": [
-            {
-              "name": "y",
-              "type": "space",
-              "unit": "micrometer"
+      "version": "0.9dev42",
+      "root": {
+        "type": "multiscale",
+        "id": "0192f3a0-7c1e-7b00-9c22-000000000009",
+        "name": "fov0",
+        "coordinate_systems": [
+          {
+            "type": "coordinate_system",
+            "id": "0192f3a0-7c1e-7b00-9c22-000000000029",
+            "axes": [
+              {
+                "name": "y",
+                "type": "space",
+                "unit": "micrometer"
+              },
+              {
+                "name": "x",
+                "type": "space",
+                "unit": "micrometer"
+              }
+            ]
+          }
+        ],
+        "scales": [
+          {
+            "type": "scale",
+            "id": "0192f3a0-7c1e-7b00-9c22-000000000039",
+            "path": {
+              "type": "zarr",
+              "format": "relative",
+              "href": "./s0"
             },
-            {
-              "name": "x",
-              "type": "space",
-              "unit": "micrometer"
-            }
-          ]
-        }
-      ],
-      "scales": [
-        {
-          "type": "scale",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000039",
-          "path": {
-            "type": "zarr",
-            "format": "relative",
-            "href": "./s0"
-          },
-          "coordinate_transformations": [
-            {
-              "input": {
+            "coordinate_transformations": [
+              {
+                "input": {
+                  "type": "scale",
+                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000039"
+                },
+                "output": {
+                  "type": "coordinate_system",
+                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000029"
+                },
                 "type": "scale",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000039"
-              },
-              "output": {
-                "type": "coordinate_system",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000029"
-              },
-              "type": "scale",
-              "scale": [
-                1.0,
-                1.0
-              ]
-            }
-          ]
-        },
-        {
-          "type": "scale",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000049",
-          "path": {
-            "type": "zarr",
-            "format": "relative",
-            "href": "./s1"
+                "scale": [
+                  1.0,
+                  1.0
+                ]
+              }
+            ]
           },
-          "coordinate_transformations": [
-            {
-              "input": {
+          {
+            "type": "scale",
+            "id": "0192f3a0-7c1e-7b00-9c22-000000000049",
+            "path": {
+              "type": "zarr",
+              "format": "relative",
+              "href": "./s1"
+            },
+            "coordinate_transformations": [
+              {
+                "input": {
+                  "type": "scale",
+                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000049"
+                },
+                "output": {
+                  "type": "coordinate_system",
+                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000029"
+                },
                 "type": "scale",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000049"
-              },
-              "output": {
-                "type": "coordinate_system",
-                "ref": "0192f3a0-7c1e-7b00-9c22-000000000029"
-              },
-              "type": "scale",
-              "scale": [
-                2.0,
-                2.0
-              ]
-            }
-          ]
-        }
-      ],
-      "nodes": []
+                "scale": [
+                  2.0,
+                  2.0
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": []
+      }
     }
   },
   "zarr_format": 3,

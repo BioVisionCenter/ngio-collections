@@ -5,8 +5,9 @@ only what resolution needs: the normalised metadata-file `url`, the form `kind`,
 the envelope-stripped `root` node dict and the document-level
 `extension_manifest`. `build` stays free of IO and of the wire-envelope details
 (JSON keeps the OME payload at top-level `ome`; Zarr keeps it under
-`attributes.ome`). `from_content` is the one place that knows those envelopes;
-`fetch_all` calls it after a successful read.
+`attributes.ome`; inside the payload the node sits under `root`, next to the
+envelope keys `version` and `extension_manifest`). `from_content` is the one
+place that knows those envelopes; `fetch_all` calls it after a successful read.
 """
 
 from __future__ import annotations
@@ -17,11 +18,14 @@ from typing import Literal
 from ngio_collections.models._paths import ZARR_METADATA_FILE, meta_url
 
 # The models are not versioned: there is exactly one OME payload version, stamped
-# on every document written by `write_document`.
-VERSION = "0.x"
+# on every document written by `write_document`. It matches `rfc8_model`.
+VERSION = "0.9dev42"
 
-DOCUMENT_KEYS = frozenset({"version", "extension_manifest"})
-"""Keys that belong to the document envelope, not to the root node."""
+ROOT_KEY = "root"
+"""The payload key holding the root node dict."""
+
+DOCUMENT_KEYS = frozenset({"version", "extension_manifest", ROOT_KEY})
+"""Keys of the OME payload envelope (`version`, `extension_manifest`, `root`)."""
 
 Kind = Literal["zarr", "json"]
 
@@ -76,10 +80,14 @@ class Document:
             content: The full document dict as loaded from the store.
 
         Returns:
-            A `Document` whose `root` is the OME payload's root node dict with the
-            envelope keys (`version`, `extension_manifest`) removed. A document
+            A `Document` whose `root` is the OME payload's `root` node dict and
+            whose `extension_manifest` is the payload's manifest list. A document
             carrying no `ome` key at all (e.g. a plain data array) is not an
             error: it comes back with `has_payload=False` and an empty `root`.
+
+        Raises:
+            ValueError: If the `ome` payload has no `root` object (not an RFC-8
+                document in this envelope).
         """
         url = meta_url(url)
         kind = _kind_for(url)
@@ -87,13 +95,15 @@ class Document:
         ome = container.get("ome")
         if ome is None:
             return cls(url=url, kind=kind, root={}, has_payload=False)
-        root = {k: v for k, v in ome.items() if k not in DOCUMENT_KEYS}
+        root = ome.get(ROOT_KEY)
+        if not isinstance(root, dict):
+            raise ValueError(f"OME payload at {url!r} has no `{ROOT_KEY}` object")
         manifest = tuple(ome.get("extension_manifest") or ())
         return cls(url=url, kind=kind, root=root, extension_manifest=manifest)
 
 
 def wrap_payload(kind: Kind, payload: dict, existing: dict | None = None) -> dict:
-    """Wrap an OME `payload` back into a `kind` document envelope.
+    """Wrap an OME `payload` (`version`, manifest, `root`) into a `kind` envelope.
 
     JSON puts the payload at the top-level `ome` key; Zarr puts it under
     `attributes.ome` and ensures the group markers. `existing` (the current

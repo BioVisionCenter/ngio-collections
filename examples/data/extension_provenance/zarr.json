@@ -1,7 +1,7 @@
 {
   "attributes": {
     "ome": {
-      "version": "0.x",
+      "version": "0.9dev42",
       "extension_manifest": [
         {
           "id": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/",
@@ -20,45 +20,47 @@
           "homepage": "https://github.com/BioVisionCenter/ngio-collections/tree/main/examples/schemas"
         }
       ],
-      "type": "collection",
-      "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
-      "name": "experiment",
-      "nodes": [
-        {
-          "type": "multiscale",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
-          "name": "raw",
-          "path": {
-            "type": "zarr",
-            "format": "relative",
-            "href": "./raw"
-          }
-        },
-        {
-          "type": "multiscale",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
-          "name": "nuclei",
-          "path": {
-            "type": "zarr",
-            "format": "relative",
-            "href": "./nuclei"
-          },
-          "traits": [
-            {
-              "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance",
-              "task": "cellpose-segmentation",
-              "version": "0.4.2",
-              "timestamp": "2026-10-27T10:00:00Z",
-              "inputs": [
-                {
-                  "type": "multiscale",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
-                }
-              ]
+      "root": {
+        "type": "collection",
+        "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
+        "name": "experiment",
+        "nodes": [
+          {
+            "type": "multiscale",
+            "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+            "name": "raw",
+            "path": {
+              "type": "zarr",
+              "format": "relative",
+              "href": "./raw"
             }
-          ]
-        }
-      ]
+          },
+          {
+            "type": "multiscale",
+            "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
+            "name": "nuclei",
+            "path": {
+              "type": "zarr",
+              "format": "relative",
+              "href": "./nuclei"
+            },
+            "traits": [
+              {
+                "type": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/provenance",
+                "task": "cellpose-segmentation",
+                "version": "0.4.2",
+                "timestamp": "2026-10-27T10:00:00Z",
+                "inputs": [
+                  {
+                    "type": "multiscale",
+                    "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     }
   },
   "zarr_format": 3,

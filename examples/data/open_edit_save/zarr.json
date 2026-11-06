@@ -1,22 +1,24 @@
 {
   "attributes": {
     "ome": {
-      "version": "0.x",
-      "type": "collection",
-      "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
-      "name": "experiment",
-      "nodes": [
-        {
-          "type": "multiscale",
-          "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
-          "name": "Raw image",
-          "path": {
-            "type": "zarr",
-            "format": "relative",
-            "href": "./image"
+      "version": "0.9dev42",
+      "root": {
+        "type": "collection",
+        "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
+        "name": "experiment",
+        "nodes": [
+          {
+            "type": "multiscale",
+            "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+            "name": "Raw image",
+            "path": {
+              "type": "zarr",
+              "format": "relative",
+              "href": "./image"
+            }
           }
-        }
-      ]
+        ]
+      }
     }
   },
   "zarr_format": 3,

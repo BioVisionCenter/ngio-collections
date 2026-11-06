@@ -344,7 +344,7 @@ async def test_routed_store_resolves_remote_nodes() -> None:
         path=ngc.DocPath.for_url("https://h.org/ref.zarr"),
     )
     await aio.create(f"{DATA}/c.json", collection(1).add_external(entry), local)
-    assert (await local.get(f"{DATA}/c.json"))["ome"]["nodes"][0]["path"][
+    assert (await local.get(f"{DATA}/c.json"))["ome"]["root"]["nodes"][0]["path"][
         "format"
     ] == "http"
     routed = ngc.RoutedStore(local=local, http=remote)

@@ -14,6 +14,9 @@ extensibility), not the text as published. The proposal lives in the
 `rfc8-revision1/` checkout (`rfc8_revision_changes.md`, the three example
 documents, and the upstream draft it amends). In short:
 
+- the `ome` payload is the envelope `{version: "0.9dev42", extension_manifest?,
+  root}` with the root node under `root` (the `rfc8_model` layout; the revision
+  text puts the node fields directly under `ome`, see Deviations);
 - nodes are `{type, id, name?, traits?}`; `attributes` is gone, every piece of
   metadata is a typed **trait** (a keyword for built-in traits, a URI for
   extensions), and extensions are declared per document in `extension_manifest`
@@ -163,6 +166,11 @@ a bug worth reporting rather than a reason to deep-import.
   `paths_are_core` validator.
 - **Provisional recommended traits.** HCS and labels are deferred to sub-RFCs;
   the trait models here follow the revision's examples and may change.
+- **Envelope: `ome.root` and version `0.9dev42`.** The revision text keeps the
+  root node's fields directly under `ome`, next to `version`. This package
+  instead nests the node under `ome.root` and stamps `version: "0.9dev42"`,
+  matching the `rfc8_model` pydantic draft so documents round-trip between the
+  two. `extension_manifest` stays a list next to `root`.
 - **`json` path type kept.** The revision only shows `type: "zarr"`; the
   upstream draft defines `json` too, and standalone `collection.json` documents
   rely on it.

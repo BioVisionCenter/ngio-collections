@@ -56,8 +56,11 @@ def _sample() -> NodeTree:
 
 
 def test_payload_shape_and_key_order() -> None:
-    body = payload(_sample(), base_url=f"{DATA}/c.json", relativize=False)
-    assert list(body)[:3] == ["version", "type", "id"]  # no manifest when empty
+    envelope = payload(_sample(), base_url=f"{DATA}/c.json", relativize=False)
+    assert list(envelope) == ["version", "root"]  # no manifest when empty
+    assert envelope["version"] == "0.9dev42"
+    body = envelope["root"]
+    assert list(body)[:2] == ["type", "id"]
     assert (
         body["type"] == "collection" and body["id"] == mk(0) and body["name"] == "root"
     )
@@ -73,15 +76,15 @@ def test_payload_shape_and_key_order() -> None:
 def test_payload_carries_the_manifest_when_given() -> None:
     manifest = [{"id": "https://napari.org/ngff/", "version": "1.0", "schemas": []}]
     body = payload(_sample(), base_url=f"{DATA}/c.json", extension_manifest=manifest)
-    assert list(body)[:2] == ["version", "extension_manifest"]
+    assert list(body) == ["version", "extension_manifest", "root"]
     assert body["extension_manifest"] == manifest
 
 
 def test_fields_are_emitted_on_the_node() -> None:
     fields = {"coordinate_systems": [], "scales": []}
     c = NodeTree.of(NodeRecord(type="multiscale", id=mk(1), fields=fields))
-    body = payload(c, base_url=f"{DATA}/img/zarr.json")
-    assert list(body) == ["version", "type", "id", "coordinate_systems", "scales"]
+    body = payload(c, base_url=f"{DATA}/img/zarr.json")["root"]
+    assert list(body) == ["type", "id", "coordinate_systems", "scales"]
 
 
 def test_relativize_rewrites_node_path_and_embedded_path_objects() -> None:
@@ -110,7 +113,7 @@ def test_relativize_rewrites_node_path_and_embedded_path_objects() -> None:
             },
         ),
     )
-    (stub,) = payload(c, base_url=f"{DATA}/c.json", relativize=True)["nodes"]
+    (stub,) = payload(c, base_url=f"{DATA}/c.json", relativize=True)["root"]["nodes"]
     assert stub["path"] == {
         "type": "zarr",
         "format": "relative",
@@ -138,7 +141,7 @@ def test_relativize_rewrites_node_path_and_embedded_path_objects() -> None:
         )
     )
     body = payload(remote, base_url=f"{DATA}/img/zarr.json", relativize=True)
-    assert body["scales"][0]["path"]["href"] == "https://h.org/a/0"
+    assert body["root"]["scales"][0]["path"]["href"] == "https://h.org/a/0"
 
 
 def test_embedded_multiscale_is_refused_when_strict() -> None:
@@ -161,11 +164,11 @@ async def test_resolved_view_serializes_back_to_the_entry_document(
     revision_store,
 ) -> None:
     url = f"{DATA}/collection/zarr.json"
-    original = (await revision_store.get(url))["attributes"]["ome"]
+    original = (await revision_store.get(url))["attributes"]["ome"]["root"]
     view = build(url, await fetch_all(url, revision_store), inline=True)
     body = payload(view.tree if hasattr(view, "tree") else view, base_url=url)
-    assert body["nodes"] == original["nodes"]
-    assert body["traits"] == original["traits"]
+    assert body["root"]["nodes"] == original["nodes"]
+    assert body["root"]["traits"] == original["traits"]
 
 
 # --------------------------------------------------------------------------- #
@@ -233,7 +236,7 @@ def test_uri_path_types_are_used_types_and_relativized() -> None:
     )
     assert derive_manifest(c, registry=ExtensionRegistry([entry])) == [entry.to_dict()]
     # the node path and the path object inside a field both relativize on write
-    (node,) = payload(c, base_url=f"{DATA}/c.json", relativize=True)["nodes"]
+    (node,) = payload(c, base_url=f"{DATA}/c.json", relativize=True)["root"]["nodes"]
     assert node["path"] == {"type": csv, "format": "relative", "href": "./tables/t.csv"}
     assert node["sidecar"] == {"type": csv, "format": "relative", "href": "./s.csv"}
 

@@ -3,22 +3,24 @@
   "node_type": "group",
   "attributes": {
     "ome": {
-      "version": "0.x",
-      "type": "collection",
-      "id": "0192f3a0-7c1e-7b00-9c22-000000000056",
-      "traits": [
-        {
-          "type": "well",
-          "row_index": 0,
-          "column_index": 0
-        },
-        {
-          "type": "well",
-          "row_index": 1,
-          "column_index": 1
-        }
-      ],
-      "nodes": []
+      "version": "0.9dev42",
+      "root": {
+        "type": "collection",
+        "id": "0192f3a0-7c1e-7b00-9c22-000000000056",
+        "traits": [
+          {
+            "type": "well",
+            "row_index": 0,
+            "column_index": 0
+          },
+          {
+            "type": "well",
+            "row_index": 1,
+            "column_index": 1
+          }
+        ],
+        "nodes": []
+      }
     }
   }
 }

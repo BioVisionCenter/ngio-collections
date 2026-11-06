@@ -28,10 +28,17 @@ except ImportError:  # the schema step is optional
     Draft202012Validator = None
 
 
-def _ome_root(document: dict) -> dict | None:
-    """The `ome` object of a `zarr.json` or standalone JSON document, if any."""
+def _ome(document: dict) -> dict | None:
+    """The `ome` payload of a `zarr.json` or standalone JSON document, if any."""
     ome = document.get("attributes", {}).get("ome") or document.get("ome")
     return ome if isinstance(ome, dict) else None
+
+
+def _ome_root(document: dict) -> dict | None:
+    """The root node dict (`ome.root`) of a document, if any."""
+    ome = _ome(document)
+    root = ome.get("root") if ome else None
+    return root if isinstance(root, dict) else None
 
 
 def _walk_nodes(node: dict):

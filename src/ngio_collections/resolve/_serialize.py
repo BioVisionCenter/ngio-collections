@@ -30,7 +30,7 @@ from ngio_collections.graph import (
     traits_to_list,
 )
 from ngio_collections.models._paths import DocPath
-from ngio_collections.resolve._document import VERSION
+from ngio_collections.resolve._document import ROOT_KEY, VERSION
 from ngio_collections.resolve._jsonrefs import relativize_paths
 
 
@@ -140,14 +140,12 @@ def payload(
 
     `version` and `extension_manifest` are document-envelope keys kept off the
     nodes themselves so they never nest into embedded children; the manifest is
-    emitted only when non-empty.
+    emitted only when non-empty. The root node dict sits under `root`.
     """
     body: dict = {"version": VERSION}
     if extension_manifest:
         body["extension_manifest"] = [dict(entry) for entry in extension_manifest]
-    body.update(
-        node_dict(
-            tree, root_id, base_url=base_url, relativize=relativize, strict=strict
-        )
+    body[ROOT_KEY] = node_dict(
+        tree, root_id, base_url=base_url, relativize=relativize, strict=strict
     )
     return body

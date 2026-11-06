@@ -32,7 +32,7 @@ def _fake_urlopen(documents: dict[str, dict]):
 
 
 async def test_http_store_reads_and_is_read_only(monkeypatch) -> None:
-    docs = {"https://h.org/a.json": {"ome": {"type": "collection"}}}
+    docs = {"https://h.org/a.json": {"ome": {"root": {"type": "collection"}}}}
     monkeypatch.setattr(_http.urllib.request, "urlopen", _fake_urlopen(docs))
     store = ngc.HttpStore()
     assert store.read_only
