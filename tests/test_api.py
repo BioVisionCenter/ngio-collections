@@ -19,7 +19,6 @@ from ngio_collections.models import (
     SchemaRef,
 )
 from ngio_collections.models._errors import NodeStateError
-from ngio_collections.resolve import EmbeddedMultiscaleError, IdMismatchError
 from tests._builders import collection, multiscale
 from tests.conftest import DATA, mk, requires_pydantic
 
@@ -117,18 +116,47 @@ async def test_stub_matches_create_stub_and_is_findable_after_reopen() -> None:
     assert found.remove().find(mk(2)) is None
 
 
-async def test_entry_and_target_must_share_the_id() -> None:
+@requires_pydantic  # validators read through the typed models
+async def test_entry_and_target_may_have_distinct_ids() -> None:
     store = MemoryStore()
     await aio.create(f"{DATA}/image.zarr", multiscale(2), store)
-    wrong = ngc.new_node("multiscale", id=mk(7), path=ngc.ZarrPath(href="./image.zarr"))
-    await aio.create(f"{DATA}/c.json", collection(1).add_external(wrong), store)
-    view = await aio.open_resolved(f"{DATA}/c.json", store)
-    assert view.find(mk(7)).is_external  # left unresolved
-    assert [e.validator for e in view.validate(ngc.CORE_VALIDATORS)] == [
-        "external_unresolved"
+    entry = ngc.new_node("multiscale", id=mk(7), path=ngc.ZarrPath(href="./image.zarr"))
+    await aio.create(f"{DATA}/c.json", collection(1).add_external(entry), store)
+    view = await aio.open_resolved(f"{DATA}/c.json", store, on_error="raise")
+    node = view.find(mk(7))
+    # resolved under the entry's id; the image's own root id still finds it
+    assert node is not None and not node.is_external and node.id == mk(7)
+    assert node.record.edge.target_id == mk(2)
+    assert view.find(mk(2)).node_id == node.node_id
+    # the image's self-reference uses its own document's id and still validates
+    assert view.validate(ngc.CORE_VALIDATORS) == []
+
+
+@requires_pydantic  # the recommended validators read through the typed models
+async def test_manifest_also_lists_extensions_of_referenced_documents() -> None:
+    store = MemoryStore()
+    napari = "https://napari.org/ngff/"
+    image = multiscale(2).set_trait({"type": RENDER, "contrast_limits": [0, 1]})
+    stub = await aio.create(f"{DATA}/raw", image, store, registry=NAPARI)
+    # the collection uses no extension itself, but the image below it does
+    await aio.create(f"{DATA}/zarr.json", collection(1).add_external(stub), store)
+    root = (await store.get(f"{DATA}/zarr.json"))["attributes"]["ome"]
+    assert [e["id"] for e in root["extensionManifest"]] == [napari]
+    view = await aio.open_resolved(f"{DATA}/zarr.json", store)
+    assert view.validate(ngc.ALL_VALIDATORS) == []
+    # the extra reads can be turned off; the validator then reports the gap
+    opened = await aio.open(f"{DATA}/zarr.json", store)
+    await aio.save(opened, store, aggregate_manifest=False)
+    root = (await store.get(f"{DATA}/zarr.json"))["attributes"]["ome"]
+    assert "extensionManifest" not in root
+    view = await aio.open_resolved(f"{DATA}/zarr.json", store)
+    assert [e.validator for e in view.validate(ngc.ALL_VALIDATORS)] == [
+        "manifest_lists_downstream"
     ]
-    with pytest.raises(IdMismatchError):
-        await aio.open_resolved(f"{DATA}/c.json", store, on_error="raise")
+    # saving again with the default restores it
+    await aio.save(await aio.open(f"{DATA}/zarr.json", store), store)
+    root = (await store.get(f"{DATA}/zarr.json"))["attributes"]["ome"]
+    assert [e["id"] for e in root["extensionManifest"]] == [napari]
 
 
 @requires_pydantic  # validators / `.arrays` read through the typed models
@@ -333,10 +361,36 @@ async def test_create_guards() -> None:
     await aio.create(f"{DATA}/c.json", collection(1), store)
     with pytest.raises(NodeStateError):
         await aio.create(f"{DATA}/c.json", collection(2), store)
-    stub = await aio.create(f"{DATA}/raw", multiscale(2), store)
-    embedded = collection(3).add_external(stub).find(mk(2)).set_path(None)
-    with pytest.raises(EmbeddedMultiscaleError):
-        await aio.create(f"{DATA}/bad.json", embedded, store)
+
+
+@requires_pydantic  # validators read through the typed models
+async def test_inlined_multiscale_roundtrips_and_externalizes() -> None:
+    store = MemoryStore()
+    url = f"{DATA}/c/zarr.json"
+    await aio.create(url, collection(1, multiscale(2)), store)
+    written = (await store.get(url))["attributes"]["ome"]
+    (inlined,) = written["nodes"]
+    assert inlined["type"] == "multiscale" and "path" not in inlined
+    assert [a["path"]["href"] for a in inlined["data"]] == ["./s0", "./s1"]
+    opened = await aio.open(url, store)
+    image = opened.find(mk(2))
+    assert not image.is_external and image.record.children is None
+    assert opened.validate(ngc.CORE_VALIDATORS) == []
+    await aio.save(opened, store)  # an unedited save is byte-identical
+    assert (await store.get(url))["attributes"]["ome"] == written
+    # split it out into its own document: the entry keeps the id
+    split = await aio.externalize(image, f"{DATA}/c/raw", store)
+    assert split.find(mk(2)).is_external
+    (entry,) = (await store.get(url))["attributes"]["ome"]["nodes"]
+    assert entry == {
+        "type": "multiscale",
+        "id": mk(2),
+        "name": "ms2",
+        "path": {"type": "zarr", "format": "relative", "href": "./raw"},
+    }
+    moved = (await store.get(f"{DATA}/c/raw/zarr.json"))["attributes"]["ome"]
+    # array paths are rewritten relative to the image's new document
+    assert [a["path"]["href"] for a in moved["data"]] == ["../s0", "../s1"]
 
 
 @requires_pydantic  # validators / `.arrays` read through the typed models

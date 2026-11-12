@@ -91,10 +91,18 @@ def test_scene_trait_writes_the_camel_case_wire_keys() -> None:
     assert set(dumped) == {"type", "coordinateSystems", "coordinateTransformations"}
     # the Python attribute names are accepted on input and never written
     by_name = ngc.SceneTrait.model_validate(
-        {"type": "scene", "coordinate_systems": dumped["coordinateSystems"]}
+        {
+            "type": "scene",
+            "coordinate_systems": dumped["coordinateSystems"],
+            "coordinate_transformations": [],
+        }
     )
     assert by_name.coordinate_systems == scene.coordinate_systems
     assert "coordinate_systems" not in by_name.model_dump(mode="json")
+    # `coordinateTransformations` is required, `coordinateSystems` is not
+    assert ngc.SceneTrait(coordinate_transformations=[]).coordinate_systems == []
+    with pytest.raises(ValidationError):
+        ngc.SceneTrait.model_validate({"type": "scene", "coordinateSystems": []})
 
 
 def test_reference_obj_is_typed_id_and_closed() -> None:
@@ -325,3 +333,28 @@ def test_dataclass_locators_work_as_pydantic_fields() -> None:
         )
     with pytest.raises(ValidationError):
         ngc.ScaleTransformation(input={"type": "coordinate_system", "ref": "not an id"})
+
+
+def test_custom_path_keeps_the_fields_its_extension_defines() -> None:
+    # the revision's `OMEROPath` example: no `format`, three extra keys
+    wire = {
+        "type": "https://ngff.example.org/omero/OMEROPath",
+        "href": "https://omero.example.org/webclient/?show=image-48213",
+        "host": "omero.example.org",
+        "port": 4064,
+        "imageId": 48213,
+    }
+    path = ngc.DocPath.from_dict(wire)
+    assert path.format is None and not path.is_document
+    assert path.extra == {"host": "omero.example.org", "port": 4064, "imageId": 48213}
+    assert path.to_dict() == wire and list(path.to_dict()) == list(wire)
+    assert path.resolve("/data/c.json") == wire["href"]  # left to the extension
+    assert path.relativize("/data/c.json") is path
+    # a built-in path stays closed: `format` is required, extras are not accepted
+    with pytest.raises(ValueError, match="format"):
+        ngc.DocPath.from_dict({"type": "zarr", "href": "./s0"})
+    with pytest.raises(ValueError, match="extra"):
+        ngc.ZarrPath(href="./s0", extra={"host": "h"})
+    # the typed models carry it through unchanged
+    level = ngc.MultiscaleArray.model_validate({"type": "array", "path": wire})
+    assert level.path == path and level.model_dump(exclude_none=True)["path"] == wire

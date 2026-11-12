@@ -41,6 +41,9 @@ def _kind_for(url: str) -> Kind:
 class Document:
     """One parsed document: its metadata-file `url`, `kind`, `root` and manifest.
 
+    `version` is the payload's `version` string, which nested nodes may repeat
+    but not contradict.
+
     `has_payload` is `False` for a document that was read successfully but carries
     no `ome` key at all (a plain Zarr array, say). That is a *different* fact from
     the document being absent (unreadable), and resolution needs both: a node whose
@@ -53,6 +56,7 @@ class Document:
     root: dict
     has_payload: bool = True
     extension_manifest: tuple[dict, ...] = ()
+    version: str | None = None
 
     @property
     def ref_url(self) -> str:
@@ -100,7 +104,14 @@ class Document:
             raise ValueError(f"OME payload at {url!r} is not a node (no `type`)")
         root = {k: v for k, v in ome.items() if k not in DOCUMENT_KEYS}
         manifest = tuple(ome.get(MANIFEST_KEY) or ())
-        return cls(url=url, kind=kind, root=root, extension_manifest=manifest)
+        version = ome.get("version")
+        return cls(
+            url=url,
+            kind=kind,
+            root=root,
+            extension_manifest=manifest,
+            version=version if isinstance(version, str) else None,
+        )
 
 
 def wrap_payload(kind: Kind, payload: dict, existing: dict | None = None) -> dict:

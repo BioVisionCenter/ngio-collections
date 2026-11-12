@@ -18,17 +18,20 @@ remote data (a published image, remote arrays as levels) without bundling it.
 **Types.** ``type`` is an extension point (upstream "Path" interface): besides
 the built-in ``zarr`` (a group whose metadata is ``<dir>/zarr.json``) and
 ``json`` (the document itself), a URI type declared by an extension is accepted.
-Such a path *locates data*: it resolves and relativizes like any other, is
-declared in the manifest, but is never fetched or opened as a node document
-(``is_document`` is false and ``meta_url`` refuses it). The shape stays closed to
-``{type, format, href}``; extra keys an extension defines are not kept.
+Such a path *locates data*: it is declared in the manifest, but is never
+fetched or opened as a node document (``is_document`` is false and ``meta_url``
+refuses it). Its shape is the extension's to define: ``format`` may be absent
+and any further keys (``host``, ``port``, ... in the revision's ``OMEROPath``
+example) are kept in ``extra`` and written back. When it does declare a
+``format``, it resolves and relativizes like any other path. The built-in types
+keep the closed ``{type, format, href}`` shape.
 """
 
 from __future__ import annotations
 
 import posixpath
-from dataclasses import dataclass, replace
-from typing import Literal, Mapping, cast, get_args
+from dataclasses import dataclass, field, replace
+from typing import Any, Literal, Mapping, cast, get_args
 from urllib.parse import urljoin
 
 from ngio_collections._types import JSONValue
@@ -43,6 +46,8 @@ PathFormat = Literal["relative", "absolute", "http"]
 BUILTIN_PATH_TYPES: frozenset[str] = frozenset(get_args(PathType))
 """The path types that locate a node document (`zarr`, `json`)."""
 _PATH_FORMATS: frozenset[str] = frozenset(get_args(PathFormat))
+_PATH_KEYS: frozenset[str] = frozenset({"type", "format", "href"})
+"""The keys every path object may carry; a URI-typed path may add its own."""
 
 ALL_FORMATS: frozenset[str] = frozenset({"relative", "absolute", "http"})
 """Every format this package resolves (the documented deviation from the spec)."""
@@ -184,22 +189,27 @@ class DocPath:
     the module functions so the inverse-pair invariant lives in one place. A
     frozen stdlib dataclass (no pydantic): construct it directly, via the
     `ZarrPath` / `JsonPath` convenience subclasses, or with `from_dict`; it is
-    also accepted as a field of the pydantic value models. Unknown keys are not
-    kept: the shape is closed. `type` is a built-in (`zarr`, `json`) or an
-    extension URI; only the built-ins locate a document (`is_document`).
+    also accepted as a field of the pydantic value models. `type` is a built-in
+    (`zarr`, `json`) or an extension URI; only the built-ins locate a document
+    (`is_document`). A built-in path has exactly the three keys. A URI-typed
+    path may omit `format` and carries any other keys its extension defines in
+    `extra`.
     """
 
     type: str
-    format: PathFormat
+    format: PathFormat | None = None
     href: str
+    extra: Mapping[str, JSONValue] = field(default_factory=dict, hash=False)
 
     def __post_init__(self) -> None:
         """Check the vocabularies and reject inconsistent `format` / `href` pairings.
 
         Raises:
             ValueError: If `type` is neither a built-in nor a URI, `format` is
-                not a known literal, `href` is not a string, an `http` path has
-                no `http(s)://` href, or a `relative` path carries a URL href.
+                not a known literal (or is missing on a built-in path), `href`
+                is not a string, an `http` path has no `http(s)://` href, a
+                `relative` path carries a URL href, or a built-in path carries
+                `extra` keys.
         """
         if not isinstance(self.type, str) or (
             self.type not in BUILTIN_PATH_TYPES and not is_extension_type(self.type)
@@ -208,10 +218,18 @@ class DocPath:
                 f"path type must be one of {sorted(BUILTIN_PATH_TYPES)} or an "
                 f"extension URI, got {self.type!r}"
             )
-        if self.format not in _PATH_FORMATS:
+        custom = self.type not in BUILTIN_PATH_TYPES
+        if self.format not in _PATH_FORMATS and not (custom and self.format is None):
             raise ValueError(
                 f"path format must be one of {sorted(_PATH_FORMATS)}, got {self.format!r}"
             )
+        if self.extra and not custom:
+            raise ValueError(
+                f"a {self.type!r} path has only type, format and href; got extra "
+                f"keys {sorted(self.extra)}"
+            )
+        if _PATH_KEYS & set(self.extra):
+            raise ValueError(f"path `extra` cannot hold {sorted(_PATH_KEYS)}")
         if not isinstance(self.href, str):
             raise ValueError(f"path href must be a string, got {self.href!r}")
         if self.format == "http" and not is_http(self.href):
@@ -225,30 +243,63 @@ class DocPath:
     def from_dict(cls, data: Mapping[str, JSONValue] | DocPath) -> DocPath:
         """Build a path object from its wire mapping (`{type, format, href}`).
 
-        A `DocPath` instance is returned as is.
+        A `DocPath` instance is returned as is. On a URI-typed path `format` is
+        optional and the remaining keys are kept in `extra`; on a built-in path
+        unknown keys are ignored.
 
         Raises:
-            ValueError: If `data` is not a mapping, misses one of the three keys,
-                or fails the checks in `__post_init__`.
+            ValueError: If `data` is not a mapping, misses a required key, or
+                fails the checks in `__post_init__`.
         """
         if isinstance(data, DocPath):
             return data
         if not isinstance(data, Mapping):
             raise ValueError(f"a path object must be a mapping, got {data!r}")
-        missing = [k for k in ("type", "format", "href") if k not in data]
+        type_ = data.get("type")
+        if not isinstance(type_, str):
+            raise ValueError(f"path object {dict(data)!r} needs a string type")
+        custom = type_ not in BUILTIN_PATH_TYPES
+        required = ("href",) if custom else ("format", "href")
+        missing = [k for k in required if k not in data]
         if missing:
             raise ValueError(f"path object {dict(data)!r} is missing {missing}")
-        type_, format_, href = data["type"], data["format"], data["href"]
-        if not (isinstance(type_, str) and isinstance(format_, str)):
-            raise ValueError(f"path object {dict(data)!r} needs string type and format")
+        format_, href = data.get("format"), data["href"]
+        if format_ is not None and not isinstance(format_, str):
+            raise ValueError(f"path format must be a string, got {format_!r}")
         if not isinstance(href, str):
             raise ValueError(f"path href must be a string, got {href!r}")
+        extra = {k: v for k, v in data.items() if k not in _PATH_KEYS} if custom else {}
         # `__post_init__` checks the vocabularies; the cast only satisfies the checker.
-        return cls(type=type_, format=cast(PathFormat, format_), href=href)
+        return cls(
+            type=type_,
+            format=cast("PathFormat | None", format_),
+            href=href,
+            extra=extra,
+        )
 
     def to_dict(self) -> dict[str, JSONValue]:
-        """Return the wire form `{type, format, href}`."""
-        return {"type": self.type, "format": self.format, "href": self.href}
+        """Return the wire form: `type`, `format` (when set), `href`, then `extra`."""
+        out: dict[str, JSONValue] = {"type": self.type}
+        if self.format is not None:
+            out["format"] = self.format
+        out["href"] = self.href
+        out.update(self.extra)
+        return out
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source: Any, handler: Any) -> Any:
+        """Let pydantic models hold a path: parse with `from_dict`, dump with `to_dict`.
+
+        Only pydantic calls this, so the import stays out of the core.
+        """
+        from pydantic_core import core_schema
+
+        return core_schema.no_info_plain_validator_function(
+            cls.from_dict,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda path: path.to_dict()
+            ),
+        )
 
     @property
     def is_document(self) -> bool:
@@ -258,7 +309,13 @@ class DocPath:
     def resolve(
         self, base_url: str | None, *, formats: frozenset[str] = ALL_FORMATS
     ) -> str:
-        """Return the absolute URL this path locates (see :func:`resolve`)."""
+        """Return the absolute URL this path locates (see :func:`resolve`).
+
+        A URI-typed path without a `format` is the extension's to interpret:
+        its `href` is returned as written.
+        """
+        if self.format is None:
+            return self.href
         return resolve(self.href, self.format, base_url, formats=formats)
 
     def meta_url(
@@ -294,6 +351,21 @@ class DocPath:
         if format == self.format and href == self.href:
             return self
         return replace(self, format=format, href=href)
+
+    def rebase(self, origin_url: str | None, base_url: str | None) -> DocPath:
+        """Return a copy that still locates the same target from another document.
+
+        A `relative` path is anchored on the document it was read from
+        (`origin_url`). When it is about to be written into a different
+        document (`base_url`), it is first made absolute against its origin, so
+        that `relativize` can re-express it for the new document. Paths of
+        other formats, paths with no known origin, and paths staying in their
+        document are returned unchanged.
+        """
+        if self.format != "relative" or origin_url is None or origin_url == base_url:
+            return self
+        href = resolve(self.href, "relative", origin_url)
+        return replace(self, format=format_for_url(href), href=href)
 
     @classmethod
     def for_url(cls, url: str) -> DocPath:

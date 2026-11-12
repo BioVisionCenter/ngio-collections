@@ -5,6 +5,8 @@ index lookups its own references need, so one node costs O(neighbourhood):
 
 - `id_is_valid`: the node id and every declaration it carries match
   `ID_PATTERN` (upstream "IDs"; UUIDs are allowed, not required).
+- `ids_unique_in_document`: no id is used twice among the nodes and
+  declarations of one document (upstream "`Declaration` interface").
 - `known_types`: node and trait types are keywords the revision names or URIs.
 - `node_fields_allowed`: a collection has no node fields; a multiscale has only
   `coordinateSystems`, `coordinateTransformations` and `data`. No `attributes`
@@ -16,8 +18,6 @@ index lookups its own references need, so one node costs O(neighbourhood):
 - `multiscale_transformations_wellformed`: a multiscale's
   `coordinateTransformations` go from the multiscale itself (its array space)
   to one coordinate system it declares.
-- `no_embedded_multiscale`: a multiscale inside a collection is external (a
-  rule of this package, see the README).
 - `references_resolve`: a same-document `{type, ref}` points at a declaration of
   that type (upstream "`Reference` interface"). References carrying a `path`
   are not checked here.
@@ -40,11 +40,12 @@ All but `multiscale_is_complete` (which validates through the pydantic
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Iterator, Mapping
 
 from ngio_collections._optional import require_pydantic
 from ngio_collections._types import JSONValue
-from ngio_collections.graph import find_declaration, iter_declarations
+from ngio_collections.graph import find_declaration, iter_declarations, local_ids
 from ngio_collections.models._ids import ID_PATTERN, is_id
 from ngio_collections.models._manifest import (
     SCHEMA_TYPES,
@@ -58,7 +59,7 @@ from ngio_collections.models._multiscale_keys import (
 )
 from ngio_collections.models._paths import BUILTIN_PATH_TYPES
 from ngio_collections.models._vocabulary import BUILTIN_TRAIT_TYPES
-from ngio_collections.resolve import is_path_object
+from ngio_collections.resolve import document_records, is_path_object
 from ngio_collections.validate._engine import ValidationError
 
 if TYPE_CHECKING:
@@ -80,6 +81,51 @@ def id_is_valid(node: Node) -> None:
                 f"{declaration['type']} id {declaration['id']!r} is not a valid id "
                 f"(pattern {ID_PATTERN})"
             )
+
+
+def _document_ids(node: Node) -> Iterator[str]:
+    """Yield every id the document opened by `node` declares, repeats included.
+
+    A resolved boundary node belongs to two documents. The one that declares
+    it holds its entry: the entry's id and whatever the entry's own traits and
+    fields declare. The one it points at holds the target root: the id that
+    document gives it and the declarations of the target itself.
+    """
+    tree = node.tree
+    for key in document_records(tree, node.node_id):
+        record = tree.record(key)
+        edge = record.edge
+        if edge is None:
+            yield record.id
+        elif key == node.node_id:  # the target side of the boundary
+            yield local_ids(record)[-1]
+            own = {k: v for k, v in record.traits.items() if k not in edge.traits}
+            record = replace(record, traits=own, edge=None)
+        else:  # the entry side
+            yield record.id
+            record = replace(record, traits=edge.traits, fields=edge.fields, edge=None)
+        for declaration in iter_declarations(record):
+            yield str(declaration["id"])
+
+
+def ids_unique_in_document(node: Node) -> None:
+    """No id is used twice in one document, nodes and declarations alike.
+
+    Runs on the node that opens a document (the tree root, or a node whose
+    document differs from its parent's) and looks at that document only: the
+    same id may appear again in another document.
+    """
+    parent = node.parent()
+    if parent is not None and parent.document_url == node.document_url:
+        return
+    seen: set[str] = set()
+    repeated: set[str] = set()
+    for declared in _document_ids(node):
+        (repeated if declared in seen else seen).add(declared)
+    if repeated:
+        raise ValidationError(
+            f"ids used more than once in this document: {sorted(repeated)}"
+        )
 
 
 def known_types(node: Node) -> None:
@@ -153,7 +199,9 @@ def multiscale_transformations_wellformed(node: Node) -> None:
 
     Array objects have no id, so every `input` must be a same-document
     reference to the multiscale itself (`{type: "multiscale", ref: <its id>}`),
-    standing for the array space of its highest-resolution array. Every
+    standing for the array space of its highest-resolution array. In a resolved
+    view the id is the one the multiscale's own document gives it, which may
+    differ from the id of its entry in the collection. Every
     `output` must be a same-document `coordinate_system` reference to a system
     the multiscale declares, and all outputs must name the same one.
     """
@@ -164,15 +212,16 @@ def multiscale_transformations_wellformed(node: Node) -> None:
     if not isinstance(transforms, list) or not isinstance(systems, list):
         return  # missing or malformed fields are `multiscale_is_complete`'s concern
     system_ids = {s.get("id") for s in systems if isinstance(s, Mapping)}
+    own_id = local_ids(node.record)[-1]  # the id used inside its own document
     outputs: set[str] = set()
     for transform in transforms:
         if not isinstance(transform, Mapping):
             return
         source, target = transform.get("input"), transform.get("output")
-        if _local_ref(source, "multiscale") != node.id:
+        if _local_ref(source, "multiscale") != own_id:
             raise ValidationError(
                 "multiscale transformation input must reference the multiscale "
-                f"itself ({{type: 'multiscale', ref: {node.id!r}}}), got {source!r}"
+                f"itself ({{type: 'multiscale', ref: {own_id!r}}}), got {source!r}"
             )
         target_id = _local_ref(target, "coordinate_system")
         if target_id is None or target_id not in system_ids:
@@ -185,17 +234,6 @@ def multiscale_transformations_wellformed(node: Node) -> None:
         raise ValidationError(
             "multiscale transformations must all output to the same coordinate "
             f"system, got {sorted(outputs)}"
-        )
-
-
-def no_embedded_multiscale(node: Node) -> None:
-    """A multiscale under a parent is always external (its own document)."""
-    if node.type != "multiscale" or node.parent() is None:
-        return
-    if node.record.path is None and node.record.edge is None:
-        raise ValidationError(
-            "multiscale is embedded in its parent; this package requires a "
-            "`path` to the image's own document"
         )
 
 
@@ -443,7 +481,7 @@ def paths_are_core(node: Node) -> None:
             )
 
 
-def _require_core_path(type_: str, format_: str, href: str, what: str) -> None:
+def _require_core_path(type_: str, format_: str | None, href: str, what: str) -> None:
     """Raise unless the path uses a built-in type and the `relative` format."""
     if type_ not in BUILTIN_PATH_TYPES:
         raise ValidationError(f"{what} uses non-core type {type_!r} (href {href!r})")
@@ -455,11 +493,11 @@ def _require_core_path(type_: str, format_: str, href: str, what: str) -> None:
 
 CORE_VALIDATORS = (
     id_is_valid,
+    ids_unique_in_document,
     known_types,
     node_fields_allowed,
     multiscale_is_complete,
     multiscale_transformations_wellformed,
-    no_embedded_multiscale,
     references_resolve,
     extension_types_declared,
     manifest_well_formed,

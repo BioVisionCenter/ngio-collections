@@ -32,9 +32,12 @@ in [ngff-rfc8-revisions](https://github.com/lorenzocerrone/ngff-rfc8-revisions) 
   `scale`, optionally followed by a `translation`) relative to the first. The
   node-level transformations map the array space of the first array into one
   of the node's coordinate systems;
-- a **multiscale is always its own document** here (see Deviations), declared
-  in a collection by an entry that shares its id; traits on that entry override
-  the image's own traits per type;
+- in a collection a multiscale is either **inlined** (its `data` written in
+  place) or an **entry with a `path`** to the image's own document. Traits on
+  such an entry override the image's own traits per type. The entry and the
+  document root need not share an id;
+- ids are unique within a document, and a document's manifest also lists the
+  extensions used in the documents it points at;
 - wire keys follow the revision's spelling, camelCase and snake_case mixed
   (`coordinateSystems`, `mustUnderstand`, `coordinate_system`); the Python
   attributes stay snake_case (`coordinate_systems`, `arrays`,
@@ -113,10 +116,11 @@ documents under `examples/data/`. The simplest way to run them is with
 pixi run --environment dev python examples/create_collection.py
 ```
 
-The pattern every example follows: create each image as its own document
+The pattern most examples follow: create each image as its own document
 (`create` returns its declaring entry), link the entries into a collection with
 `add_external`, then `open` to edit one document or `open_resolved` to read the
-whole tree. Each script has one job:
+whole tree. An image can also be inlined in a collection with `add`. Each
+script has one job:
 
 - `create_collection.py`: the revision's `collection.json` (two images, labels,
   scene), and the one place a multiscale is assembled by hand; the others take
@@ -127,8 +131,8 @@ whole tree. Each script has one job:
   then `delete` with cascade.
 - `trait_override.py`: traits on the entry vs. in the image document, and
   which wins on `open_resolved`.
-- `nested_collections.py`: embedded vs. external collections, `externalize`,
-  `open_ref`.
+- `nested_collections.py`: embedded vs. external nodes (a nested collection, an
+  inlined image), `externalize`, `open_ref`.
 - `hcs_plate.py`: the provisional plate / well / acquisition traits.
 - `remote_collection.py`: the `http` path deviation and strict mode.
 - `v05_plate_convert.py`: an IDR v0.5 plate converted to local documents
@@ -195,17 +199,26 @@ a bug worth reporting rather than a reason to deep-import.
   the trait models here follow the revision's examples and may change.
 - **Version string `0.9dev4`.** The revision's examples only show the
   placeholder `"0.x"`.
-- **Multiscales are never embedded, even in memory.** The revision allows a
-  multiscale with inline `data` inside a collection; here `add()` refuses a
-  multiscale without a `path`, and the way to link an image is `create` then
-  `add_external`.
-- **Custom path types are accepted as data locators.** The revision makes
-  the path `type` an extension point (its `OMEROPath` example). Here a
-  URI-typed path keeps the closed `{type, format, href}` shape (extra keys an
-  extension defines are not kept), resolves and relativizes like any path, must
-  be declared in the manifest, and is never fetched or opened as a node
-  document (`DocPath.is_document` is false). The examples use one for a CSV
-  table; `paths_are_core` flags them.
+- **An entry's id wins over its target's.** The revision only requires the
+  document behind a `path` to have a root of the declared type. When the two
+  ids differ, the resolved node keeps the entry's id; the target's root id is
+  kept on the edge record and both are found by `find()`. Whether the ids
+  should match is open upstream (issue #18).
+- **Inlined and standalone copies are not reconciled.** The revision accepts
+  that an inlined multiscale and the image's own document can go out of sync
+  and leaves consistency to implementations. This package reads whichever one
+  the document it opened contains and does not compare them.
+- **Custom path types are data locators.** The revision makes the path `type`
+  an extension point (its `OMEROPath` example). A URI-typed path may omit
+  `format` and keeps the extra keys its extension defines; it must be declared
+  in the manifest and is never fetched or opened as a node document
+  (`DocPath.is_document` is false). One that sits inside a trait or a field
+  without a `format` is not recognised as a path. The examples use one for a
+  CSV table; `paths_are_core` flags them.
+- **Manifest aggregation follows one level.** On `create` / `save` /
+  `externalize` the manifests of the directly referenced documents are read
+  and merged in (`aggregate_manifest=False` skips the reads). Documents further
+  down are covered only if those documents aggregated in turn.
 - **`mustUnderstand` is honoured through the process registry.** A custom type
   of a `mustUnderstand` extension is a validation finding unless the extension
   was passed to `register_extension`; nothing is skipped or rejected on read.
@@ -242,7 +255,9 @@ Points this implementation surfaced, for the revision's authors:
   manifest entry; one built-in opaque trait would absorb that.
 - When an entry in a collection and the document it points at both carry
   traits or a `name`, precedence is unspecified (here the declaring entry
-  wins).
+  wins; issue #8). The same holds for their ids (issue #18).
+- A collection entry needs an `id` like any node, but the `OMEROPath` and grid
+  gallery examples write entries without one.
 - Trait rules (which node types a trait applies to, exclusivity, child
   constraints) have no machine-readable home; they live in validator code
   here. The revision lists this as future work.

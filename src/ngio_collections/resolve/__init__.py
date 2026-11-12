@@ -11,7 +11,6 @@ from __future__ import annotations
 from ngio_collections.resolve._build import (
     CycleError,
     Docs,
-    IdMismatchError,
     OnError,
     TypeMismatchError,
     build,
@@ -23,9 +22,12 @@ from ngio_collections.resolve._fetch import (
     trait_reference_targets,
 )
 from ngio_collections.resolve._jsonrefs import is_path_object, relativize_paths
-from ngio_collections.resolve._manifest import derive_manifest, used_extension_types
+from ngio_collections.resolve._manifest import (
+    derive_manifest,
+    document_records,
+    used_extension_types,
+)
 from ngio_collections.resolve._serialize import (
-    EmbeddedMultiscaleError,
     node_dict,
     payload,
 )
@@ -35,13 +37,12 @@ __all__ = [
     "CycleError",
     "Docs",
     "Document",
-    "EmbeddedMultiscaleError",
-    "IdMismatchError",
     "Kind",
     "OnError",
     "TypeMismatchError",
     "build",
     "derive_manifest",
+    "document_records",
     "fetch_all",
     "is_path_object",
     "node_dict",

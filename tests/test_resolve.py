@@ -14,7 +14,6 @@ from ngio_collections.models._paths import CORE_FORMATS
 from ngio_collections.resolve import (
     CycleError,
     Document,
-    IdMismatchError,
     TypeMismatchError,
     build,
     fetch_all,
@@ -214,14 +213,67 @@ def test_type_mismatch_skips_or_raises() -> None:
         build(entry.url, docs, inline=True, on_error="raise")
 
 
-def test_id_mismatch_skips_or_raises() -> None:
+def test_distinct_entry_and_target_ids_resolve_under_the_entry_id() -> None:
     entry = _doc("collection", _collection(_stub(1, "image")))
     target = _doc("image", _image(2))  # root id differs from the entry's
     docs = {entry.url: entry, target.url: target}
-    (key,) = build(entry.url, docs, inline=True).children_ids(ROOT)
-    assert build(entry.url, docs, inline=True).record(key).is_external
-    with pytest.raises(IdMismatchError):
-        build(entry.url, docs, inline=True, on_error="raise")
+    tree = build(entry.url, docs, inline=True, on_error="raise")
+    (key,) = tree.children_ids(ROOT)
+    record = tree.record(key)
+    assert not record.is_external and record.id == mk(1)
+    assert record.edge is not None and record.edge.target_id == mk(2)
+    assert tree.find(mk(1)) == tree.find(mk(2)) == (key,)
+
+
+def test_nested_version_may_repeat_but_not_contradict_the_document() -> None:
+    def doc(version: str | None) -> Document:
+        child = {"type": "collection", "id": mk(2), "nodes": []}
+        if version is not None:
+            child["version"] = version
+        ome = {
+            "version": "0.9dev4",
+            "type": "collection",
+            "id": mk(1),
+            "nodes": [child],
+        }
+        return Document.from_content(f"{DATA}/c.json", {"ome": ome})
+
+    for version in (None, "0.9dev4"):
+        entry = doc(version)
+        tree = build(entry.url, {entry.url: entry}, inline=False)
+        (key,) = tree.children_ids(ROOT)
+        assert dict(tree.record(key).fields) == {}  # not kept as a field
+    entry = doc("0.5")
+    with pytest.raises(ValueError, match="version"):
+        build(entry.url, {entry.url: entry}, inline=False)
+
+
+def test_multiscale_entry_is_inlined_or_external_never_both() -> None:
+    both = {
+        "type": "multiscale",
+        "id": mk(2),
+        "path": {"type": "zarr", "format": "relative", "href": "./raw"},
+        "data": [],
+    }
+    ome = {"version": "0.9dev4", "type": "collection", "id": mk(1), "nodes": [both]}
+    entry = Document.from_content(f"{DATA}/c.json", {"ome": ome})
+    with pytest.raises(ValueError, match="data"):
+        build(entry.url, {entry.url: entry}, inline=False)
+
+
+async def test_inlined_and_distinct_id_fixtures_resolve(revision_store) -> None:
+    url = f"{DATA}/inlined/zarr.json"
+    tree = build(url, await fetch_all(url, revision_store), inline=True)
+    (key,) = tree.children_ids(ROOT)
+    inlined = tree.record(key)
+    assert inlined.type == "multiscale" and inlined.path is None
+    assert inlined.children is None and "data" in inlined.fields
+    url = f"{DATA}/distinct_ids/zarr.json"
+    tree = build(url, await fetch_all(url, revision_store), inline=True)
+    (key,) = tree.children_ids(ROOT)
+    record = tree.record(key)
+    assert record.edge is not None and record.edge.target_id != record.id
+    assert tree.find(record.edge.target_id) == (key,)
 
 
 def test_payload_free_target_is_a_terminal_leaf() -> None:
@@ -369,9 +421,6 @@ async def test_revision_collection_resolves(revision_store) -> None:
 
 async def test_bad_fixtures_report_their_defect(revision_store) -> None:
     base = f"{DATA}/bad"
-    with pytest.raises(IdMismatchError):
-        url = f"{base}/id_mismatch/zarr.json"
-        build(url, await fetch_all(url, revision_store), inline=True, on_error="raise")
     with pytest.raises(TypeMismatchError):
         url = f"{base}/type_mismatch/zarr.json"
         build(url, await fetch_all(url, revision_store), inline=True, on_error="raise")

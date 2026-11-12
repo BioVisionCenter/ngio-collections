@@ -15,7 +15,6 @@ from ngio_collections.graph import ROOT, NodeRecord, NodeTree
 from ngio_collections.models import ExtensionManifestEntry, ExtensionRegistry, SchemaRef
 from ngio_collections.models._paths import DocPath, ZarrPath
 from ngio_collections.resolve import (
-    EmbeddedMultiscaleError,
     build,
     derive_manifest,
     fetch_all,
@@ -147,20 +146,16 @@ def test_relativize_rewrites_node_path_and_embedded_path_objects() -> None:
     assert body["data"][0]["path"]["href"] == "https://h.org/a/0"
 
 
-def test_embedded_multiscale_is_refused_when_strict() -> None:
+def test_inlined_multiscale_is_written_in_place() -> None:
+    fields = {"coordinateSystems": [], "coordinateTransformations": [], "data": []}
     c = NodeTree.of(NodeRecord(type="collection", id=mk(0), children=()))
-    c, _ = c.add_child(ROOT, NodeRecord(type="multiscale", id=mk(1), fields={}))
-    with pytest.raises(EmbeddedMultiscaleError):
-        payload(c, base_url=f"{DATA}/c.json")
-    lenient = node_dict(
-        c, ROOT, base_url=f"{DATA}/c.json", relativize=False, strict=False
-    )
-    assert lenient["nodes"][0]["type"] == "multiscale"
-    # a multiscale as the document root is fine
-    payload(
-        NodeTree.of(NodeRecord(type="multiscale", id=mk(1))),
-        base_url=f"{DATA}/i/zarr.json",
-    )
+    c, _ = c.add_child(ROOT, NodeRecord(type="multiscale", id=mk(1), fields=fields))
+    (inlined,) = payload(c, base_url=f"{DATA}/c.json")["nodes"]
+    # a leaf: its fields sit on the node and there is no `nodes` or `path` key
+    assert list(inlined) == ["type", "id", *fields]
+    assert node_dict(c, ROOT, base_url=f"{DATA}/c.json", relativize=False)["nodes"] == [
+        inlined
+    ]
 
 
 async def test_resolved_view_serializes_back_to_the_entry_document(

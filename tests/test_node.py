@@ -106,14 +106,16 @@ def test_multiscale_handle_exposes_fields() -> None:
     assert ms.record.children is None
 
 
-def test_add_rejects_an_embedded_multiscale() -> None:
+def test_add_embeds_or_links_a_multiscale() -> None:
     root = ngc.new_collection(id=mk(0))
-    with pytest.raises(NodeStateError):
-        root.add(multiscale(4))
-    with pytest.raises(NodeStateError):
-        ngc.new_collection(children=[multiscale(4)])
+    embedded = root.add(multiscale(4)).find(mk(4))
+    assert not embedded.is_external and embedded.record.children is None
+    assert ngc.new_collection(children=[multiscale(4)]).find(mk(4)) is not None
     linked = root.add(multiscale(4, path=ngc.ZarrPath(href="./ms4")))
     assert linked.find(mk(4)).is_external
+    # made embedded again, a multiscale stays a leaf
+    again = linked.find(mk(4)).set_path(None).find(mk(4))
+    assert not again.is_external and again.record.children is None
     with pytest.raises(ValueError):
         root.add_external(ngc.new_collection(id=mk(5)))  # not external
 
@@ -180,7 +182,8 @@ def test_trait_lenses_and_typed_edits() -> None:
 def test_set_trait_drops_none_fields_and_writes_wire_keys() -> None:
     root = _tree()
     scene = ngc.SceneTrait(
-        coordinate_systems=[ngc.CoordinateSystem(id=mk(5), axes=[ngc.Axis(name="x")])]
+        coordinate_systems=[ngc.CoordinateSystem(id=mk(5), axes=[ngc.Axis(name="x")])],
+        coordinate_transformations=[],
     )
     edited = root.set_trait(scene)
     assert edited.traits["scene"] == {

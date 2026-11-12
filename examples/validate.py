@@ -5,7 +5,7 @@ when a node fails its check. `ngc.validate(node, validators)` runs them over a
 node and its descendants and collects the failures. Three bundles ship:
 
 * `CORE_VALIDATORS`: the structural rules of RFC-8 revision 2 (valid ids, known
-  types, no `attributes` bag, complete multiscales, no embedded multiscale,
+  types, no `attributes` bag, complete multiscales, unique ids per document,
   same-document references resolve, extension types declared, among others);
 * `RECOMMENDED_VALIDATORS`: the provisional trait rules (well under plate,
   `applies_to`, scale factors vs axes, labels sources, among others);

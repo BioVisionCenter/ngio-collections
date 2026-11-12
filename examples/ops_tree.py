@@ -8,6 +8,7 @@ Run with: pixi run --environment dev python examples/ops_tree.py
 
 import ngio_collections as ngc
 from _ids import uid
+from _images import image
 
 
 def main() -> None:
@@ -15,15 +16,14 @@ def main() -> None:
     plate = ngc.new_collection(id=uid(2), name="plate")
     root = root.add(plate)  # edits return the new root
 
-    # Multiscales are never embedded: link a declaring entry instead.
+    # An image is linked through a declaring entry (its own document) ...
     entry = ngc.new_node(
         "multiscale", id=uid(3), name="image", path=ngc.ZarrPath(href="./image")
     )
     root = root.find(uid(2)).add_external(entry)
-    try:
-        root.add(ngc.new_node("multiscale", id=uid(9)))
-    except ngc.NodeStateError as error:
-        print("embedding refused:", error)
+    # ... or inlined: `add` embeds a multiscale that has no path.
+    root = root.add(image(9, "thumbnail"))
+    print("inlined     :", root.find(uid(9)).name, root.find(uid(9)).is_external)
 
     # No id given: `new_id()` mints a UUIDv7 for each; any id string would do.
     root = root.add(

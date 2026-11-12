@@ -20,7 +20,7 @@ from ngio_collections.models._manifest import (
 )
 
 
-def _document_records(tree: NodeTree, root_id: NodeId) -> Iterator[NodeId]:
+def document_records(tree: NodeTree, root_id: NodeId) -> Iterator[NodeId]:
     """Yield the keys one document serializes: the subtree cut at boundaries."""
     stack = [root_id]
     while stack:
@@ -40,7 +40,7 @@ def used_extension_types(tree: NodeTree, root_id: NodeId = ROOT) -> tuple[str, .
     (`edge.traits`), which is what the document actually stores.
     """
     used: dict[str, None] = {}
-    for node_id in _document_records(tree, root_id):
+    for node_id in document_records(tree, root_id):
         record = tree.record(node_id)
         if is_extension_type(record.type):
             used.setdefault(record.type)

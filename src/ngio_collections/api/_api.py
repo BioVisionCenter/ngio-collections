@@ -4,17 +4,18 @@ Each verb composes the lower layers (`fetch_all` (async) then `build` (pure) to
 read, `write_document` to write) and returns a `Node` handle. Reading stamps
 `origin_url` on every record (so opened nodes are document-backed); `create` /
 `save` write one document and return the declaring entry (`stub`) you compose
-into a parent with `add_external`. Multiscales are never embedded: an image is
-created as its own document first, then linked.
+into a parent with `add_external`. A node can instead be embedded in its
+parent's document with `add`, a multiscale included.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Mapping
 
 from ngio_collections.api._extensions import EXTENSIONS
 from ngio_collections.api._node import Node, _reference_stub, wrap_node
-from ngio_collections.graph import ROOT, NodeRecord, find_declaration
+from ngio_collections.graph import ROOT, NodeId, NodeRecord, NodeTree, find_declaration
 from ngio_collections.io.store import (
     AnyReadableStore,
     AsyncReadableStore,
@@ -27,7 +28,14 @@ from ngio_collections.models._errors import NodeStateError
 from ngio_collections.models._manifest import ExtensionRegistry
 from ngio_collections.models._paths import ALL_FORMATS, DocPath, meta_url
 from ngio_collections.models._references import ReferenceObj
-from ngio_collections.resolve import OnError, build, fetch_all, write_document
+from ngio_collections.resolve import (
+    Document,
+    OnError,
+    build,
+    document_records,
+    fetch_all,
+    write_document,
+)
 
 
 def _store(store: AnyReadableStore | None) -> AsyncReadableStore:
@@ -54,6 +62,55 @@ async def _exists(store: AsyncReadableStore, url: str) -> bool:
     except FileNotFoundError:
         return False
     return True
+
+
+async def _downstream_manifest(
+    store: AsyncReadableStore,
+    tree: NodeTree,
+    root_id: NodeId,
+    base_url: str,
+    *,
+    concurrency: int = 16,
+) -> list[dict]:
+    """Return the manifest entries of the documents the document at `root_id` points at.
+
+    The revision asks a document to also list the extensions used in the
+    documents below it. Each external entry of the document is followed once
+    (documents below those are expected to have done the same) and its manifest
+    read; a target that cannot be read, or is not a document, contributes
+    nothing.
+    """
+    urls: dict[str, None] = {}
+    for key in document_records(tree, root_id):
+        if key == root_id:
+            continue
+        record = tree.record(key)
+        edge = record.edge
+        path = record.path if edge is None else edge.path
+        origin = record.origin_url if edge is None else edge.origin_url
+        if path is None or not path.is_document:
+            continue
+        try:
+            urls.setdefault(path.meta_url(origin or base_url))
+        except ValueError:
+            continue
+    sem = asyncio.Semaphore(max(1, concurrency))
+
+    async def read(url: str) -> tuple[dict, ...]:
+        try:
+            async with sem:
+                content = await store.get(url=url)
+            return Document.from_content(url, content).extension_manifest
+        except Exception:  # unreadable or not an OME document: nothing to list
+            return ()
+
+    entries: dict[str, dict] = {}
+    for manifest in await asyncio.gather(*(read(url) for url in urls)):
+        for entry in manifest:
+            entry_id = entry.get("id")
+            if isinstance(entry_id, str):
+                entries.setdefault(entry_id, dict(entry))
+    return list(entries.values())
 
 
 async def open(source: str, store: AnyReadableStore | None = None) -> Node:
@@ -205,16 +262,18 @@ async def create(
     overwrite: bool = False,
     relativize: bool = True,
     registry: ExtensionRegistry = EXTENSIONS,
+    aggregate_manifest: bool = True,
 ) -> Node:
     """Write a detached tree to a new document; return its declaring entry.
 
     The `extensionManifest` is derived from the URI types the tree uses and the
-    extensions registered with `register_extension`.
+    extensions registered with `register_extension`. With `aggregate_manifest`
+    it also lists the extensions declared by the documents the tree points at,
+    which costs one read per external entry.
 
     Raises:
         NodeStateError: If `root` is already document-backed, or a document
             already exists at `destination` and `overwrite` is `False`.
-        EmbeddedMultiscaleError: If the tree embeds a multiscale below its root.
     """
     store = _store(store)
     if not root.is_detached:
@@ -226,6 +285,9 @@ async def create(
         raise NodeStateError(
             f"a document already exists at {url!r}; open it and save(), or pass overwrite=True"
         )
+    downstream: list[dict] = []
+    if aggregate_manifest:
+        downstream = await _downstream_manifest(store, root.tree, root.node_id, url)
     await write_document(
         store,
         url,
@@ -234,6 +296,7 @@ async def create(
         relativize=relativize,
         overwrite=overwrite,
         registry=registry,
+        downstream=downstream,
     )
     return _reference_stub(root, url)
 
@@ -244,12 +307,15 @@ async def save(
     *,
     relativize: bool = True,
     registry: ExtensionRegistry = EXTENSIONS,
+    aggregate_manifest: bool = True,
 ) -> Node:
     """Write an opened tree back into its own document; return its declaring entry.
 
     Single-document: the node's whole document is rewritten (preserving sibling
     keys and previously declared manifest entries). Resolved views are
-    read-only: `open()` the document you want to change.
+    read-only: `open()` the document you want to change. With
+    `aggregate_manifest` the manifest also lists the extensions declared by the
+    documents the tree points at, which costs one read per external entry.
 
     Raises:
         NodeStateError: If `node` is a resolved view or detached.
@@ -267,6 +333,9 @@ async def save(
         existing = await store.get(url=url)
     except FileNotFoundError:
         existing = None
+    downstream: list[dict] = []
+    if aggregate_manifest:
+        downstream = await _downstream_manifest(store, node.tree, ROOT, url)
     await write_document(
         store,
         url,
@@ -276,6 +345,7 @@ async def save(
         existing=existing,
         overwrite=True,
         registry=registry,
+        downstream=downstream,
     )
     return _reference_stub(node, url)
 
@@ -288,6 +358,7 @@ async def externalize(
     overwrite: bool = False,
     relativize: bool = True,
     registry: ExtensionRegistry = EXTENSIONS,
+    aggregate_manifest: bool = True,
 ) -> Node:
     """Split `node` out of its document into its own document at `destination`.
 
@@ -324,6 +395,9 @@ async def externalize(
         raise NodeStateError(
             f"a document already exists at {url!r}; pass overwrite=True"
         )
+    downstream: list[dict] = []
+    if aggregate_manifest:
+        downstream = await _downstream_manifest(store, node.tree, node.node_id, url)
     await write_document(
         store,
         url,
@@ -332,6 +406,7 @@ async def externalize(
         relativize=relativize,
         overwrite=overwrite,
         registry=registry,
+        downstream=downstream,
     )
     stub = NodeRecord(
         type=node.type,
@@ -341,7 +416,13 @@ async def externalize(
         origin_url=home_url,
     )
     root = wrap_node(node.tree.replace(node.node_id, stub), ROOT)
-    await save(root, store, relativize=relativize, registry=registry)
+    await save(
+        root,
+        store,
+        relativize=relativize,
+        registry=registry,
+        aggregate_manifest=aggregate_manifest,
+    )
     return root
 
 

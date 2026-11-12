@@ -16,9 +16,10 @@ of its own: every document it might need is supplied up front in `docs` (the
 
 Resolution degrades gracefully and deterministically: a node is left external
 when the hop budget is exhausted (`depth`), its path format is outside `formats`,
-a cycle is hit, the target was not fetched, its root type does not match, or its
-root id does not match (the revision requires the declaring entry and the target
-root to share one id). `on_error` chooses between leaving the node (`"skip"`)
+a cycle is hit, the target was not fetched, or its root type does not match. The
+declaring entry and the target root need not share an id: the resolved node
+keeps the entry's id and remembers the target's (`edge.target_id`). `on_error`
+chooses between leaving the node (`"skip"`)
 and raising (`"raise"`). A node whose target carries no OME metadata is left in
 place under *either* policy: its `path` locates plain data, so there is nothing
 to resolve. Identity is the structural `NodeId` path, so the same document
@@ -47,6 +48,7 @@ from ngio_collections.models._paths import (
     UnsupportedPathFormatError,
     meta_url,
 )
+from ngio_collections.models._multiscale_keys import DATA_KEY
 from ngio_collections.resolve._document import Document
 
 OnError = Literal["skip", "raise"]
@@ -56,10 +58,6 @@ Docs = Mapping[str, Document]
 
 class TypeMismatchError(TypeError):
     """An external node's `type` differs from its target document's root type."""
-
-
-class IdMismatchError(ValueError):
-    """An external node's `id` differs from its target document's root id."""
 
 
 class CycleError(ValueError):
@@ -144,13 +142,21 @@ class _Builder:
 
     # -- node dict → record -------------------------------------------------
 
-    def node_record(self, node_dict: dict, origin_url: str) -> NodeRecord:
+    def node_record(
+        self, node_dict: dict, origin_url: str, *, version: str | None = None
+    ) -> NodeRecord:
         """Build the record for `node_dict` (embedded, branch or external).
 
+        `version` is the enclosing document's version when `node_dict` is a
+        nested node: the node may repeat it (it is dropped, not kept as a
+        field) but not contradict it.
+
         Raises:
-            ValueError: If the dict has no `id`, carries both `nodes` and
-                `path`, or its traits are malformed (not objects with a string
-                `type`, or two traits of one type).
+            ValueError: If the dict has no `id`, carries both `path` and its
+                content (`nodes`, or `data` on a multiscale), declares a
+                `version` other than its document's, or its traits are
+                malformed (not objects with a string `type`, or two traits of
+                one type).
         """
         node_id = node_dict.get("id")
         if not isinstance(node_id, str) or not node_id:
@@ -161,6 +167,21 @@ class _Builder:
             raise ValueError(
                 f"node {node_id!r} carries both `nodes` and `path`; a declaration "
                 "is embedded or external, never both"
+            )
+        if (
+            node_dict.get("type") == "multiscale"
+            and DATA_KEY in node_dict
+            and node_dict.get("path") is not None
+        ):
+            raise ValueError(
+                f"multiscale {node_id!r} carries both `{DATA_KEY}` and `path`; it "
+                "is inlined or external, never both"
+            )
+        own_version = node_dict.get("version")
+        if own_version is not None and own_version != version:
+            raise ValueError(
+                f"node {node_id!r} in {origin_url!r} declares version "
+                f"{own_version!r}, but its document is version {version!r}"
             )
         path = node_dict.get("path")
         return NodeRecord(
@@ -219,7 +240,7 @@ class _Builder:
         ancestors: frozenset[str],
     ) -> _Resolved:
         """Decide whether `node_dict` is embedded, left external, or resolved."""
-        record = self.node_record(node_dict, doc.url)
+        record = self.node_record(node_dict, doc.url, version=doc.version)
         if record.path is None:
             return _Resolved(record, node_dict, doc, depth, ancestors)
         if not self.inline:
@@ -273,14 +294,6 @@ class _Builder:
                     f"{target.root.get('type')!r} at {target_url!r}"
                 )
             return leave
-        if stub.id != target.root.get("id"):
-            if self.on_error == "raise":
-                raise IdMismatchError(
-                    f"node id {stub.id!r} does not match target root id "
-                    f"{target.root.get('id')!r} at {target_url!r}; a declaring "
-                    "entry and the root of its document share one id"
-                )
-            return leave
         merged = self._merge_record(stub, target.root, target.url)
         next_depth = None if depth is None else depth - 1
         return _Resolved(
@@ -292,16 +305,19 @@ class _Builder:
     ) -> NodeRecord:
         """Splice a target root into the place of its declaring entry `stub`.
 
-        The target supplies type, id, fields and children; traits are combined
-        with the declaring entry winning per type; the declaring entry's name
-        wins when set. The entry's own pre-merge values survive on `edge`, so
-        serializing the resolved node emits the entry again, unchanged.
+        The target supplies type, fields and children; the declaring entry
+        supplies the id (the revision does not require the two documents to
+        agree on it; the target's own root id is kept as `edge.target_id`).
+        Traits are combined with the declaring entry winning per type; the
+        declaring entry's name wins when set. The entry's own pre-merge values
+        survive on `edge`, so serializing the resolved node emits the entry
+        again, unchanged.
         """
         assert stub.path is not None
         target = self.node_record(target_root, target_url)
         return NodeRecord(
             type=target.type,
-            id=target.id,
+            id=stub.id,
             name=stub.name if stub.name is not None else target.name,
             traits=merge_traits(target.traits, stub.traits),
             fields=target.fields,
@@ -313,10 +329,15 @@ class _Builder:
                 fields=stub.fields,
                 name=stub.name,
                 origin_url=stub.origin_url,
+                target_id=target.id,
             ),
         )
 
 
 def _fields(node_dict: dict) -> dict:
     """Return the node-type fields of a node dict (everything not reserved)."""
-    return {k: v for k, v in node_dict.items() if k not in RESERVED_NODE_KEYS}
+    return {
+        k: v
+        for k, v in node_dict.items()
+        if k not in RESERVED_NODE_KEYS and k != "version"
+    }

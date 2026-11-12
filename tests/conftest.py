@@ -43,7 +43,9 @@ def make_id():
 
 @pytest.fixture
 def revision_store() -> MemoryStore:
-    """A `MemoryStore` holding the collection, plate, standalone and bad fixtures."""
+    """A `MemoryStore` holding every fixture tree under `tests/data/revision`."""
     store = MemoryStore()
-    load_fixtures(store, "collection", "plate", "standalone", "bad")
+    load_fixtures(
+        store, "collection", "plate", "standalone", "inlined", "distinct_ids", "bad"
+    )
     return store

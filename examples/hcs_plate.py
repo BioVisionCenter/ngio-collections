@@ -7,8 +7,8 @@
 
 HCS is deferred to a sub-RFC; `PlateTrait` / `WellTrait` / `AcquisitionTrait`
 follow the revision's example and are marked provisional. Note the well is an
-*embedded* collection (nested collections may be inlined; only multiscales may
-not), and that `acquisition` on an image's entry is a typed reference to the
+*embedded* collection (any node may be inlined or be its own document), and
+that `acquisition` on an image's entry is a typed reference to the
 acquisition *declared* in the plate trait. The generated document mirrors
 the revision's `examples/plate.json`.
 

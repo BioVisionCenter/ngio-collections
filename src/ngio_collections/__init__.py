@@ -5,9 +5,9 @@ of free-form attributes, typed `{type, ref}` references, `{type, format, href}`
 paths and URI-typed extensions declared in a per-document `extensionManifest`.
 Ids are free-form strings (`ID_PATTERN`). A multiscale is a leaf node carrying
 `coordinateSystems` + `coordinateTransformations` + `data` (one id-less `array`
-object per resolution level, the lower ones with `downsamplingTransformations`). Two
-deliberate deviations: a multiscale is always its own document, never embedded
-in a collection, and `absolute` and `http` paths are resolved, not only
+object per resolution level, the lower ones with `downsamplingTransformations`); in a
+collection it is either inlined or an entry pointing at its own document. One
+deliberate deviation: `absolute` and `http` paths are resolved, not only
 `relative` ones, so collections can point at existing data without bundling it.
 
 The in-memory model is an immutable, indexed `NodeTree` of `NodeRecord`s; you hold

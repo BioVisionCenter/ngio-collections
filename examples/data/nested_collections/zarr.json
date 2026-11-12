@@ -15,6 +15,56 @@
             "format": "relative",
             "href": "./labels.json"
           }
+        },
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000004",
+          "name": "overview",
+          "coordinateSystems": [
+            {
+              "type": "coordinate_system",
+              "id": "0192f3a0-7c1e-7b00-9c22-000000000024",
+              "axes": [
+                {
+                  "name": "y",
+                  "type": "space",
+                  "unit": "micrometer"
+                },
+                {
+                  "name": "x",
+                  "type": "space",
+                  "unit": "micrometer"
+                }
+              ]
+            }
+          ],
+          "coordinateTransformations": [
+            {
+              "input": {
+                "type": "multiscale",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000004"
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000024"
+              },
+              "type": "scale",
+              "scale": [
+                1.0,
+                1.0
+              ]
+            }
+          ],
+          "data": [
+            {
+              "type": "array",
+              "path": {
+                "type": "zarr",
+                "format": "relative",
+                "href": "./s0"
+              }
+            }
+          ]
         }
       ]
     }

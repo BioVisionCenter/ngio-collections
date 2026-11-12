@@ -4,10 +4,10 @@
     ├── raw     -> ./raw     (multiscale, its own zarr.json)
     └── nuclei  -> ./nuclei  (multiscale; labels trait on its entry, as in the spec)
 
-In this package a multiscale is never embedded in a collection: each
-image is written as its own document first (`create` returns its declaring
-entry, a stub carrying the same id) and the collection only links it with
-`add_external`. This is the one example that assembles a multiscale by hand;
+Each image is written as its own document first (`create` returns its
+declaring entry, a stub carrying the same id) and the collection links it with
+`add_external`; an image can also be inlined with `add` (see
+`nested_collections.py`). This is the one example that assembles a multiscale by hand;
 the others import a ready-made image from `_images.py`.
 
 The multiscale layout follows RFC-8 revision 2: a physical coordinate system,

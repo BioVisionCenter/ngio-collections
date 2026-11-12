@@ -44,7 +44,8 @@ one coordinate system and three arrays.
 
 ### Documents
 
-Under the revision a multiscale is never embedded in a collection, so every
+The dataset keeps every multiscale in its own document (the revision also
+allows inlining one), so every
 image and label is written as its own `zarr.json` whatever the sharding: at
 ~1M nodes that is ~105,600 image documents. `--shard` decides only where the
 *collection* documents are cut:
@@ -57,6 +58,11 @@ image and label is written as its own `zarr.json` whatever the sharding: at
 Tables (an extension node type, `https://ngio.example/bench/table`) are
 embedded in their scene; the manifest declaring the extension is written on
 every document.
+
+`save` reads the manifest of every document the saved one points at, so that
+its own manifest also lists the extensions used below it (one read per
+external entry). With `--shard none` the root document has ~105k entries at
+1M nodes, and `write (root doc)` is dominated by those reads.
 
 ### Local cache
 

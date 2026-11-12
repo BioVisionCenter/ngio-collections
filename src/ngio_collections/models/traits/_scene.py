@@ -19,8 +19,8 @@ class SceneTrait(BaseTrait):
 
     `coordinate_systems` declares the collection's own systems;
     `coordinate_transformations` relate the member images' systems (referenced
-    with a `path`) to them. On the wire they are `coordinateSystems` and
-    `coordinateTransformations`.
+    with a `path`) to them. On the wire they are `coordinateSystems` (optional)
+    and `coordinateTransformations` (required).
     """
 
     applies_to: ClassVar[frozenset[str]] = frozenset({"collection"})
@@ -30,5 +30,5 @@ class SceneTrait(BaseTrait):
         COORDINATE_SYSTEMS_KEY, default_factory=list
     )
     coordinate_transformations: list[CoordinateTransformation] = wire(
-        COORDINATE_TRANSFORMATIONS_KEY, default_factory=list
+        COORDINATE_TRANSFORMATIONS_KEY
     )

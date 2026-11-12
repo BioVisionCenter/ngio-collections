@@ -22,7 +22,13 @@ from typing import Iterable, Iterator, Literal, Mapping
 from ngio_collections._types import JSONValue
 from ngio_collections.graph._ids import ROOT, NodeId
 from ngio_collections.graph._pmap import PersistentMap
-from ngio_collections.graph._record import Fields, NodeRecord, Traits, declared_ids
+from ngio_collections.graph._record import (
+    Fields,
+    NodeRecord,
+    Traits,
+    declared_ids,
+    local_ids,
+)
 
 Mode = Literal["editable", "resolved"]
 
@@ -97,7 +103,7 @@ class NodeTree:
         return cls(
             root=ROOT,
             nodes=PersistentMap({ROOT: seeded}),
-            by_local_id=_index_add(PersistentMap(), (seeded.id,), ROOT),
+            by_local_id=_index_add(PersistentMap(), local_ids(seeded), ROOT),
             by_declaration_id=_index_add(PersistentMap(), declared_ids(seeded), ROOT),
             mode=mode,
         )
@@ -173,7 +179,7 @@ class NodeTree:
         new = replace(
             self,
             nodes=evolver.finish(),
-            by_local_id=_index_add(self.by_local_id, (child_rec.id,), child_key),
+            by_local_id=_index_add(self.by_local_id, local_ids(child_rec), child_key),
             by_declaration_id=_index_add(
                 self.by_declaration_id, declared_ids(child_rec), child_key
             ),
@@ -197,7 +203,7 @@ class NodeTree:
         for descendant in tuple(self.walk(node_id)):
             rec = self.nodes[descendant]
             evolver.delete(descendant)
-            by_local_id = _index_remove(by_local_id, (rec.id,), descendant)
+            by_local_id = _index_remove(by_local_id, local_ids(rec), descendant)
             by_declaration_id = _index_remove(
                 by_declaration_id, declared_ids(rec), descendant
             )
@@ -229,12 +235,12 @@ class NodeTree:
         for descendant in tuple(self.walk(node_id)):
             rec = self.nodes[descendant]
             evolver.delete(descendant)
-            by_local_id = _index_remove(by_local_id, (rec.id,), descendant)
+            by_local_id = _index_remove(by_local_id, local_ids(rec), descendant)
             by_declaration_id = _index_remove(
                 by_declaration_id, declared_ids(rec), descendant
             )
         evolver.set(node_id, new_rec)
-        by_local_id = _index_add(by_local_id, (new_rec.id,), node_id)
+        by_local_id = _index_add(by_local_id, local_ids(new_rec), node_id)
         by_declaration_id = _index_add(
             by_declaration_id, declared_ids(new_rec), node_id
         )
@@ -325,7 +331,7 @@ class TreeBuilder:
         self._mode = mode
         self._manifests = dict(manifests or {})
         self._done = False
-        _bucket_add(self._by_local_id, (seeded.id,), ROOT)
+        _bucket_add(self._by_local_id, local_ids(seeded), ROOT)
         _bucket_add(self._by_declaration_id, declared_ids(seeded), ROOT)
 
     def _check(self) -> None:
@@ -345,7 +351,7 @@ class TreeBuilder:
         child_key = (*parent_key, _segment_for(siblings, child_rec))
         self._nodes[child_key] = child_rec
         self._nodes[parent_key] = replace(parent, children=(*siblings, child_key))
-        _bucket_add(self._by_local_id, (child_rec.id,), child_key)
+        _bucket_add(self._by_local_id, local_ids(child_rec), child_key)
         _bucket_add(self._by_declaration_id, declared_ids(child_rec), child_key)
         return child_key
 

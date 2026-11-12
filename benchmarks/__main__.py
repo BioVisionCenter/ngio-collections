@@ -10,9 +10,11 @@ Operations, in the spec's order of importance:
     write (root doc)  open + save the entry collection document
     write (image doc) open + save one multiscale document
 
-There is no single-snapshot write any more: this package never embeds a
-multiscale in a collection, so a self-contained one-document copy of the tree
-cannot exist. The full-tree write is reported once as the dataset setup row.
+There is no single-snapshot write: the dataset keeps every multiscale in its
+own document, so the tree is never one self-contained document. The full-tree
+write is reported once as the dataset setup row. The timed writes use the
+default `aggregate_manifest`, which reads the manifest of each document the
+written one points at.
 
 The dataset is generated once and cached under ``benchmarks/.data/`` (keyed by
 shard + scale); later runs reuse it. ``walk`` / ``find`` / ``edit`` /

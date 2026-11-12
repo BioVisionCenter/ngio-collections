@@ -14,9 +14,9 @@ document, and positioned edits return the updated handle. Typed subclasses
 (`CollectionNode` / `MultiscaleNode` plus a generic `Node` fallback) come from
 the registry by `record.type`.
 
-This package never embeds a multiscale in a collection: `add`
-rejects a multiscale child that carries no `path`. Create the image document
-first (`create`), then attach the returned stub.
+A multiscale can be inlined in a collection (`add` a multiscale that has no
+`path`) or live in its own document (`create` it, then attach the returned stub
+with `add_external`).
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ from ngio_collections.graph import (
     Traits,
     TreeBuilder,
     is_ancestor,
+    local_ids,
 )
 from ngio_collections.models._errors import NodeStateError
 from ngio_collections.models._ids import is_id, new_id
@@ -181,7 +182,7 @@ class Node:
         """
         return ReferenceObj(
             type=self.type,
-            ref=self.id,
+            ref=local_ids(self.record)[-1],  # the id its own document gives it
             path=DocPath.for_url(self.require_document_url()),
         )
 
@@ -194,8 +195,9 @@ class Node:
 
         The stub is the same shape `create` / `save` return: attach it under a
         parent with `add_external` to link this node's document rather than
-        embed its subtree. It carries this node's id, as the revision requires
-        the entry and the document root to share one id.
+        embed its subtree. It carries this node's id; the revision does not
+        require the entry and the document root to share one, and an entry
+        with another id resolves just as well.
 
         Raises:
             NodeStateError: If the node is detached (no backing document).
@@ -358,6 +360,9 @@ class Node:
     def set_path(self, path: DocPath | None) -> Node:
         """Make this node external (point it at `path`) or embedded again (`None`).
 
+        Embedded again, a multiscale stays a leaf; any other node becomes an
+        empty branch.
+
         Raises:
             NodeStateError: If the node has children; an external node is a leaf.
         """
@@ -366,7 +371,8 @@ class Node:
             raise NodeStateError(
                 f"node {record.id!r} has children; externalize() it instead"
             )
-        updated = replace(record, path=path, children=None if path is not None else ())
+        is_leaf = path is not None or record.type == "multiscale"
+        updated = replace(record, path=path, children=None if is_leaf else ())
         return self._root(self._tree.replace(self._id, updated))
 
     def rename(self, name: str | None) -> Node:
@@ -376,18 +382,11 @@ class Node:
     def add(self, *children: Node) -> Node:
         """Graft each child's subtree under this node, in order; return the tree root.
 
-        Raises:
-            NodeStateError: If a child is a multiscale with no `path`: the
-                revision never embeds a multiscale. `create()` its document
-                first and attach the returned stub with `add_external`.
+        A multiscale without a `path` is embedded: it is written inline in this
+        node's document, and its array paths are then relative to that document.
         """
         tree = self._tree
         for child in children:
-            if child.type == "multiscale" and not child.is_external:
-                raise NodeStateError(
-                    f"multiscale {child.id!r} has no path; a multiscale is always its "
-                    "own document: create() it, then add_external() the stub"
-                )
             tree = _graft(tree, self._id, child._tree, child._id)
         return self._root(tree)
 

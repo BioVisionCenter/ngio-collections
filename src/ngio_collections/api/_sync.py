@@ -97,6 +97,7 @@ def create(
     overwrite: bool = False,
     relativize: bool = True,
     registry: ExtensionRegistry = EXTENSIONS,
+    aggregate_manifest: bool = True,
 ) -> Node:
     """Synchronous `create`."""
     return _run(
@@ -107,6 +108,7 @@ def create(
             overwrite=overwrite,
             relativize=relativize,
             registry=registry,
+            aggregate_manifest=aggregate_manifest,
         )
     )
 
@@ -117,9 +119,18 @@ def save(
     *,
     relativize: bool = True,
     registry: ExtensionRegistry = EXTENSIONS,
+    aggregate_manifest: bool = True,
 ) -> Node:
     """Synchronous `save`."""
-    return _run(_api.save(node, store, relativize=relativize, registry=registry))
+    return _run(
+        _api.save(
+            node,
+            store,
+            relativize=relativize,
+            registry=registry,
+            aggregate_manifest=aggregate_manifest,
+        )
+    )
 
 
 def externalize(
@@ -130,6 +141,7 @@ def externalize(
     overwrite: bool = False,
     relativize: bool = True,
     registry: ExtensionRegistry = EXTENSIONS,
+    aggregate_manifest: bool = True,
 ) -> Node:
     """Synchronous `externalize`."""
     return _run(
@@ -140,6 +152,7 @@ def externalize(
             overwrite=overwrite,
             relativize=relativize,
             registry=registry,
+            aggregate_manifest=aggregate_manifest,
         )
     )
 

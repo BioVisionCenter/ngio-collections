@@ -112,6 +112,38 @@ def test_id_is_valid() -> None:
     )
 
 
+def test_ids_unique_in_document() -> None:
+    name = "ids_unique_in_document"
+    assert name not in _names(collection(1, collection(2), multiscale(3)))
+    # two nodes with one id
+    assert name in _names(collection(1, collection(2), collection(2)))
+    # a node and a declaration with one id
+    clash = multiscale(3).fields["coordinateSystems"][0]["id"]
+    assert name in _names(
+        collection(1, multiscale(3), collection(4).rename(None)).add(
+            ngc.new_collection(id=clash)
+        )
+    )
+    # two declarations with one id, inside one inlined image
+    twice = multiscale(3)
+    twice = twice.set_field("coordinateSystems", twice.fields["coordinateSystems"] * 2)
+    assert name in _names(collection(1, twice))
+    # reported once, on the node that opens the document
+    errors = collection(1, collection(2), collection(2)).validate(CORE_VALIDATORS)
+    assert [(e.validator, e.declared_id) for e in errors] == [(name, mk(1))]
+
+
+async def test_ids_may_repeat_across_documents() -> None:
+    store = MemoryStore()
+    first = await aio.create(f"{DATA}/a", multiscale(2), store)
+    second = await aio.create(f"{DATA}/b", multiscale(2), store)
+    # two documents that happen to use the same ids, under distinct entries
+    second = ngc.new_node("multiscale", id=mk(9), path=second.path)
+    await aio.create(f"{DATA}/c.json", collection(1).add_external(first, second), store)
+    view = await aio.open_resolved(f"{DATA}/c.json", store)
+    assert view.validate(CORE_VALIDATORS) == []
+
+
 def test_known_types() -> None:
     assert "known_types" in _names(ngc.new_node("array", id=mk(1)))
     assert "known_types" in _names(collection(1, traits=[{"type": "fractal:table"}]))
@@ -174,13 +206,11 @@ def test_multiscale_is_complete() -> None:
     assert "multiscale_is_complete" not in _names(collection(1, external(2, "./img")))
 
 
-def test_no_embedded_multiscale() -> None:
-    embedded = _wrap(
-        NodeRecord(type="collection", id=mk(1), children=()),
-        NodeRecord(type="multiscale", id=mk(2), fields=dict(multiscale(2).fields)),
-    )
-    assert "no_embedded_multiscale" in _names(embedded)
-    assert "no_embedded_multiscale" not in _names(collection(1, external(2, "./img")))
+def test_inlined_multiscale_validates_like_a_standalone_one() -> None:
+    inlined = collection(1, multiscale(2))
+    assert _names(inlined, CORE_VALIDATORS) == []
+    broken = inlined.find(mk(2)).set_field("data", [])
+    assert _names(broken.find(mk(2)), CORE_VALIDATORS) == ["multiscale_is_complete"]
 
 
 def test_references_resolve() -> None:

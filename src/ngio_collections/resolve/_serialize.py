@@ -12,8 +12,9 @@ remote / cross-root paths stay verbatim) so a co-located collection stays
 relocatable. `None` fields and empty trait lists are dropped, so an unedited
 document re-serializes identically.
 
-This package never embeds a multiscale inside a collection; with
-`strict=True` serializing such a record raises `EmbeddedMultiscaleError`.
+A multiscale without a `path` is written inline, with its `data`. A relative
+path read from another document is rebased, so a node moved between documents
+keeps locating the same targets.
 """
 
 from __future__ import annotations
@@ -34,10 +35,6 @@ from ngio_collections.resolve._document import MANIFEST_KEY, VERSION
 from ngio_collections.resolve._jsonrefs import relativize_paths
 
 
-class EmbeddedMultiscaleError(ValueError):
-    """A multiscale is embedded in a collection; the revision requires a `path`."""
-
-
 def _entry_dict(
     *,
     type: str,
@@ -48,21 +45,32 @@ def _entry_dict(
     fields: Fields,
     base_url: str,
     relativize: bool,
+    origin_url: str | None,
 ) -> dict:
-    """Assemble the common node-dict prefix: type, id, name, path, traits, fields."""
+    """Assemble the common node-dict prefix: type, id, name, path, traits, fields.
+
+    Relative paths read from another document (`origin_url`) are rebased onto
+    `base_url`, so they keep locating the same target.
+    """
     data: dict = {"type": type, "id": id}
     if name is not None:
         data["name"] = name
     if path is not None:
-        out_path = path.relativize(base_url) if relativize else path
+        out_path = path.rebase(origin_url, base_url)
+        if relativize:
+            out_path = out_path.relativize(base_url)
         data["path"] = out_path.to_dict()
     if traits:
-        trait_list = cast(JSONValue, traits_to_list(traits))
-        if relativize:
-            trait_list = relativize_paths(trait_list, base_url)
-        data["traits"] = trait_list
+        data["traits"] = relativize_paths(
+            cast(JSONValue, traits_to_list(traits)),
+            base_url,
+            origin_url=origin_url,
+            relativize=relativize,
+        )
     for key, value in fields.items():
-        data[key] = relativize_paths(value, base_url) if relativize else value
+        data[key] = relativize_paths(
+            value, base_url, origin_url=origin_url, relativize=relativize
+        )
     return data
 
 
@@ -72,14 +80,10 @@ def node_dict(
     *,
     base_url: str,
     relativize: bool,
-    strict: bool = True,
-    _is_root: bool = True,
 ) -> dict:
     """Serialize the node at `node_id` (and its subtree) to a node dict.
 
-    Raises:
-        EmbeddedMultiscaleError: With `strict`, if a non-root multiscale has no
-            `path` (it would be embedded in its parent's document).
+    A multiscale without a `path` is written inline, with its `data`.
     """
     record = tree.record(node_id)
     if record.edge is not None:  # resolved boundary: emit the declaring entry
@@ -93,6 +97,7 @@ def node_dict(
             fields=edge.fields,
             base_url=base_url,
             relativize=relativize,
+            origin_url=edge.origin_url,
         )
     data = _entry_dict(
         type=record.type,
@@ -103,25 +108,13 @@ def node_dict(
         fields=record.fields,
         base_url=base_url,
         relativize=relativize,
+        origin_url=record.origin_url,
     )
     if record.path is not None:
         return data
-    if strict and record.type == "multiscale" and not _is_root:
-        raise EmbeddedMultiscaleError(
-            f"multiscale {record.id!r} is embedded in its parent; this package "
-            "requires every multiscale in a collection to be its own document "
-            "(create() it first, then add_external())"
-        )
     if record.children is not None:
         data["nodes"] = [
-            node_dict(
-                tree,
-                child,
-                base_url=base_url,
-                relativize=relativize,
-                strict=strict,
-                _is_root=False,
-            )
+            node_dict(tree, child, base_url=base_url, relativize=relativize)
             for child in record.children
         ]
     return data
@@ -134,7 +127,6 @@ def payload(
     base_url: str,
     relativize: bool = True,
     extension_manifest: Sequence[Mapping] | None = None,
-    strict: bool = True,
 ) -> dict:
     """Return the full OME payload for a document.
 
@@ -145,9 +137,5 @@ def payload(
     body: dict = {"version": VERSION}
     if extension_manifest:
         body[MANIFEST_KEY] = [dict(entry) for entry in extension_manifest]
-    body.update(
-        node_dict(
-            tree, root_id, base_url=base_url, relativize=relativize, strict=strict
-        )
-    )
+    body.update(node_dict(tree, root_id, base_url=base_url, relativize=relativize))
     return body

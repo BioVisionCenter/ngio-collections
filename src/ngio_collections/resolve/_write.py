@@ -4,8 +4,9 @@ The write counterpart to `fetch_all`: serialize the subtree rooted at `root_id`,
 derive or accept the document's `extensionManifest`, wrap it in the document
 envelope (preserving any `existing` content's siblings), and `put` it. This
 writes a single document, the unit `create` / `save` / `externalize` each
-target. Multiscales are never embedded, so a collection document only ever
-carries declaring entries for its images; there is no multi-document writer.
+target. A document holds whatever is embedded in it (nested collections,
+inlined multiscales) plus the declaring entries of the nodes that live in
+their own documents; there is no multi-document writer.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ async def write_document(
     overwrite: bool = False,
     extension_manifest: Sequence[Mapping] | None = None,
     registry: ExtensionRegistry | None = None,
-    strict: bool = True,
+    downstream: Sequence[Mapping] = (),
 ) -> str:
     """Serialize the subtree at `root_id` to `url` and write it through `store`.
 
@@ -55,7 +56,9 @@ async def write_document(
         extension_manifest: The manifest to write verbatim; when `None` it is
             derived from the URI types used, `existing`'s manifest and `registry`.
         registry: Known extensions to draw derived manifest entries from.
-        strict: Refuse to embed a multiscale (`EmbeddedMultiscaleError`).
+        downstream: Manifest entries of the documents this one points at. They
+            are appended to a derived manifest (ids already present are
+            skipped), so the document also lists the extensions used below it.
 
     Returns:
         The normalised URL written.
@@ -63,7 +66,6 @@ async def write_document(
     Raises:
         StoreDuplicateValueError: If a document already exists at `url` and
             `overwrite` is `False`.
-        EmbeddedMultiscaleError: With `strict`, if a multiscale would be embedded.
     """
     writable = _require_writable(store)
     url = meta_url(url)
@@ -75,13 +77,17 @@ async def write_document(
         extension_manifest = derive_manifest(
             tree, root_id, registry=registry, known=known
         )
+        listed = {entry.get("id") for entry in extension_manifest}
+        for entry in downstream:
+            if entry.get("id") not in listed:
+                listed.add(entry.get("id"))
+                extension_manifest.append(dict(entry))
     body = payload(
         tree,
         root_id=root_id,
         base_url=url,
         relativize=relativize,
         extension_manifest=extension_manifest,
-        strict=strict,
     )
     content = wrap_payload(kind, body, existing)
     await writable.put(url, content, overwrite=overwrite)

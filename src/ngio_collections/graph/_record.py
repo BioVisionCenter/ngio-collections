@@ -104,6 +104,20 @@ def _walk_declarations(value: object) -> Iterator[Mapping[str, JSONValue]]:
             yield from _walk_declarations(item)
 
 
+def local_ids(record: NodeRecord) -> tuple[str, ...]:
+    """Return the ids `record` answers to: its own, plus its target root's if distinct.
+
+    A resolved boundary record carries the id of its declaring entry; the
+    document it was spliced from may name its root differently
+    (`edge.target_id`), and references written inside that document use that
+    id.
+    """
+    target_id = None if record.edge is None else record.edge.target_id
+    if target_id is None or target_id == record.id:
+        return (record.id,)
+    return (record.id, target_id)
+
+
 def iter_declarations(record: NodeRecord) -> Iterator[Mapping[str, JSONValue]]:
     """Yield every `{type, id}` declaration nested in `record`'s fields and traits."""
     for container in (record.fields, record.traits):
@@ -142,8 +156,10 @@ class EdgeInfo:
     Retained when resolution splices an external node's target document in, so
     the trait combination stays invertible: `path` is the declaring entry's
     locator, `traits` / `fields` / `name` are its own pre-merge values, and
-    `origin_url` is the document that declared it. Serializing a record with an
-    `edge` emits that declaring entry again, never the target's subtree.
+    `origin_url` is the document that declared it. `target_id` is the id the
+    target document gives its root: the resolved record keeps the entry's id,
+    and the two may differ. Serializing a record with an `edge` emits that
+    declaring entry again, never the target's subtree.
     """
 
     path: DocPath
@@ -151,6 +167,7 @@ class EdgeInfo:
     fields: Fields = field(default=_EMPTY)
     name: str | None = None
     origin_url: str | None = None
+    target_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

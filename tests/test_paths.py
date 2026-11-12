@@ -159,7 +159,7 @@ def test_docpath_dict_round_trip_is_a_closed_shape():
     assert path == DocPath(type="zarr", format="relative", href="./x")
     assert path.to_dict() == wire == ZarrPath(href="./x").to_dict()
     assert DocPath.from_dict(path) is path
-    # unknown keys are not kept: the path-object shape is closed
+    # unknown keys are not kept on a built-in path: its shape is closed
     assert DocPath.from_dict({**wire, "weird": 1}).to_dict() == wire
 
 

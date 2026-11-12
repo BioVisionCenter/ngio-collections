@@ -32,12 +32,19 @@ do not round-trip with it for now.
   node's coordinate systems (`multiscale_transformations_wellformed`).
 Manifest entries carry `mustUnderstand`; `register_extension` is what marks an
 extension as understood (`must_understand_supported` validator).
-Deliberate deviation: a multiscale is always its own document (never embedded,
-`add()` refuses it); upstream allows inline `data` inside a collection.
+In a collection a multiscale is inlined (`add`) or an entry with a `path`
+(`create` then `add_external`); both are valid upstream. An entry's id need not
+match its target root's: the resolved node keeps the entry's id and
+`edge.target_id` holds the other (`graph/_record.py::local_ids`). Relative
+paths are rebased when a node is written into another document
+(`DocPath.rebase`). Ids are unique per document (`ids_unique_in_document`), a
+nested node may repeat the root's `version`, and `create` / `save` /
+`externalize` also list the extensions of the referenced documents in the
+manifest (`aggregate_manifest`).
 Deliberate deviation: `absolute` and `http` paths resolve (spec: `relative`
 only); keep it stated in the README and `models/_paths.py`. `DocPath.type`
-also admits extension URIs as *data* paths (closed shape, never fetched as a
-document; `is_document` is false). The example extensions and their JSON
+also admits extension URIs as *data* paths (`format` optional, extension
+fields kept in `extra`, never fetched as a document; `is_document` is false). The example extensions and their JSON
 Schemas live in `examples/_extensions.py` and `examples/schemas/`; the library
 never evaluates schemas.
 

@@ -14,10 +14,13 @@ their `applies_to` constraint:
   transform's factors against the system it maps into (multiscale-level
   transformations and `scene` traits alike).
 - `labels_source_resolves`: a `labels` trait's sources are multiscales.
+- `manifest_lists_downstream`: in a resolved view, a document's manifest also
+  lists the extensions declared by the documents it points at (upstream
+  "Extension manifest", a SHOULD).
 
 Each is a plain callable that `raise`s `ValidationError` on a problem and returns
 otherwise; callers pass the ones they want explicitly or use the bundles.
-`well_under_plate` and `plate_children_are_wells` only look at trait types and
+`well_under_plate`, `plate_children_are_wells` and `manifest_lists_downstream`
 run without pydantic; the other three read through the pydantic value models
 and import them lazily (the `validate` extra).
 """
@@ -27,6 +30,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterable
 
 from ngio_collections._optional import require_pydantic
+from ngio_collections.resolve import document_records
 from ngio_collections.validate._engine import ValidationError
 
 if TYPE_CHECKING:
@@ -170,11 +174,44 @@ def labels_source_resolves(node: Node) -> None:
             )
 
 
+def manifest_lists_downstream(node: Node) -> None:
+    """A document's manifest lists the extensions of the documents it points at.
+
+    Runs on the node that opens a document, in a resolved view (where the
+    manifests of the target documents are known). Each directly referenced
+    document is compared; documents further down are checked against their own
+    parent in turn.
+    """
+    tree = node.tree
+    parent = node.parent()
+    url = node.document_url
+    if tree.mode != "resolved" or url is None:
+        return
+    if parent is not None and parent.document_url == url:
+        return
+    listed = {entry.get("id") for entry in tree.manifests.get(url, ())}
+    missing: set[str] = set()
+    for key in document_records(tree, node.node_id):
+        record = tree.record(key)
+        if key == node.node_id or record.edge is None or record.origin_url is None:
+            continue
+        for entry in tree.manifests.get(record.origin_url, ()):
+            entry_id = entry.get("id")
+            if isinstance(entry_id, str) and entry_id not in listed:
+                missing.add(entry_id)
+    if missing:
+        raise ValidationError(
+            "manifest does not list extensions used in referenced documents: "
+            f"{sorted(missing)}"
+        )
+
+
 RECOMMENDED_VALIDATORS = (
     well_under_plate,
     plate_children_are_wells,
     trait_applies_to,
     scale_matches_axes,
     labels_source_resolves,
+    manifest_lists_downstream,
 )
 """The checks for the revision's recommended-tier traits."""

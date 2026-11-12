@@ -1,9 +1,10 @@
-"""Relativize path objects embedded inside a node's traits and fields (write time).
+"""Rebase and relativize path objects embedded inside a node's traits and fields.
 
 A pure JSON walker: no node or IO dependency. Any object carrying the path-object
 shape (`{"type": "zarr"|"json"|<URI>, "format": ..., "href": ...}`) anywhere in a value
 (`arrays[*].path`, `labels.source[*].path`, a scene transform's `input.path`, …)
-is relativized against the document when it is a local absolute path, while
+is relativized against the document when it is a local absolute path (and a
+relative one read from another document is first rebased onto it), while
 plain `path` strings (e.g. `ScaleTransformation.path`) are left untouched, since
 the match is on the path-object *shape*, not the key name.
 """
@@ -20,7 +21,9 @@ from ngio_collections.models._paths import BUILTIN_PATH_TYPES, DocPath
 def is_path_object(value: object) -> bool:
     """Return whether `value` has the `{type, format, href}` path-object shape.
 
-    The `type` is a built-in path type or an extension URI (a data path).
+    The `type` is a built-in path type or an extension URI (a data path). A
+    URI-typed path is recognised by its `format`; one without a `format` cannot
+    be told apart from other extension objects and is left alone.
     """
     if not isinstance(value, Mapping):
         return False
@@ -33,15 +36,26 @@ def is_path_object(value: object) -> bool:
     )
 
 
-def relativize_paths(value: JSONValue, base_url: str | None) -> JSONValue:
-    """Relativize every embedded path object in a JSON value.
+def relativize_paths(
+    value: JSONValue,
+    base_url: str | None,
+    *,
+    origin_url: str | None = None,
+    relativize: bool = True,
+) -> JSONValue:
+    """Rebase and relativize every embedded path object in a JSON value.
 
     Args:
         value: A JSON value drawn from a node's traits or fields.
-        base_url: The owning document's `url` (the relativization base).
+        base_url: The `url` of the document being written (the relativization
+            base).
+        origin_url: The document the value was read from. Relative paths are
+            anchored on it and are rebased when it differs from `base_url`.
+        relativize: Whether to relativize local absolute paths; rebasing
+            happens either way.
 
     Returns:
-        The value with matching path objects relativized (a new structure).
+        The value with matching path objects rewritten (a new structure).
     """
     if isinstance(value, dict):
         if is_path_object(value):
@@ -49,8 +63,17 @@ def relativize_paths(value: JSONValue, base_url: str | None) -> JSONValue:
                 path = DocPath.from_dict(value)
             except Exception:
                 return value  # malformed: leave it for validation to report
-            return path.relativize(base_url).to_dict()
-        return {k: relativize_paths(v, base_url) for k, v in value.items()}
+            path = path.rebase(origin_url, base_url)
+            return (path.relativize(base_url) if relativize else path).to_dict()
+        return {
+            k: relativize_paths(
+                v, base_url, origin_url=origin_url, relativize=relativize
+            )
+            for k, v in value.items()
+        }
     if isinstance(value, list):
-        return [relativize_paths(v, base_url) for v in value]
+        return [
+            relativize_paths(v, base_url, origin_url=origin_url, relativize=relativize)
+            for v in value
+        ]
     return value

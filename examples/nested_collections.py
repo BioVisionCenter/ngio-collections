@@ -1,9 +1,11 @@
-"""Nested collections: embedded or external, `externalize`, and `open_ref`.
+"""Nested nodes: embedded or external, `externalize`, and `open_ref`.
 
-Unlike multiscales, a collection may be embedded in its parent document or be
-its own document (a `.json` file or a Zarr group). `externalize` moves an
-embedded collection into its own document and leaves its declaring entry
-behind; a typed `ReferenceObj` with a `path` can then be opened directly.
+A collection or a multiscale may be embedded in its parent document or be its
+own document (a `.json` file or a Zarr group). Here the root embeds a `labels`
+collection and inlines an `overview` image, while `nuclei` is its own document.
+`externalize` moves an embedded node into its own document and leaves its
+declaring entry behind; a typed `ReferenceObj` with a `path` can then be opened
+directly.
 
 Run with: pixi run --environment dev python examples/nested_collections.py
 """
@@ -20,7 +22,8 @@ def main() -> None:
     url = str(base / "zarr.json")
     stub = ngc.create(str(base / "nuclei"), image(2, "nuclei"), overwrite=True)
     labels = ngc.new_collection(id=uid(3), name="labels").add_external(stub)
-    root = ngc.new_collection(id=uid(1), name="root").add(labels)  # labels embedded
+    # labels is embedded; the overview image is inlined, `data` and all
+    root = ngc.new_collection(id=uid(1), name="root").add(labels, image(4, "overview"))
     ngc.create(url, root, overwrite=True)
     opened = ngc.open(url)
     print("embedded :", [(n.name, n.is_external) for n in opened.walk()])

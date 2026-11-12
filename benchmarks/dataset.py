@@ -14,7 +14,8 @@ is 19 declared nodes (scene + 18 children). Node count scales linearly with
 so ``scenes_per_well == 11`` yields ~1.0M nodes (see ``scenes_for_target``).
 Arrays and coordinate systems are declarations inside a multiscale, not nodes.
 
-Under the revision a multiscale is always its own document, so every image and
+The benchmark keeps every multiscale in its own document (the revision also
+allows inlining one), so every image and
 label is written as a ``zarr.json`` of its own regardless of sharding; the
 ``--shard`` level only decides the *collection* document boundaries (``scene`` /
 ``well`` / ``plate`` / ``none``). Tables are embedded in their scene's document.
