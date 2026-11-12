@@ -1,10 +1,10 @@
 """Extension manifest models: the per-document declaration of URI-typed extensions.
 
-RFC-8 revision 1 (§4) identifies extension node types and traits by URI and
+RFC-8 revision 2 identifies extension node types and traits by URI and
 requires every extension a document uses to be declared in an
-`extension_manifest` under the `ome` key, so a reader can list the extensions
+`extensionManifest` under the `ome` key, so a reader can list the extensions
 and their schemas without a central registry. An entry is
-`{id, version, schemas, name?, description?, must_understand?, homepage?}`,
+`{id, version, schemas, name?, description?, mustUnderstand?, homepage?}`,
 where `schemas` is a non-empty list of `{type: jsonschema | linkml, url}`
 (upstream "Extension manifest" section). `ExtensionManifestEntry` is one such
 declaration; `ExtensionRegistry` is the process-wide table of entries a writer
@@ -79,9 +79,9 @@ def _optional_str(data: Mapping[str, JSONValue], key: str) -> str | None:
 
 @dataclass(frozen=True, kw_only=True)
 class ExtensionManifestEntry:
-    """One `extension_manifest` entry: the extension's id, version and schemas.
+    """One `extensionManifest` entry: the extension's id, version and schemas.
 
-    `must_understand` marks an extension whose data changes what the document
+    `must_understand` (wire key `mustUnderstand`) marks an extension whose data changes what the document
     *means*: a reader that does not support it must not fall back to a generic
     reading of its custom types (`must_understand_supported` validator).
     """
@@ -128,7 +128,7 @@ class ExtensionManifestEntry:
         """Build an entry from its wire mapping.
 
         Reads `id`, `version`, `schemas?`, `name?`, `description?`,
-        `must_understand?` and `homepage?`. Unknown keys are ignored. An
+        `mustUnderstand?` and `homepage?`. Unknown keys are ignored. An
         `ExtensionManifestEntry` is returned as is.
 
         Raises:
@@ -153,10 +153,10 @@ class ExtensionManifestEntry:
             if not isinstance(item, Mapping):
                 raise ValueError(f"a schema reference must be a mapping, got {item!r}")
             refs.append(SchemaRef.from_dict(item))
-        must_understand = data.get("must_understand", False)
+        must_understand = data.get("mustUnderstand", False)
         if not isinstance(must_understand, bool):
             raise ValueError(
-                f"manifest `must_understand` must be a bool, got {must_understand!r}"
+                f"manifest `mustUnderstand` must be a bool, got {must_understand!r}"
             )
         return cls(
             id=id_,
@@ -172,7 +172,7 @@ class ExtensionManifestEntry:
         """Return the wire form.
 
         `id`, `version` and `schemas` are always written; `name`, `description`
-        and `homepage` only when set, `must_understand` only when `True`.
+        and `homepage` only when set, `mustUnderstand` only when `True`.
         """
         out: dict[str, JSONValue] = {
             "id": self.id,
@@ -184,7 +184,7 @@ class ExtensionManifestEntry:
         if self.description is not None:
             out["description"] = self.description
         if self.must_understand:
-            out["must_understand"] = True
+            out["mustUnderstand"] = True
         if self.homepage is not None:
             out["homepage"] = self.homepage
         return out
@@ -195,7 +195,7 @@ class ExtensionManifestEntry:
 
 
 class ExtensionRegistry:
-    """The table of known extensions a writer fills `extension_manifest` from."""
+    """The table of known extensions a writer fills `extensionManifest` from."""
 
     def __init__(self, entries: Iterable[ExtensionManifestEntry] = ()) -> None:
         """Start a registry holding `entries` (keyed by extension id)."""

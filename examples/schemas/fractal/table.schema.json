@@ -9,7 +9,7 @@
     "type": {
       "const": "https://raw.githubusercontent.com/BioVisionCenter/ngio-collections/main/examples/schemas/fractal/table"
     },
-    "id": { "type": "string", "format": "uuid" },
+    "id": { "type": "string", "pattern": "^[a-zA-Z0-9_.-]+$" },
     "name": { "type": "string" },
     "path": {
       "type": "object",

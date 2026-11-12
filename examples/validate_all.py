@@ -35,10 +35,9 @@ def _ome(document: dict) -> dict | None:
 
 
 def _ome_root(document: dict) -> dict | None:
-    """The root node dict (`ome.root`) of a document, if any."""
+    """The root node dict of a document (the `ome` payload itself), if any."""
     ome = _ome(document)
-    root = ome.get("root") if ome else None
-    return root if isinstance(root, dict) else None
+    return ome if ome and isinstance(ome.get("type"), str) else None
 
 
 def _walk_nodes(node: dict):
@@ -85,7 +84,7 @@ def validate_entry(url: str) -> list[str]:
     view = ngc.open_resolved(url)
     findings = []
     for error in view.validate(ngc.ALL_VALIDATORS):
-        node = view.find(error.node_uuid) if error.node_uuid else None
+        node = view.find(error.declared_id) if error.declared_id else None
         if (
             error.validator == "external_unresolved"
             and node is not None
@@ -96,7 +95,7 @@ def validate_entry(url: str) -> list[str]:
                 f"  (tolerated) placeholder remote {node.name!r} never resolves"
             )
             continue
-        findings.append(f"  FAIL {error.validator} on {error.node_uuid}: {error}")
+        findings.append(f"  FAIL {error.validator} on {error.declared_id}: {error}")
     return findings
 
 

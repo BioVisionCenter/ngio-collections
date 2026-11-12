@@ -1,6 +1,6 @@
 """A local collection pointing at a *remote* image: the `http` path deviation.
 
-RFC-8 revision 1 makes only `relative` a core path format and defers `absolute`
+RFC-8 revision 2 makes only `relative` a core path format and defers `absolute`
 and `http` to a sub-RFC. This package deliberately resolves all three, so a
 collection can reference existing data (a published image, remote arrays) with
 nothing copied. Strict conformance is one flag away: `formats=CORE_FORMATS`
@@ -30,12 +30,12 @@ def main() -> None:
     remote_image = image(
         4,
         "published-reference",
-        scale_paths=[ngc.ZarrPath(format="http", href=f"{REMOTE}/0")],
+        array_paths=[ngc.ZarrPath(format="http", href=f"{REMOTE}/0")],
     )
     remote = ngc.MemoryStore()
     ngc.create(REMOTE, remote_image, remote)
 
-    # The local collection only declares the entry: same UUID, http path.
+    # The local collection only declares the entry: same id, http path.
     entry = ngc.new_node(
         "multiscale",
         id=uid(4),
@@ -53,12 +53,15 @@ def main() -> None:
     view = ngc.open_resolved(url, store)
     node = view.find(uid(4))
     assert isinstance(node, ngc.MultiscaleNode)  # narrows the type for the access below
-    print("external (deviation):", node.is_external, [s.path.href for s in node.scales])
+    print("external (deviation):", node.is_external, [a.path.href for a in node.arrays])
     strict = ngc.open_resolved(url, store, formats=ngc.CORE_FORMATS)
     print("external (strict)   :", strict.find(uid(4)).is_external)
     print(
         "paths_are_core      :",
-        [(e.validator, e.node_uuid[-4:]) for e in view.validate((ngc.paths_are_core,))],
+        [
+            (e.validator, e.declared_id[-4:])
+            for e in view.validate((ngc.paths_are_core,))
+        ],
     )
     print("bundled validators  :", view.validate(ngc.ALL_VALIDATORS))
 

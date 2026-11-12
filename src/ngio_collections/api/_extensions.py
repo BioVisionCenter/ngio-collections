@@ -1,7 +1,7 @@
-"""The process-wide extension registry behind `extension_manifest` derivation.
+"""The process-wide extension registry behind `extensionManifest` derivation.
 
-RFC-8 revision 1 (§4) requires every extension a document uses to be declared
-in that document's `extension_manifest`. Rather than asking callers to assemble
+RFC-8 revision 2 requires every extension a document uses to be declared
+in that document's `extensionManifest`. Rather than asking callers to assemble
 the manifest by hand on every write, the API derives it: each URI-typed node or
 trait type a document uses is matched against the entries registered here (plus
 whatever the document already declared), and the matching entries are written.
@@ -26,7 +26,7 @@ def register_extension(
 
     Registering an extension also marks it as understood by this process: the
     `must_understand_supported` validator accepts custom types of a
-    `must_understand` extension only when the extension is registered here.
+    `mustUnderstand` extension only when the extension is registered here.
 
     Args:
         entry: The manifest entry (`id`, `version`, `schemas`, `name?`,

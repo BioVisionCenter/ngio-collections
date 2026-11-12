@@ -2,7 +2,7 @@
 
 `open` reads one document: cross-document nodes stay *external* (declaring
 entries with a `path`). `open_resolved` follows the paths into one read-only
-view: each image's body (`coordinate_systems`, `scales`) is spliced in and its
+view: each image's body (`coordinateSystems`, `data`) is spliced in and its
 entry's traits combine with its own.
 
 Run with: pixi run --environment dev python examples/open_resolved_inspect.py
@@ -45,7 +45,7 @@ def main() -> None:
     assert isinstance(
         nuclei, ngc.MultiscaleNode
     )  # narrows the type for the access below
-    print("nuclei scales :", [s.path.href for s in nuclei.scales])
+    print("nuclei arrays :", [a.path.href for a in nuclei.arrays])
     print("nuclei traits :", list(nuclei.traits))
     # A reference usable from another document: the path is `absolute` because
     # this document is local; `ref_local()` is the same-document form.

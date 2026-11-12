@@ -1,9 +1,9 @@
 """PROVISIONAL traits: HCS (`plate`, `well`, `acquisition`) and `labels`.
 
-RFC-8 revision 1 (§11) defers HCS and labels to sub-RFCs that do not exist yet,
+RFC-8 revision 2 defers HCS and labels to sub-RFCs that do not exist yet,
 while its examples still show them as built-in keyword traits in the
 "recommended" tier. The shapes here follow those examples
-(`rfc8-revision1/examples/plate.json`, `collection.json`) and may change again
+(`examples/plate.json` and `collection.json` of the revision repository) and may change again
 when the sub-RFCs land; treat them as a best current guess, not a contract.
 """
 
@@ -13,7 +13,7 @@ from typing import Annotated, ClassVar, Literal
 
 from pydantic import Field
 
-from ngio_collections.models._config import BaseObj, UuidStr
+from ngio_collections.models._config import BaseObj, IdStr
 from ngio_collections.models._references import ReferenceObj
 from ngio_collections.models.traits._base import BaseTrait
 
@@ -33,10 +33,10 @@ class ColumnObj(BaseObj):
 
 
 class AcquisitionObj(BaseObj):
-    """An `acquisition` declaration inside a plate trait (UUID id)."""
+    """An `acquisition` declaration inside a plate trait."""
 
     type: Literal["acquisition"] = "acquisition"
-    id: UuidStr
+    id: IdStr
     name: str | None = None
     starttime: int | None = None
     endtime: int | None = None

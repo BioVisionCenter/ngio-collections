@@ -4,7 +4,7 @@ A validator is a `Callable[[ngc.Node], None]` that raises `ngc.ValidationError`
 when a node fails its check. `ngc.validate(node, validators)` runs them over a
 node and its descendants and collects the failures. Three bundles ship:
 
-* `CORE_VALIDATORS`: the structural rules of RFC-8 revision 1 (UUID ids, known
+* `CORE_VALIDATORS`: the structural rules of RFC-8 revision 2 (valid ids, known
   types, no `attributes` bag, complete multiscales, no embedded multiscale,
   same-document references resolve, extension types declared, among others);
 * `RECOMMENDED_VALIDATORS`: the provisional trait rules (well under plate,
@@ -57,13 +57,24 @@ def main() -> None:
         ngc.new_collection(id=uid(1), traits=[{"type": "fractal:table"}]),
     )
 
-    good = image(3, axes=("z", "y", "x"))
+    good = image(3, axes=("z", "y", "x"), levels=2)
     report("complete multiscale", good)
-    bad_scales = [s.model_dump(mode="json", exclude_none=True) for s in good.scales]
+    bad_arrays = [a.model_dump(mode="json", exclude_none=True) for a in good.arrays]
     two_factors = [2.0, 2.0]  # but the multiscale has 3 axes
-    bad_scales[0]["coordinate_transformations"][0]["scale"] = two_factors
-    report("scale vs axes", good.set_field("scales", bad_scales))
-    report("empty multiscale", good.set_field("scales", []))
+    bad_arrays[1]["downsamplingTransformations"][0]["scale"] = two_factors
+    report("downsampling vs axes", good.set_field("data", bad_arrays))
+    report("empty multiscale", good.set_field("data", []))
+    report(  # the typed models reject a bad id early; a raw trait reaches the validator
+        "invalid id",
+        ngc.new_collection(id=uid(1)).set_trait(
+            {
+                "type": "plate",
+                "rows": [],
+                "columns": [],
+                "acquisitions": [{"type": "acquisition", "id": "t 0"}],  # no spaces
+            }
+        ),
+    )
     report(
         "dangling reference",
         good.set_trait(
@@ -71,13 +82,12 @@ def main() -> None:
         ),
     )
     report(
-        "remote scale (strict)",
+        "remote array (strict)",
         good.set_field(
-            "scales",
+            "data",
             [
                 {
-                    "type": "scale",
-                    "id": uid(0x33),
+                    "type": "array",
                     "path": {
                         "type": "zarr",
                         "format": "http",
@@ -103,7 +113,7 @@ def main() -> None:
         )
     except ngc.ValidationError as error:
         print(
-            f"{'custom (raised)':<22} {error.validator}: {error} (node ...{error.node_uuid[-4:]})"
+            f"{'custom (raised)':<22} {error.validator}: {error} (node ...{error.declared_id[-4:]})"
         )
 
 

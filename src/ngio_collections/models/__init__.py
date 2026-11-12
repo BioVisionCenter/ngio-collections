@@ -1,15 +1,15 @@
 """Pure value models reused across the package: ids, paths, references, traits.
 
 No nodes and no IO. The node *spine* is the `graph` layer (`NodeRecord` /
-`NodeTree`); this package holds the OME value objects (snake_case on the wire)
+`NodeTree`); this package holds the OME value objects (wire keys as the revision spells them)
 that nodes carry and that validation reads: path objects, typed references,
-UUID helpers, the extension manifest, the multiscale fields, the coordinate
+id helpers, the extension manifest, the multiscale fields, the coordinate
 transformations and the trait models.
 
 Two tiers. The core value types (`DocPath`, `ReferenceObj`, the manifest
 entries, the id helpers, `NodeStateError`, `BUILTIN_TRAIT_TYPES`) are stdlib
 dataclasses and functions, imported eagerly. The typed value models (`BaseObj`
-and everything built on it: traits, `Scale`, `CoordinateSystem`, the
+and everything built on it: traits, `MultiscaleArray`, `CoordinateSystem`, the
 transformations, `MultiscaleFields`) need pydantic, the optional `validate`
 extra, and are resolved lazily on first attribute access; without pydantic that
 access raises an `ImportError` naming the extra.
@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from ngio_collections._optional import require_pydantic
 from ngio_collections.models._errors import NodeStateError
-from ngio_collections.models._ids import UUID_PATTERN, is_uuid, new_id
+from ngio_collections.models._ids import ID_PATTERN, is_id, new_id
 from ngio_collections.models._manifest import (
     ExtensionManifestEntry,
     ExtensionRegistry,
@@ -41,15 +41,19 @@ from ngio_collections.models._paths import (
     ZarrPath,
 )
 from ngio_collections.models._references import ReferenceObj
+from ngio_collections.models._multiscale_keys import ARRAY_TYPE, DOWNSAMPLING_KEY
 from ngio_collections.models._vocabulary import BUILTIN_TRAIT_TYPES
 
 if TYPE_CHECKING:
-    from ngio_collections.models._config import BaseObj, UuidStr
+    from ngio_collections.models._config import BaseObj, IdStr
     from ngio_collections.models._multiscale import (
         Axis,
         CoordinateSystem,
+        Downsampling,
+        MultiscaleArray,
         MultiscaleFields,
-        Scale,
+        ScaleDownsampling,
+        TranslationDownsampling,
     )
     from ngio_collections.models._transformation import (
         AffineTransformation,
@@ -90,11 +94,14 @@ _TRAITS = "ngio_collections.models.traits"
 
 _LAZY: dict[str, str] = {
     "BaseObj": _CONFIG,
-    "UuidStr": _CONFIG,
+    "IdStr": _CONFIG,
     "Axis": _MULTISCALE,
     "CoordinateSystem": _MULTISCALE,
+    "Downsampling": _MULTISCALE,
+    "MultiscaleArray": _MULTISCALE,
     "MultiscaleFields": _MULTISCALE,
-    "Scale": _MULTISCALE,
+    "ScaleDownsampling": _MULTISCALE,
+    "TranslationDownsampling": _MULTISCALE,
     "AffineTransformation": _TRANSFORMATION,
     "BijectionTransformation": _TRANSFORMATION,
     "ByDimensionItem": _TRANSFORMATION,
@@ -149,7 +156,9 @@ __all__ = [
     "ALL_FORMATS",
     "BUILTIN_TRAIT_TYPES",
     "CORE_FORMATS",
-    "UUID_PATTERN",
+    "DOWNSAMPLING_KEY",
+    "ID_PATTERN",
+    "ARRAY_TYPE",
     "AcquisitionObj",
     "AcquisitionTrait",
     "AffineTransformation",
@@ -166,13 +175,16 @@ __all__ = [
     "CustomTransformation",
     "DisplacementsTransformation",
     "DocPath",
+    "Downsampling",
     "ExtensionManifestEntry",
     "ExtensionRegistry",
+    "IdStr",
     "IdentityTransformation",
     "JsonPath",
     "LabelObj",
     "LabelsTrait",
     "MapAxisTransformation",
+    "MultiscaleArray",
     "MultiscaleFields",
     "NodeStateError",
     "PathFormat",
@@ -183,20 +195,20 @@ __all__ = [
     "RgbaColor",
     "RotationTransformation",
     "RowObj",
-    "Scale",
+    "ScaleDownsampling",
     "ScaleTransformation",
     "SceneTrait",
     "SchemaRef",
     "SequenceTransformation",
     "TraitType",
+    "TranslationDownsampling",
     "TranslationTransformation",
     "UnknownTrait",
     "UnsupportedPathFormatError",
-    "UuidStr",
     "WellTrait",
     "ZarrPath",
     "is_extension_type",
-    "is_uuid",
+    "is_id",
     "manifest_entries",
     "new_id",
 ]

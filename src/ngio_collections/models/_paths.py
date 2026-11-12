@@ -6,12 +6,12 @@ package relies on: :func:`resolve` and :func:`relativize` are inverses keyed off
 the *same* base URL (a document's ``url``), so a path written relative round-trips
 to the same absolute URL when read.
 
-**Formats.** RFC-8 revision 1 (§7.3) makes ``format`` explicit — ``relative``,
+**Formats.** RFC-8 revision 2 makes ``format`` explicit — ``relative``,
 ``absolute`` or ``http`` — and forbids readers from inferring it from the string.
 The revision also makes only ``relative`` a *core* format and defers the other two
 to a sub-RFC. **This package deliberately deviates from that**: all three formats
 resolve, so a collection or multiscale document can point at existing local or
-remote data (a published image, remote arrays as scales) without bundling it.
+remote data (a published image, remote arrays as levels) without bundling it.
 ``CORE_FORMATS`` exists so callers who want strict conformance can opt in
 (``resolve(..., formats=CORE_FORMATS)``, or the ``paths_are_core`` validator).
 
@@ -48,7 +48,7 @@ ALL_FORMATS: frozenset[str] = frozenset({"relative", "absolute", "http"})
 """Every format this package resolves (the documented deviation from the spec)."""
 
 CORE_FORMATS: frozenset[str] = frozenset({"relative"})
-"""The only format RFC-8 revision 1 makes core; opt in for strict conformance."""
+"""The only format RFC-8 revision 2 makes core; opt in for strict conformance."""
 
 
 class UnsupportedPathFormatError(ValueError):

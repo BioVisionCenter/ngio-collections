@@ -3,7 +3,7 @@
 `create_collection.py` shows how a multiscale is assembled in full; every other
 example only needs *an image* and imports it from here. Ids are stable so the
 generated documents are reproducible: node `uid(n)`, coordinate system
-`system_id(n)`, scale `level` `uid(0x30 + 0x10 * level + n)`.
+`system_id(n)`. Array objects carry no id.
 """
 
 from collections.abc import Mapping, Sequence
@@ -23,41 +23,45 @@ def image(
     *,
     axes: Sequence[str] = ("y", "x"),
     levels: int = 1,
-    scale_paths: Sequence[ngc.ZarrPath] | None = None,
+    array_paths: Sequence[ngc.DocPath] | None = None,
     traits: Sequence[ngc.BaseTrait | Mapping[str, object]] = (),
 ) -> ngc.Node:
-    """A multiscale `uid(n)` with `levels` resolutions (factor `2**level` per axis)."""
+    """A multiscale `uid(n)` with `levels` arrays (level `i` downsampled by `2**i`).
+
+    Arrays live at `./s<level>` unless `array_paths` locates them elsewhere. One
+    `scale` transformation (1 µm pixels) maps the image's array space into its
+    coordinate system.
+    """
     system = ngc.CoordinateSystem(
         id=system_id(n),
         axes=[ngc.Axis(name=a, type="space", unit="micrometer") for a in axes],
     )
-    scales = []
-    for level in range(levels):
-        sid = uid(0x30 + 0x10 * level + n)
-        path = (
-            scale_paths[level]
-            if scale_paths is not None
-            else ngc.ZarrPath(href=f"./s{level}")
+    arrays = [
+        ngc.MultiscaleArray(
+            path=(
+                array_paths[level]
+                if array_paths is not None
+                else ngc.ZarrPath(href=f"./s{level}")
+            ),
+            downsamplingTransformations=(
+                [ngc.ScaleDownsampling(scale=[float(2**level)] * len(axes))]
+                if level
+                else None
+            ),
         )
-        scales.append(
-            ngc.Scale(
-                id=sid,
-                path=path,
-                coordinate_transformations=[
-                    ngc.ScaleTransformation(
-                        scale=[float(2**level)] * len(axes),
-                        input=ngc.ReferenceObj(type="scale", ref=sid),
-                        output=ngc.ReferenceObj(
-                            type="coordinate_system", ref=system_id(n)
-                        ),
-                    )
-                ],
-            )
-        )
+        for level in range(levels)
+    ]
     return ngc.new_multiscale(
         id=uid(n),
         name=name,
         coordinate_systems=[system],
-        scales=scales,
+        coordinate_transformations=[
+            ngc.ScaleTransformation(
+                scale=[1.0] * len(axes),
+                input=ngc.ReferenceObj(type="multiscale", ref=uid(n)),
+                output=ngc.ReferenceObj(type="coordinate_system", ref=system.id),
+            )
+        ],
+        arrays=arrays,
         traits=list(traits),
     )

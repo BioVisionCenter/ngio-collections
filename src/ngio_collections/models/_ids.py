@@ -1,10 +1,12 @@
-"""Identifiers: UUID strings for nodes and declarations, plus a v7 minting helper.
+"""Identifiers: free-form id strings for nodes and declarations, plus a minting helper.
 
-RFC-8 revision 1 (§6) makes `id` required on every declared object (nodes,
-scales, coordinate systems, acquisitions) and requires it to be a UUID, with
-UUIDv7 recommended so ids sort roughly by creation time. Ids are kept as plain
-strings throughout the package: the wire form is the canonical 36-character
-hyphenated text, and nothing gains from converting it to `uuid.UUID` objects.
+Ids follow the ID rules of RFC-8 revision 2: an `id` is any non-empty string of
+ASCII letters, digits, `-`, `_` and `.` (`ID_PATTERN`), so short readable ids
+(`raw`, `s0`, `well-A1`) and UUIDs are both valid. The revision recommends
+UUIDv7 and advises against encoding semantics in an id; `new_id()` mints a
+UUIDv7 as the default when the caller does not choose one: it is unique without
+coordination and sorts roughly by creation time. Ids are kept as plain strings
+throughout the package.
 """
 
 from __future__ import annotations
@@ -14,24 +16,22 @@ import re
 import time
 import uuid
 
-UUID_PATTERN = (
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
-"""Canonical hyphenated UUID text, any version."""
+ID_PATTERN = r"^[a-zA-Z0-9_.-]+$"
+"""A valid id: one or more ASCII letters, digits, `_`, `.` or `-` (the revision's ID rules)."""
 
-_UUID_RE = re.compile(UUID_PATTERN)
+_ID_RE = re.compile(ID_PATTERN)
 
 
-def is_uuid(value: object) -> bool:
-    """Return whether `value` is a canonical hyphenated UUID string.
+def is_id(value: object) -> bool:
+    """Return whether `value` is a valid id string (matches `ID_PATTERN`).
 
     Args:
         value: Any object; only `str` values can match.
 
     Returns:
-        `True` iff `value` matches `UUID_PATTERN`.
+        `True` iff `value` is a string matching `ID_PATTERN`.
     """
-    return isinstance(value, str) and _UUID_RE.fullmatch(value) is not None
+    return isinstance(value, str) and _ID_RE.fullmatch(value) is not None
 
 
 def _uuid7_fallback() -> uuid.UUID:
@@ -52,10 +52,12 @@ _uuid7 = getattr(uuid, "uuid7", None)
 
 
 def new_id() -> str:
-    """Mint a fresh UUIDv7 string (time-ordered, the revision's recommendation).
+    """Mint a fresh id: a UUIDv7 string (unique, time-ordered), always a valid id.
 
     Uses `uuid.uuid7` when the running Python provides it (3.14+) and a small
-    RFC 9562 implementation otherwise, so no extra dependency is needed.
+    RFC 9562 implementation otherwise, so no extra dependency is needed. Any
+    string matching `ID_PATTERN` is an equally valid id; this is only the
+    default for callers that do not pick one.
 
     Returns:
         A canonical hyphenated UUID string.

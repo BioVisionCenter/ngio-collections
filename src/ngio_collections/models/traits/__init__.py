@@ -1,7 +1,7 @@
 """Typed trait models and the trait base classes.
 
 The base infra (`BaseTrait`, `UnknownTrait`, `TraitType`) lives in `_base`;
-`_scene` holds the one trait RFC-8 revision 1 defines itself, and
+`_scene` holds the one trait RFC-8 revision 2 defines itself, and
 `_provisional` the recommended HCS / labels traits that are deferred to
 sub-RFCs. Re-exported here so consumers have a single trait import surface.
 """

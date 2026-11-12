@@ -3,7 +3,7 @@
 RFC-8 defers transform details to RFC-5 (still moving), so the layer stays
 forward-compatible: unknown fields round-trip via `BaseObj`'s `extra="allow"`,
 and unknown `type` values fall back to `CustomTransformation` instead of
-raising. `input` / `output` are RFC-8 revision 1 typed references
+raising. `input` / `output` are RFC-8 revision 2 typed references
 (`{type, ref, path?}`): a scale transform maps `{type: "scale", ref: <scale>}`
 onto `{type: "coordinate_system", ref: <system>}`.
 

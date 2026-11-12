@@ -4,11 +4,18 @@
     ├── raw     -> ./raw     (multiscale, its own zarr.json)
     └── nuclei  -> ./nuclei  (multiscale; labels trait on its entry, as in the spec)
 
-Under RFC-8 revision 1 a multiscale is never embedded in a collection: each
+In this package a multiscale is never embedded in a collection: each
 image is written as its own document first (`create` returns its declaring
-entry, a stub carrying the same UUID) and the collection only links it with
+entry, a stub carrying the same id) and the collection only links it with
 `add_external`. This is the one example that assembles a multiscale by hand;
 the others import a ready-made image from `_images.py`.
+
+The multiscale layout follows RFC-8 revision 2: a physical coordinate system,
+one `array` object per level in `data` (each locating its array by `path`; the
+lower levels state how they were downsampled from the full-resolution array)
+and a node-level `scale` transformation into the physical system. Array objects
+have no id, so the transformation's `input` references the multiscale itself,
+which stands for the array space of its full-resolution array.
 
 Run with: pixi run --environment dev python examples/create_collection.py
 """
@@ -28,27 +35,32 @@ def axes_czyx() -> list[ngc.Axis]:
     ]
 
 
-def build_multiscale(
-    ms_id: str, cs_id: str, scale_ids: list[str], name: str
-) -> ngc.Node:
-    """A 4D image with two resolution levels mapping into one coordinate system."""
-    system = ngc.CoordinateSystem(id=cs_id, name="physical", axes=axes_czyx())
-    scales = [
-        ngc.Scale(
-            id=sid,
+def build_multiscale(ms_id: str, cs_id: str, name: str, levels: int = 2) -> ngc.Node:
+    """A 4D image with two resolution levels: pixel size 0.1 µm, level 1 at half res."""
+    physical = ngc.CoordinateSystem(id=cs_id, name="physical", axes=axes_czyx())
+    to_physical = ngc.ScaleTransformation(
+        scale=[1, 0.5, 0.1, 0.1],  # full-resolution voxel size, the spec's values
+        input=ngc.ReferenceObj(type="multiscale", ref=ms_id),
+        output=ngc.ReferenceObj(type="coordinate_system", ref=cs_id),
+    )
+    arrays = [
+        ngc.MultiscaleArray(
             path=ngc.ZarrPath(href=f"./s{level}"),
-            coordinate_transformations=[
-                ngc.ScaleTransformation(
-                    scale=[1, 0.5, 0.1 * (level + 1), 0.1 * (level + 1)],
-                    input=ngc.ReferenceObj(type="scale", ref=sid),
-                    output=ngc.ReferenceObj(type="coordinate_system", ref=cs_id),
-                )
-            ],
+            # the full-resolution array (level 0) carries no downsampling
+            downsamplingTransformations=(
+                [ngc.ScaleDownsampling(scale=[1, 1, 2**level, 2**level])]
+                if level
+                else None
+            ),
         )
-        for level, sid in enumerate(scale_ids)
+        for level in range(levels)
     ]
     return ngc.new_multiscale(
-        id=ms_id, name=name, coordinate_systems=[system], scales=scales
+        id=ms_id,
+        name=name,
+        coordinate_systems=[physical],
+        coordinate_transformations=[to_physical],
+        arrays=arrays,
     )
 
 
@@ -58,12 +70,12 @@ def main() -> None:
     # 1. Each image is its own document.
     raw = ngc.create(
         str(base / "raw"),
-        build_multiscale(uid(2), uid(0x20), [uid(0xC), uid(0xD)], "raw"),
+        build_multiscale(uid(2), uid(0x20), "raw"),
         overwrite=True,
     )
     nuclei = ngc.create(
         str(base / "nuclei"),
-        build_multiscale(uid(3), uid(0x21), [uid(0xE), uid(0xF)], "nuclei"),
+        build_multiscale(uid(3), uid(0x21), "nuclei"),
         overwrite=True,
     )
     # The labels trait sits on nuclei's ENTRY in the collection, as in the spec's

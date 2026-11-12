@@ -17,13 +17,35 @@ def axes(*names: str) -> list[dict]:
 
 
 def cs_id(n: int) -> str:
-    """The coordinate-system UUID of the multiscale numbered `n`."""
+    """The coordinate-system id of the multiscale numbered `n`."""
     return mk(0x1000 + n)
 
 
-def scale_id(n: int, level: int) -> str:
-    """The UUID of resolution `level` of the multiscale numbered `n`."""
-    return mk(0x2000 + n * 16 + level)
+def array(n: int, level: int, ndim: int) -> dict:
+    """The `array` object of resolution `level` (factor `2**level` per axis).
+
+    Level 0 is the highest resolution and carries no downsampling. Arrays have
+    no id; `n` is unused and kept so call sites read as "array of multiscale n".
+    """
+    entry: dict = {
+        "type": "array",
+        "path": ngc.ZarrPath(href=f"./s{level}").to_dict(),
+    }
+    if level:
+        entry["downsamplingTransformations"] = [
+            {"type": "scale", "scale": [2.0**level] * ndim}
+        ]
+    return entry
+
+
+def to_physical(n: int, ndim: int) -> dict:
+    """The transformation from the array space of multiscale `n` into its system."""
+    return {
+        "type": "scale",
+        "scale": [0.5] * ndim,
+        "input": {"type": "multiscale", "ref": mk(n)},
+        "output": {"type": "coordinate_system", "ref": cs_id(n)},
+    }
 
 
 def multiscale(
@@ -35,34 +57,22 @@ def multiscale(
     name: str | None = None,
     path: ngc.DocPath | None = None,
 ) -> ngc.Node:
-    """A detached multiscale `mk(n)` with `levels` scales mapping into one system."""
+    """A detached multiscale `mk(n)` with `levels` arrays and one coordinate system.
+
+    One `scale` transformation maps the multiscale's array space into the system.
+    """
     system = {
         "type": "coordinate_system",
         "id": cs_id(n),
         "name": "physical",
         "axes": axes(*axis_names),
     }
-    scales = [
-        {
-            "type": "scale",
-            "id": scale_id(n, i),
-            "path": ngc.ZarrPath(href=f"./s{i}").to_dict(),
-            "coordinate_transformations": [
-                {
-                    "type": "scale",
-                    "scale": [2.0**i] * len(axis_names),
-                    "input": {"type": "scale", "ref": scale_id(n, i)},
-                    "output": {"type": "coordinate_system", "ref": cs_id(n)},
-                }
-            ],
-        }
-        for i in range(levels)
-    ]
     return ngc.new_multiscale(
         id=mk(n),
         name=name or f"ms{n}",
         coordinate_systems=[system],
-        scales=scales,
+        coordinate_transformations=[to_physical(n, len(axis_names))],
+        arrays=[array(n, i, len(axis_names)) for i in range(levels)],
         traits=traits,
         path=path,
     )

@@ -164,7 +164,7 @@ async def open_ref(
 
     Resolves `ref.path` (relative paths join against `base_url`, the URL of the
     document the reference was read from), opens that document with external
-    children left in place, and returns the handle for the node whose UUID is
+    children left in place, and returns the handle for the node whose id is
     `ref.ref` and whose type is `ref.type`.
 
     Raises:
@@ -208,7 +208,7 @@ async def create(
 ) -> Node:
     """Write a detached tree to a new document; return its declaring entry.
 
-    The `extension_manifest` is derived from the URI types the tree uses and the
+    The `extensionManifest` is derived from the URI types the tree uses and the
     extensions registered with `register_extension`.
 
     Raises:
@@ -351,7 +351,7 @@ async def delete(
     """Remove `node` from its on-disk document, unlinking the file if left empty.
 
     Operates on the node's *origin* document (re-read fresh), locating the node by
-    its UUID, so it is correct for a resolved node too, whose in-memory position
+    its id, so it is correct for a resolved node too, whose in-memory position
     is not its document position. If the node is its document's root, the file
     is deleted. With `cascade`, an external node's target document is deleted as
     well (data deletion must be asked for explicitly); data a URI-typed path

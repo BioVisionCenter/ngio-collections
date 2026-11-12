@@ -1,12 +1,14 @@
 """ngio_collections: functional, immutable OME-Zarr collection metadata.
 
-Targets RFC-8 **revision 1** (the Fall 2026 proposal): typed `traits` instead
-of free-form attributes, UUID ids, typed `{type, ref}` references,
-`{type, format, href}` paths, multiscales that are always their own document
-(`coordinate_systems` + `scales`, no `singlescale` nodes) and URI-typed
-extensions declared in a per-document `extension_manifest`. One deliberate
-deviation: `absolute` and `http` paths are resolved, not only `relative` ones,
-so collections can point at existing data without bundling it.
+Targets RFC-8 **revision 2** (the Fall 2026 proposal): typed `traits` instead
+of free-form attributes, typed `{type, ref}` references, `{type, format, href}`
+paths and URI-typed extensions declared in a per-document `extensionManifest`.
+Ids are free-form strings (`ID_PATTERN`). A multiscale is a leaf node carrying
+`coordinateSystems` + `coordinateTransformations` + `data` (one id-less `array`
+object per resolution level, the lower ones with `downsamplingTransformations`). Two
+deliberate deviations: a multiscale is always its own document, never embedded
+in a collection, and `absolute` and `http` paths are resolved, not only
+`relative` ones, so collections can point at existing data without bundling it.
 
 The in-memory model is an immutable, indexed `NodeTree` of `NodeRecord`s; you hold
 a `Node` handle into it. Reads (`walk` / `find` / lenses) return located handles;
@@ -20,7 +22,7 @@ level IS the public API: the subpackages (`graph`, `resolve`, `io`, `models`,
 `validate`) are internal layout and may be reorganized without notice.
 
 pydantic is optional (`pip install 'ngio-collections[validate]'`): the core
-imports and runs without it, while the typed value models (`WellTrait`, `Scale`,
+imports and runs without it, while the typed value models (`WellTrait`, `MultiscaleArray`,
 …), the `node[Trait]` lenses and the schema-shape validators are resolved
 lazily and raise `ImportError` without it. `from ngio_collections import *`
 touches every name and therefore needs the extra.

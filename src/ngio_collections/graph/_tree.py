@@ -85,7 +85,7 @@ class NodeTree:
     by_declaration_id: _Index
     mode: Mode = "editable"
     manifests: Mapping[str, tuple[dict, ...]] = field(default_factory=dict)
-    """Per document URL, the `extension_manifest` it was read with."""
+    """Per document URL, the `extensionManifest` it was read with."""
 
     # -- construction -------------------------------------------------------
 
@@ -142,9 +142,9 @@ class NodeTree:
         """Return every `NodeId` whose record carries `local_id` (index lookup)."""
         return self.by_local_id.get(local_id, ())
 
-    def declarations(self, uuid: str) -> tuple[NodeId, ...]:
-        """Return every `NodeId` whose fields or traits declare `uuid`."""
-        return self.by_declaration_id.get(uuid, ())
+    def declarations(self, declared_id: str) -> tuple[NodeId, ...]:
+        """Return every `NodeId` whose fields or traits declare `declared_id`."""
+        return self.by_declaration_id.get(declared_id, ())
 
     # -- structural edits ---------------------------------------------------
 

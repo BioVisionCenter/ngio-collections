@@ -1,4 +1,4 @@
-"""Shared fixtures: spec-style readable UUIDs and the revision fixture documents."""
+"""Shared fixtures: spec-style readable ids and the revision fixture documents."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ requires_pydantic = pytest.mark.skipif(
 
 
 def mk(n: int) -> str:
-    """A readable, valid UUID in the style of the revision's examples."""
+    """A readable id in the UUID style of the revision's examples (any id string is valid)."""
     return f"0192f3a0-7c1e-7b00-9c22-{n:012x}"
 
 

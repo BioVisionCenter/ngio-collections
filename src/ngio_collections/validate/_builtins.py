@@ -1,15 +1,18 @@
 """RECOMMENDED validators: the rules of the revision's recommended-tier traits.
 
-HCS and labels are deferred to sub-RFCs (RFC-8 revision 1 §11), so these encode
-the rules the revision's examples imply and §3.1's `applies_to` constraint:
+HCS and labels are deferred to sub-RFCs (RFC-8 revision 2, "Future
+possibilities"), so these encode the rules the provisional traits imply and
+their `applies_to` constraint:
 
 - `well_under_plate` reads *up* one level: a `well` sits under a `plate`.
 - `plate_children_are_wells` reads *down* one level: a plate's children are
   collections carrying `well`.
 - `trait_applies_to`: each built-in trait sits on a node type it applies to.
-- `scale_matches_axes`: a `scale` transform's factor count matches the axis
-  count of the coordinate system it maps into, within the same multiscale (or
-  the same `scene`).
+- `scale_matches_axes`: every per-axis vector has as many entries as the
+  coordinate system it relates to: a multiscale's array downsampling factors
+  and offsets against the axis count of its coordinate systems, and a `scale`
+  transform's factors against the system it maps into (multiscale-level
+  transformations and `scene` traits alike).
 - `labels_source_resolves`: a `labels` trait's sources are multiscales.
 
 Each is a plain callable that `raise`s `ValidationError` on a problem and returns
@@ -28,7 +31,7 @@ from ngio_collections.validate._engine import ValidationError
 
 if TYPE_CHECKING:
     from ngio_collections.api._node import Node
-    from ngio_collections.models._multiscale import CoordinateSystem
+    from ngio_collections.models._multiscale import CoordinateSystem, MultiscaleFields
     from ngio_collections.models._transformation import CoordinateTransformation
 
 
@@ -55,7 +58,7 @@ def plate_children_are_wells(node: Node) -> None:
 
 
 def trait_applies_to(node: Node) -> None:
-    """Each built-in trait sits on a node type it applies to (§3.1)."""
+    """Each built-in trait sits on a node type it applies to."""
     require_pydantic("trait_applies_to")
     from ngio_collections.models.traits import (
         AcquisitionTrait,
@@ -102,8 +105,29 @@ def _check_scales(
             )
 
 
+def _check_arrays(fields: MultiscaleFields) -> None:
+    """Raise if an array's downsampling vectors mismatch the axis count.
+
+    The dimensionality is the axis count the multiscale's coordinate systems
+    agree on; when they disagree there is no single answer and nothing is checked.
+    """
+    ndim = {len(system.axes) for system in fields.coordinate_systems}
+    if len(ndim) != 1:
+        return
+    (n,) = ndim
+    for index, array in enumerate(fields.arrays):
+        for transform in array.downsamplingTransformations or ():
+            vector = getattr(transform, transform.type)
+            if len(vector) != n:
+                raise ValidationError(
+                    f"array {index} has a {transform.type!r} "
+                    f"downsampling vector of {len(vector)} entries but the "
+                    f"multiscale has {n} axis/axes"
+                )
+
+
 def scale_matches_axes(node: Node) -> None:
-    """A `scale` transform's factor count must match its coordinate system's axes."""
+    """Per-axis vectors (downsampling, `scale` transforms) match the axis count."""
     require_pydantic("scale_matches_axes")
     from ngio_collections.models._multiscale import MultiscaleFields
     from ngio_collections.models.traits import SceneTrait
@@ -113,9 +137,12 @@ def scale_matches_axes(node: Node) -> None:
             fields = MultiscaleFields.model_validate(dict(node.fields))
         except Exception:
             return  # malformed fields are `multiscale_is_complete`'s concern
-        for scale in fields.scales:
-            _check_scales(scale.coordinate_transformations, fields.coordinate_systems)
-    scene = node.get_trait(SceneTrait)
+        _check_arrays(fields)
+        _check_scales(fields.coordinate_transformations, fields.coordinate_systems)
+    try:
+        scene = node.get_trait(SceneTrait)
+    except Exception as exc:  # pydantic.ValidationError
+        raise ValidationError(f"scene trait does not validate: {exc}") from exc
     if scene is not None:
         _check_scales(scene.coordinate_transformations, scene.coordinate_systems)
 

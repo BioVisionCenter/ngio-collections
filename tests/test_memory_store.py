@@ -49,7 +49,7 @@ async def test_read_only_rejects_writes_and_fails_early_through_the_api() -> Non
         await aio.create("/c.json", collection(1), store)
 
 
-@requires_pydantic  # validators / `.scales` read through the typed models
+@requires_pydantic  # validators / `.arrays` read through the typed models
 async def test_hermetic_create_open_save_roundtrip() -> None:
     store = MemoryStore()
     stub = await aio.create("/data/image.zarr", multiscale(2, name="raw"), store)
@@ -57,6 +57,6 @@ async def test_hermetic_create_open_save_roundtrip() -> None:
     opened = await aio.open("/data/c.json", store)
     await aio.save(opened.find(mk(2)).rename("edited"), store)
     view = await aio.open_resolved("/data/c.json", store)
-    assert view.find(mk(2)).name == "edited" and len(view.find(mk(2)).scales) == 2
+    assert view.find(mk(2)).name == "edited" and len(view.find(mk(2)).arrays) == 2
     urls = {url async for url, _ in store.items()}
     assert urls == {"/data/c.json", "/data/image.zarr/zarr.json"}

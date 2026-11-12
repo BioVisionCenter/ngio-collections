@@ -9,7 +9,7 @@ of its own: every document it might need is supplied up front in `docs` (the
 - `inline=True` (`open_resolved`): each resolvable external node is spliced
   into the tree in place. The target document's root replaces it, keeping the
   target's type, id, fields and children; the traits of the two are combined
-  with the declaring entry winning per trait type (RFC-8 rev. 1 §3.1), and the
+  with the declaring entry winning per trait type (the revision's trait-combination rule), and the
   declaring entry's name wins when it has one. The result is a read-only
   `resolved` tree that is a *view*: serializing it emits the declaring entries
   again, never a target's body.
@@ -18,7 +18,7 @@ Resolution degrades gracefully and deterministically: a node is left external
 when the hop budget is exhausted (`depth`), its path format is outside `formats`,
 a cycle is hit, the target was not fetched, its root type does not match, or its
 root id does not match (the revision requires the declaring entry and the target
-root to share one UUID). `on_error` chooses between leaving the node (`"skip"`)
+root to share one id). `on_error` chooses between leaving the node (`"skip"`)
 and raising (`"raise"`). A node whose target carries no OME metadata is left in
 place under *either* policy: its `path` locates plain data, so there is nothing
 to resolve. Identity is the structural `NodeId` path, so the same document
@@ -278,7 +278,7 @@ class _Builder:
                 raise IdMismatchError(
                     f"node id {stub.id!r} does not match target root id "
                     f"{target.root.get('id')!r} at {target_url!r}; a declaring "
-                    "entry and the root of its document share one UUID"
+                    "entry and the root of its document share one id"
                 )
             return leave
         merged = self._merge_record(stub, target.root, target.url)

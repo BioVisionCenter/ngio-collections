@@ -49,8 +49,11 @@ def test_facade_covers_the_downstream_essentials() -> None:
         "PlateTrait",
         "LabelsTrait",
         "SceneTrait",
-        "Scale",
+        "MultiscaleArray",
+        "ScaleDownsampling",
         "CoordinateSystem",
+        "ID_PATTERN",
+        "is_id",
     ]
     for name in essentials:
         assert name in ngc.__all__, name
@@ -63,6 +66,10 @@ def test_published_rfc8_names_are_gone() -> None:
         "save_inlined",
         "open_inlined",
         "WellAttribute",
-        "IdStr",
+        "Scale",
+        "UuidStr",
+        "UUID_PATTERN",
+        "is_uuid",
+        "id_is_uuid",
     ):
         assert name not in ngc.__all__, name

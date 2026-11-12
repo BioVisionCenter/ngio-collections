@@ -1,7 +1,7 @@
 """Write one document's worth of a `NodeTree` through a store.
 
 The write counterpart to `fetch_all`: serialize the subtree rooted at `root_id`,
-derive or accept the document's `extension_manifest`, wrap it in the document
+derive or accept the document's `extensionManifest`, wrap it in the document
 envelope (preserving any `existing` content's siblings), and `put` it. This
 writes a single document, the unit `create` / `save` / `externalize` each
 target. Multiscales are never embedded, so a collection document only ever

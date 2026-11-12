@@ -14,7 +14,7 @@ document, and positioned edits return the updated handle. Typed subclasses
 (`CollectionNode` / `MultiscaleNode` plus a generic `Node` fallback) come from
 the registry by `record.type`.
 
-RFC-8 revision 1 never embeds a multiscale in a collection (§8.1): `add`
+This package never embeds a multiscale in a collection: `add`
 rejects a multiscale child that carries no `path`. Create the image document
 first (`create`), then attach the returned stub.
 """
@@ -38,8 +38,13 @@ from ngio_collections.graph import (
     is_ancestor,
 )
 from ngio_collections.models._errors import NodeStateError
-from ngio_collections.models._ids import is_uuid, new_id
+from ngio_collections.models._ids import is_id, new_id
 from ngio_collections.models._manifest import is_extension_type
+from ngio_collections.models._multiscale_keys import (
+    COORDINATE_SYSTEMS_KEY,
+    COORDINATE_TRANSFORMATIONS_KEY,
+    DATA_KEY,
+)
 from ngio_collections.models._paths import DocPath, meta_url
 from ngio_collections.models._references import ReferenceObj
 from ngio_collections.validate import (
@@ -56,7 +61,11 @@ from ngio_collections.validate import (
 if TYPE_CHECKING:
     # The typed value models need pydantic (the `validate` extra). They are only
     # named in annotations here; at runtime they are imported lazily where used.
-    from ngio_collections.models._multiscale import CoordinateSystem, Scale
+    from ngio_collections.models._multiscale import (
+        CoordinateSystem,
+        MultiscaleArray,
+    )
+    from ngio_collections.models._transformation import CoordinateTransformation
     from ngio_collections.models.traits import BaseTrait
 
 BUILTIN_NODE_TYPES = frozenset({"collection", "multiscale"})
@@ -102,7 +111,7 @@ class Node:
 
     @property
     def id(self) -> str:
-        """The node's UUID."""
+        """The node's id."""
         return self.record.id
 
     @property
@@ -112,7 +121,7 @@ class Node:
 
     @property
     def fields(self) -> Fields:
-        """The raw node-type fields (`coordinate_systems`, `scales`, …)."""
+        """The raw node-type fields (`coordinateSystems`, `data`, …)."""
         return self.record.fields
 
     @property
@@ -147,7 +156,7 @@ class Node:
 
     @property
     def extension_manifest(self) -> tuple[dict, ...]:
-        """The `extension_manifest` of this node's document (empty if detached)."""
+        """The `extensionManifest` of this node's document (empty if detached)."""
         url = self.record.origin_url
         return () if url is None else self._tree.manifests.get(url, ())
 
@@ -185,7 +194,7 @@ class Node:
 
         The stub is the same shape `create` / `save` return: attach it under a
         parent with `add_external` to link this node's document rather than
-        embed its subtree. It carries this node's UUID, as the revision requires
+        embed its subtree. It carries this node's id, as the revision requires
         the entry and the document root to share one id.
 
         Raises:
@@ -220,9 +229,9 @@ class Node:
             yield wrap_node(self._tree, node_id)
 
     def find(self, id: str) -> Node | None:
-        """Return the first node in this subtree whose UUID is `id`.
+        """Return the first node in this subtree whose id is `id`.
 
-        This covers external nodes too: a declaring entry carries the UUID of
+        This covers external nodes too: a declaring entry carries the id of
         the document it points at, so a cross-document child is findable by id
         in a single-document `open`.
         """
@@ -460,7 +469,9 @@ def new_node(
 
     A node with a `path` is an external leaf (a declaring entry); otherwise it is
     a branch whose `children` subtrees are grafted in order (and can keep growing
-    via `add`). `id` defaults to a freshly minted UUIDv7.
+    via `add`). `id` defaults to a freshly minted UUIDv7 (`new_id()`); any string
+    matching `ID_PATTERN` is accepted. A `multiscale` never has children, so it
+    is created as a leaf and serializes without a `nodes` key.
 
     `origin_url` is provenance: pass it to reconstruct a node known to live in
     the document at that URL without reading it. It makes the node
@@ -469,20 +480,24 @@ def new_node(
     document actually exists.
 
     Raises:
-        ValueError: If `id` is not a UUID, or `children` are given with `path`.
+        ValueError: If `id` is not a valid id, or `children` are given with `path`.
     """
     if children and path is not None:
         raise ValueError("an external node is a leaf; it cannot take children")
     node_id = new_id() if id is None else id
-    if not is_uuid(node_id):
-        raise ValueError(f"node id must be a UUID (see new_id()), got {node_id!r}")
+    if not is_id(node_id):
+        raise ValueError(
+            f"node id must be a non-empty string of letters, digits, '_', '.' and "
+            f"'-' (see new_id()), got {node_id!r}"
+        )
+    is_leaf = path is not None or node_type == "multiscale"
     record = NodeRecord(
         type=node_type,
         id=node_id,
         name=name,
         traits=_traits_from(traits),
         fields=dict(fields) if fields else {},
-        children=None if path is not None else (),
+        children=None if is_leaf else (),
         path=path,
         origin_url=None if origin_url is None else meta_url(origin_url),
     )
@@ -504,23 +519,33 @@ def new_collection(
 def new_multiscale(
     *,
     coordinate_systems: Sequence[CoordinateSystem | Mapping[str, JSONValue]],
-    scales: Sequence[Scale | Mapping[str, JSONValue]],
+    arrays: Sequence[MultiscaleArray | Mapping[str, JSONValue]],
+    coordinate_transformations: Sequence[
+        CoordinateTransformation | Mapping[str, JSONValue]
+    ],
     id: str | None = None,
     name: str | None = None,
     traits: Sequence[BaseTrait | Mapping[str, JSONValue]] = (),
     path: DocPath | None = None,
 ) -> Node:
-    """Create a detached `multiscale` node with its `coordinate_systems` and `scales`.
+    """Create a detached `multiscale` node from its `coordinate_systems` and `arrays`.
 
-    The result is the root of an image document: `create()` it, then attach the
-    returned stub to a collection with `add_external`. Models are dumped and
-    mappings stored verbatim; nothing is validated here (run
+    They are stored under the wire keys `coordinateSystems` and `data`.
+    `coordinate_transformations` (wire key `coordinateTransformations`) map the
+    multiscale's array space into a declared system; their `input` references
+    the multiscale itself, so pass `id` explicitly to build them. The result is
+    the root of an image document: `create()` it,
+    then attach the returned stub to a collection with `add_external`. Models
+    are dumped and mappings stored verbatim; nothing is validated here (run
     `multiscale_is_complete`).
     """
     fields: dict[str, JSONValue] = {
-        "coordinate_systems": [_dump(c) for c in coordinate_systems],
-        "scales": [_dump(s) for s in scales],
+        COORDINATE_SYSTEMS_KEY: [_dump(c) for c in coordinate_systems],
     }
+    fields[COORDINATE_TRANSFORMATIONS_KEY] = [
+        _dump(t) for t in coordinate_transformations
+    ]
+    fields[DATA_KEY] = [_dump(a) for a in arrays]
     return new_node(
         "multiscale", id=id, name=name, traits=traits, fields=fields, path=path
     )
@@ -541,9 +566,11 @@ class CollectionNode(Node):
 class MultiscaleNode(Node):
     """Handle for a `multiscale` node, with typed access to its fields.
 
-    The typed reads (`coordinate_systems`, `scales`, `scale`, `coordinate_system`)
-    validate through the pydantic value models and need the `validate` extra;
-    the raw lists are always at `node.fields["coordinate_systems"]` / `["scales"]`.
+    The typed reads (`coordinate_systems`, `coordinate_transformations`, `arrays`,
+    `coordinate_system`) validate through the pydantic value models and
+    need the `validate` extra; the raw lists are always at
+    `node.fields["coordinateSystems"]` / `["coordinateTransformations"]` /
+    `["data"]`.
     """
 
     @property
@@ -552,39 +579,58 @@ class MultiscaleNode(Node):
         require_pydantic("MultiscaleNode.coordinate_systems")
         from ngio_collections.models._multiscale import CoordinateSystem
 
-        raw = self.record.fields.get("coordinate_systems")
+        raw = self.record.fields.get(COORDINATE_SYSTEMS_KEY)
         items = raw if isinstance(raw, list) else []
         return tuple(CoordinateSystem.model_validate(c) for c in items)
 
     @property
-    def scales(self) -> tuple[Scale, ...]:
-        """The multiscale's scales (validated; needs pydantic), coarsest last as written."""
-        require_pydantic("MultiscaleNode.scales")
-        from ngio_collections.models._multiscale import Scale
+    def coordinate_transformations(self) -> tuple[CoordinateTransformation, ...]:
+        """The node-level transformations (validated; needs pydantic), possibly empty."""
+        require_pydantic("MultiscaleNode.coordinate_transformations")
+        from pydantic import TypeAdapter
 
-        raw = self.record.fields.get("scales")
+        from ngio_collections.models._transformation import CoordinateTransformation
+
+        raw = self.record.fields.get(COORDINATE_TRANSFORMATIONS_KEY)
         items = raw if isinstance(raw, list) else []
-        return tuple(Scale.model_validate(s) for s in items)
+        adapter = TypeAdapter(CoordinateTransformation)
+        return tuple(adapter.validate_python(t) for t in items)
 
-    def scale(self, id: str) -> Scale | None:
-        """Return the scale declared with UUID `id`, or `None`."""
-        return next((s for s in self.scales if s.id == id), None)
+    @property
+    def arrays(self) -> tuple[MultiscaleArray, ...]:
+        """The multiscale's arrays (validated; needs pydantic), finest first as written."""
+        require_pydantic("MultiscaleNode.arrays")
+        from ngio_collections.models._multiscale import MultiscaleArray
+
+        raw = self.record.fields.get(DATA_KEY)
+        items = raw if isinstance(raw, list) else []
+        return tuple(MultiscaleArray.model_validate(a) for a in items)
 
     def coordinate_system(self, id: str) -> CoordinateSystem | None:
-        """Return the coordinate system declared with UUID `id`, or `None`."""
+        """Return the coordinate system declared with id `id`, or `None`."""
         return next((c for c in self.coordinate_systems if c.id == id), None)
 
-    def set_scales(self, scales: Sequence[Scale | Mapping[str, JSONValue]]) -> Node:
-        """Replace the `scales` field (models dumped, mappings verbatim); return the root."""
-        dumped = [_dump(s) for s in scales]
-        return self.set_field("scales", cast(JSONValue, dumped))
+    def set_arrays(
+        self, arrays: Sequence[MultiscaleArray | Mapping[str, JSONValue]]
+    ) -> Node:
+        """Replace the `data` field (models dumped, mappings verbatim); return the root."""
+        dumped = [_dump(a) for a in arrays]
+        return self.set_field(DATA_KEY, cast(JSONValue, dumped))
+
+    def set_coordinate_transformations(
+        self,
+        transformations: Sequence[CoordinateTransformation | Mapping[str, JSONValue]],
+    ) -> Node:
+        """Replace the `coordinateTransformations` field; return the root."""
+        dumped = [_dump(t) for t in transformations]
+        return self.set_field(COORDINATE_TRANSFORMATIONS_KEY, cast(JSONValue, dumped))
 
     def set_coordinate_systems(
         self, systems: Sequence[CoordinateSystem | Mapping[str, JSONValue]]
     ) -> Node:
-        """Replace the `coordinate_systems` field (models dumped, mappings verbatim)."""
+        """Replace the `coordinateSystems` field (models dumped, mappings verbatim)."""
         dumped = [_dump(c) for c in systems]
-        return self.set_field("coordinate_systems", cast(JSONValue, dumped))
+        return self.set_field(COORDINATE_SYSTEMS_KEY, cast(JSONValue, dumped))
 
 
 class NodeTypeRegistry:
@@ -634,7 +680,7 @@ def register_node_type(
 
     Raises:
         ValueError: If `node_type` is neither a built-in keyword nor a URI;
-            prefixed names such as `myorg:table` are not valid in revision 1.
+            prefixed names such as `myorg:table` are not valid in revision 2.
     """
     if node_type not in BUILTIN_NODE_TYPES and not is_extension_type(node_type):
         raise ValueError(

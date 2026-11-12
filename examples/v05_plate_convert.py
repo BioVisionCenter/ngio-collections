@@ -1,11 +1,15 @@
-"""Convert a remote OME-Zarr v0.5 plate (IDR) into local RFC-8 revision-1 documents.
+"""Convert a remote OME-Zarr v0.5 plate (IDR) into local RFC-8 revision-2 documents.
 
 Nothing is downloaded but metadata. For every image the converter writes a
-*local* multiscale `zarr.json` whose `scales[*].path` are `format: "http"`
+*local* multiscale `zarr.json` whose `data[*].path` are `format: "http"`
 locators of the remote arrays (this package's documented deviation: the
 revision makes only `relative` core), translating the v0.5 `multiscales` entry
-(axes, datasets, scale transforms) into `coordinate_systems` + `scales`. The
-plate and its wells become collections with the provisional HCS traits.
+(axes, datasets, scale transforms) into the revision layout: a physical
+coordinate system, one `array` object per dataset (the lower levels carry
+downsampling factors, the dataset's scale relative to the first) and one
+node-level `scale` transformation (the full-resolution pixel size) whose input
+is the multiscale itself. The plate
+and its wells become collections with the provisional HCS traits.
 
     data/v05_plate_convert/
     ├── zarr.json          plate collection (plate trait)
@@ -31,11 +35,17 @@ def read(url: str) -> dict:
     return asyncio.run(HTTP.get(url + "zarr.json"))["attributes"]["ome"]
 
 
+def _dataset_scale(dataset: dict) -> list[float]:
+    return next(
+        t["scale"] for t in dataset["coordinateTransformations"] if t["type"] == "scale"
+    )
+
+
 def convert_multiscale(image_url: str, ome: dict, name: str) -> ngc.Node:
-    """Translate one v0.5 `multiscales` entry into a revision-1 multiscale node."""
+    """Translate one v0.5 `multiscales` entry into a multiscale node."""
     ms = ome["multiscales"][0]
     cs_id = uid_for(image_url + "#physical")
-    system = ngc.CoordinateSystem(
+    physical = ngc.CoordinateSystem(
         id=cs_id,
         name="physical",
         axes=[
@@ -43,29 +53,37 @@ def convert_multiscale(image_url: str, ome: dict, name: str) -> ngc.Node:
             for a in ms["axes"]
         ],
     )
-    scales = []
-    for dataset in ms["datasets"]:
-        sid = uid_for(image_url + "#" + dataset["path"])
-        factors = next(
-            t["scale"]
-            for t in dataset["coordinateTransformations"]
-            if t["type"] == "scale"
-        )
-        scales.append(
-            ngc.Scale(
-                id=sid,
+    full = _dataset_scale(ms["datasets"][0])
+    arrays = []
+    for level, dataset in enumerate(ms["datasets"]):
+        factors = _dataset_scale(dataset)
+        arrays.append(
+            ngc.MultiscaleArray(
+                name=dataset["path"],
                 path=ngc.ZarrPath(format="http", href=image_url + dataset["path"]),
-                coordinate_transformations=[
-                    ngc.ScaleTransformation(
-                        scale=factors,
-                        input=ngc.ReferenceObj(type="scale", ref=sid),
-                        output=ngc.ReferenceObj(type="coordinate_system", ref=cs_id),
-                    )
-                ],
+                downsamplingTransformations=(
+                    [
+                        ngc.ScaleDownsampling(
+                            scale=[f / f0 for f, f0 in zip(factors, full)]
+                        )
+                    ]
+                    if level
+                    else None
+                ),
             )
         )
     return ngc.new_multiscale(
-        id=uid_for(image_url), name=name, coordinate_systems=[system], scales=scales
+        id=uid_for(image_url),
+        name=name,
+        coordinate_systems=[physical],
+        coordinate_transformations=[
+            ngc.ScaleTransformation(
+                scale=full,
+                input=ngc.ReferenceObj(type="multiscale", ref=uid_for(image_url)),
+                output=ngc.ReferenceObj(type="coordinate_system", ref=cs_id),
+            )
+        ],
+        arrays=arrays,
     )
 
 
@@ -125,10 +143,10 @@ def main() -> None:
         first, ngc.MultiscaleNode
     )  # narrows the type for the access below
     print("wrote", url)
-    print("first image scales:", [s.path.href for s in first.scales][:2], "...")
+    print("first image arrays:", [a.path.href for a in first.arrays][:2], "...")
     print("validation:", view.validate(ngc.ALL_VALIDATORS))
     print(
-        "images with non-core (http) scale paths:",
+        "images with non-core (http) array paths:",
         len(view.validate((ngc.paths_are_core,))),
         "(as intended)",
     )

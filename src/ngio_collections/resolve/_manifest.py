@@ -1,4 +1,4 @@
-"""Derive a document's `extension_manifest` from the extension types it uses.
+"""Derive a document's `extensionManifest` from the extension types it uses.
 
 A pure walk over the part of a `NodeTree` that one document serializes: the
 subtree under `root_id`, stopping at document boundaries (external records and
@@ -60,7 +60,7 @@ def derive_manifest(
     registry: ExtensionRegistry | None = None,
     known: Sequence[Mapping] = (),
 ) -> list[dict]:
-    """Return the `extension_manifest` for the document rooted at `root_id`.
+    """Return the `extensionManifest` for the document rooted at `root_id`.
 
     Args:
         tree: The tree being serialized.

@@ -43,14 +43,14 @@ async def _image_and_collection(store: MemoryStore) -> tuple[ngc.Node, ngc.Node]
     return stub, root
 
 
-@requires_pydantic  # `.scales` and ALL_VALIDATORS read through the typed models
+@requires_pydantic  # `.arrays` and ALL_VALIDATORS read through the typed models
 async def test_create_link_open_resolve_roundtrip() -> None:
     store = MemoryStore()
     stub, _ = await _image_and_collection(store)
     assert stub.is_external and stub.id == mk(2) and stub.ref_path == f"{DATA}/raw"
 
     image = await aio.open(f"{DATA}/raw", store)
-    assert isinstance(image, ngc.MultiscaleNode) and len(image.scales) == 2
+    assert isinstance(image, ngc.MultiscaleNode) and len(image.arrays) == 2
     assert image.document_url == f"{DATA}/raw/zarr.json"
 
     opened = await aio.open(f"{DATA}/zarr.json", store)
@@ -64,7 +64,7 @@ async def test_create_link_open_resolve_roundtrip() -> None:
         raw is not None and not raw.is_external and isinstance(raw, ngc.MultiscaleNode)
     )
     assert raw.traits[RENDER]["contrast_limits"] == [0, 1500]  # the entry's trait
-    assert len(raw.scales) == 2 and raw.record.edge is not None
+    assert len(raw.arrays) == 2 and raw.record.edge is not None
     assert view.validate(ngc.ALL_VALIDATORS) == []
 
 
@@ -117,7 +117,7 @@ async def test_stub_matches_create_stub_and_is_findable_after_reopen() -> None:
     assert found.remove().find(mk(2)) is None
 
 
-async def test_entry_and_target_must_share_the_uuid() -> None:
+async def test_entry_and_target_must_share_the_id() -> None:
     store = MemoryStore()
     await aio.create(f"{DATA}/image.zarr", multiscale(2), store)
     wrong = ngc.new_node("multiscale", id=mk(7), path=ngc.ZarrPath(href="./image.zarr"))
@@ -131,7 +131,7 @@ async def test_entry_and_target_must_share_the_uuid() -> None:
         await aio.open_resolved(f"{DATA}/c.json", store, on_error="raise")
 
 
-@requires_pydantic  # validators / `.scales` read through the typed models
+@requires_pydantic  # validators / `.arrays` read through the typed models
 async def test_manifest_is_derived_from_the_registry_and_exposed() -> None:
     store = MemoryStore()
     stub = (await aio.create(f"{DATA}/raw", multiscale(2), store)).set_trait(
@@ -141,9 +141,9 @@ async def test_manifest_is_derived_from_the_registry_and_exposed() -> None:
         f"{DATA}/zarr.json", collection(1).add_external(stub), store, registry=NAPARI
     )
     doc = (await store.get(f"{DATA}/zarr.json"))["attributes"]["ome"]
-    assert [e["id"] for e in doc["extension_manifest"]] == ["https://napari.org/ngff/"]
+    assert [e["id"] for e in doc["extensionManifest"]] == ["https://napari.org/ngff/"]
     assert (
-        "extension_manifest"
+        "extensionManifest"
         not in (await store.get(f"{DATA}/raw/zarr.json"))["attributes"]["ome"]
     )
     opened = await aio.open(f"{DATA}/zarr.json", store)
@@ -238,7 +238,7 @@ async def test_externalize_rejects_invalid_targets() -> None:
     assert updated.find(mk(3)).is_external
 
 
-@requires_pydantic  # validators / `.scales` read through the typed models
+@requires_pydantic  # validators / `.arrays` read through the typed models
 def test_sync_api_on_local_store(tmp_path) -> None:
     image_url = str(tmp_path / "raw")
     stub = ngc.create(image_url, multiscale(2), None)
@@ -253,7 +253,7 @@ def test_sync_api_on_local_store(tmp_path) -> None:
     assert not view.find(mk(2)).is_external and view.validate(ngc.ALL_VALIDATORS) == []
 
 
-@requires_pydantic  # `.scales`
+@requires_pydantic  # `.arrays`
 async def test_open_ref_follows_typed_references() -> None:
     store = MemoryStore()
     await _image_and_collection(store)
@@ -261,7 +261,7 @@ async def test_open_ref_follows_typed_references() -> None:
     (entry,) = opened.children()
     ref = ngc.ReferenceObj(type="multiscale", ref=entry.id, path=entry.path)
     node = await aio.open_ref(ref, opened.document_url, store)
-    assert node.id == mk(2) and node.tree.mode == "editable" and len(node.scales) == 2
+    assert node.id == mk(2) and node.tree.mode == "editable" and len(node.arrays) == 2
     with pytest.raises(LookupError):  # type mismatch
         await aio.open_ref(
             ngc.ReferenceObj(type="collection", ref=entry.id, path=entry.path),
@@ -276,7 +276,11 @@ async def test_open_ref_follows_typed_references() -> None:
         )
     with pytest.raises(TypeError):  # a nested declaration, not a node
         await aio.open_ref(
-            ngc.ReferenceObj(type="scale", ref=node.scales[0].id, path=entry.path),
+            ngc.ReferenceObj(
+                type="coordinate_system",
+                ref=node.coordinate_systems[0].id,
+                path=entry.path,
+            ),
             opened.document_url,
             store,
         )
@@ -284,18 +288,20 @@ async def test_open_ref_follows_typed_references() -> None:
         await aio.open_ref(ngc.ReferenceObj(type="multiscale", ref=mk(2)))
 
 
-@requires_pydantic  # `.scales`
+@requires_pydantic  # `.arrays`
 async def test_resolve_ref_is_local_and_pure() -> None:
     store = MemoryStore()
     await _image_and_collection(store)
     image = await aio.open(f"{DATA}/raw", store)
-    scale = image.scales[0]
-    declaration = aio.resolve_ref(image, ngc.ReferenceObj(type="scale", ref=scale.id))
-    assert declaration["path"]["href"] == "./s0"
-    system = aio.resolve_ref(image, scale.coordinate_transformations[0].output)
+    system = aio.resolve_ref(
+        image,
+        ngc.ReferenceObj(type="coordinate_system", ref=image.coordinate_systems[0].id),
+    )
     assert system["type"] == "coordinate_system"
     with pytest.raises(LookupError):
-        aio.resolve_ref(image, ngc.ReferenceObj(type="coordinate_system", ref=scale.id))
+        aio.resolve_ref(
+            image, ngc.ReferenceObj(type="coordinate_system", ref=mk(0x999))
+        )
     view = await aio.open_resolved(f"{DATA}/zarr.json", store)
     assert aio.resolve_ref(view, view.find(mk(2)).ref_local()).id == mk(2)
     with pytest.raises(NodeStateError):
@@ -333,7 +339,7 @@ async def test_create_guards() -> None:
         await aio.create(f"{DATA}/bad.json", embedded, store)
 
 
-@requires_pydantic  # validators / `.scales` read through the typed models
+@requires_pydantic  # validators / `.arrays` read through the typed models
 async def test_routed_store_resolves_remote_nodes() -> None:
     local, remote = MemoryStore(), MemoryStore()
     await aio.create("https://h.org/ref.zarr", multiscale(2), remote)
@@ -344,7 +350,7 @@ async def test_routed_store_resolves_remote_nodes() -> None:
         path=ngc.DocPath.for_url("https://h.org/ref.zarr"),
     )
     await aio.create(f"{DATA}/c.json", collection(1).add_external(entry), local)
-    assert (await local.get(f"{DATA}/c.json"))["ome"]["root"]["nodes"][0]["path"][
+    assert (await local.get(f"{DATA}/c.json"))["ome"]["nodes"][0]["path"][
         "format"
     ] == "http"
     routed = ngc.RoutedStore(local=local, http=remote)

@@ -1,7 +1,7 @@
 """The extensions the examples use: ids, manifest entries and the table handle.
 
 Three small, illustrative extensions, each exercising one extension point of
-RFC-8 revision 1 (§4):
+RFC-8 revision 2:
 
 * **Fractal provenance** (`PROVENANCE`): a pure-metadata *trait* recording
   which task produced a node and from which inputs (typed references).

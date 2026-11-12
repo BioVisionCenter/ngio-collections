@@ -15,9 +15,9 @@ A record is exactly one *shape*:
 `type` is the structural tag (`collection` / `multiscale` / an extension URI).
 Semantic roles (`well`, `scene`, `plate`, …) are *traits*: typed objects keyed
 by their own `type`, so one node can carry several at once. Node-type fields
-that RFC-8 revision 1 puts directly on the node (`coordinate_systems`, `scales`,
-extension fields) live in `fields`. `id` is the node's UUID, kept verbatim and
-never rewritten; `origin_url` records the document it came from.
+that sit directly on the node (`coordinateSystems`, `data`, extension
+fields) live in `fields`. `id` is the node's id, kept verbatim and never
+rewritten; `origin_url` records the document it came from.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ Traits = Mapping[str, Mapping[str, JSONValue]]
 """Trait type → the trait object verbatim (its `type` key included), in order."""
 
 Fields = Mapping[str, JSONValue]
-"""Node-type fields (`coordinate_systems`, `scales`, extension fields)."""
+"""Node-type fields (`coordinateSystems`, `data`, extension fields)."""
 
 _EMPTY: Mapping = MappingProxyType({})
 
@@ -80,7 +80,7 @@ def traits_to_list(traits: Traits) -> list[dict[str, JSONValue]]:
 
 
 def merge_traits(base: Traits, override: Traits) -> Traits:
-    """Combine two trait sets; `override` wins per trait type (RFC-8 rev. 1 §3.1).
+    """Combine two trait sets; `override` wins per trait type (the revision's trait-combination rule).
 
     The result keeps `base`'s order, replaces same-type entries in place, and
     appends the types only `override` carries.
@@ -113,7 +113,7 @@ def iter_declarations(record: NodeRecord) -> Iterator[Mapping[str, JSONValue]]:
 def declared_ids(record: NodeRecord) -> tuple[str, ...]:
     """Return the ids of the declarations nested in `record`'s fields and traits.
 
-    These are the scales, coordinate systems, acquisitions, … that same-document
+    These are the arrays, coordinate systems, acquisitions, … that same-document
     references (`{type, ref}`) point at. The node's own id and its children are
     not included.
     """
@@ -124,11 +124,13 @@ def declared_ids(record: NodeRecord) -> tuple[str, ...]:
     return tuple(ids)
 
 
-def find_declaration(record: NodeRecord, uuid: str) -> Mapping[str, JSONValue] | None:
-    """Return the first `{type, id}` object with `id == uuid` nested in `record`."""
+def find_declaration(
+    record: NodeRecord, declared_id: str
+) -> Mapping[str, JSONValue] | None:
+    """Return the first `{type, id}` object with `id == declared_id` nested in `record`."""
     for container in (record.fields, record.traits):
         for declaration in _walk_declarations(dict(container)):
-            if declaration["id"] == uuid:
+            if declaration["id"] == declared_id:
                 return declaration
     return None
 
@@ -138,7 +140,7 @@ class EdgeInfo:
     """Provenance of a resolved boundary node: the declaring entry it collapsed.
 
     Retained when resolution splices an external node's target document in, so
-    the §3.1 trait combination stays invertible: `path` is the declaring entry's
+    the trait combination stays invertible: `path` is the declaring entry's
     locator, `traits` / `fields` / `name` are its own pre-merge values, and
     `origin_url` is the document that declared it. Serializing a record with an
     `edge` emits that declaring entry again, never the target's subtree.

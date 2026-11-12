@@ -3,22 +3,20 @@
   "node_type": "group",
   "attributes": {
     "ome": {
-      "version": "0.9dev42",
-      "root": {
-        "type": "collection",
-        "id": "0192f3a0-7c1e-7b00-9c22-000000000053",
-        "nodes": [
-          {
-            "type": "collection",
-            "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
-            "path": {
-              "type": "zarr",
-              "format": "relative",
-              "href": "./raw"
-            }
+      "version": "0.9dev4",
+      "type": "collection",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000053",
+      "nodes": [
+        {
+          "type": "collection",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./raw"
           }
-        ]
-      }
+        }
+      ]
     }
   }
 }

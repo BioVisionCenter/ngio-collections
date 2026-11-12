@@ -1,34 +1,32 @@
 {
   "attributes": {
     "ome": {
-      "version": "0.9dev42",
-      "root": {
-        "type": "collection",
-        "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
-        "name": "root",
-        "nodes": [
-          {
-            "type": "multiscale",
-            "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
-            "name": "image",
-            "path": {
-              "type": "zarr",
-              "format": "relative",
-              "href": "./image"
-            }
-          },
-          {
-            "type": "multiscale",
-            "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
-            "name": "nuclei",
-            "path": {
-              "type": "zarr",
-              "format": "relative",
-              "href": "./nuclei"
-            }
+      "version": "0.9dev4",
+      "type": "collection",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
+      "name": "root",
+      "nodes": [
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+          "name": "image",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./image"
           }
-        ]
-      }
+        },
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
+          "name": "nuclei",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./nuclei"
+          }
+        }
+      ]
     }
   },
   "zarr_format": 3,

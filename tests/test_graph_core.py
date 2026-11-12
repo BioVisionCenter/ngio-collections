@@ -27,14 +27,15 @@ from tests.conftest import mk
 WELL = {"type": "well", "row_index": 0, "column_index": 0}
 SCENE = {
     "type": "scene",
-    "coordinate_systems": [{"type": "coordinate_system", "id": mk(0x5), "axes": []}],
+    "coordinateSystems": [{"type": "coordinate_system", "id": mk(0x5), "axes": []}],
 }
-SCALES = {
-    "scales": [
+ARRAYS = {
+    "data": [
         {
-            "type": "scale",
+            "type": "array",
             "id": mk(0xC),
             "path": {"type": "zarr", "format": "relative", "href": "./s0"},
+            "downsamplingTransformations": [{"type": "scale", "scale": [1.0]}],
         }
     ]
 }
@@ -114,21 +115,21 @@ def test_traits_from_list_indexes_by_type_and_rejects_duplicates() -> None:
 def test_merge_traits_override_wins_per_type_and_keeps_order() -> None:
     base = traits_from_list([WELL, SCENE])
     override = traits_from_list(
-        [{"type": "scene", "coordinate_systems": []}, {"type": "labels"}]
+        [{"type": "scene", "coordinateSystems": []}, {"type": "labels"}]
     )
     merged = merge_traits(base, override)
     assert list(merged) == ["well", "scene", "labels"]
-    assert merged["scene"] == {"type": "scene", "coordinate_systems": []}
+    assert merged["scene"] == {"type": "scene", "coordinateSystems": []}
     assert merged["well"] is WELL
     assert merge_traits(base, {}) is base
 
 
 def test_declarations_nested_in_fields_and_traits() -> None:
     record = NodeRecord(
-        type="multiscale", id=mk(1), traits={"scene": SCENE}, fields=SCALES
+        type="multiscale", id=mk(1), traits={"scene": SCENE}, fields=ARRAYS
     )
     assert set(declared_ids(record)) == {mk(0xC), mk(0x5)}
-    assert find_declaration(record, mk(0xC))["type"] == "scale"
+    assert find_declaration(record, mk(0xC))["type"] == "array"
     assert find_declaration(record, mk(0x99)) is None
     # references ({type, ref}) are not declarations
     ref_only = NodeRecord(
@@ -161,7 +162,7 @@ def _sample() -> tuple[NodeTree, dict[str, tuple[str, ...]]]:
     )
     c, nuclei = c.add_child(
         labels,
-        NodeRecord(type="multiscale", id=mk(3), traits={"scene": SCENE}, fields=SCALES),
+        NodeRecord(type="multiscale", id=mk(3), traits={"scene": SCENE}, fields=ARRAYS),
     )
     return c, {"root": ROOT, "img": img, "labels": labels, "nuclei": nuclei}
 
@@ -277,7 +278,7 @@ def test_tree_builder_matches_incremental_add_child_and_carries_manifests() -> N
     )
     tb.add_child(
         labels,
-        NodeRecord(type="multiscale", id=mk(3), traits={"scene": SCENE}, fields=SCALES),
+        NodeRecord(type="multiscale", id=mk(3), traits={"scene": SCENE}, fields=ARRAYS),
     )
     built = tb.finish()
     inc, _ = _sample()

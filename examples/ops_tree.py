@@ -1,7 +1,7 @@
 """Tree operations: add, add_external, find, find_by_name, remove, subtree.
 
-Ids are UUIDs (`new_id()` mints a UUIDv7); names are free-form and need not be
-unique, so `find` takes a UUID and `find_by_name` returns a tuple.
+Ids are free-form strings (`new_id()` mints a UUIDv7 when none is given); names
+need not be unique, so `find` takes an id and `find_by_name` returns a tuple.
 
 Run with: pixi run --environment dev python examples/ops_tree.py
 """
@@ -21,16 +21,16 @@ def main() -> None:
     )
     root = root.find(uid(2)).add_external(entry)
     try:
-        root.add(ngc.new_multiscale(id=uid(9), coordinate_systems=[], scales=[]))
+        root.add(ngc.new_node("multiscale", id=uid(9)))
     except ngc.NodeStateError as error:
         print("embedding refused:", error)
 
-    # No id given: `new_id()` mints a UUIDv7 for each.
+    # No id given: `new_id()` mints a UUIDv7 for each; any id string would do.
     root = root.add(
         ngc.new_collection(name="scratch"), ngc.new_collection(name="scratch")
     )
     print("walk        :", [(n.name, n.id[-4:]) for n in root.walk()])
-    print("find(uuid)  :", root.find(uid(3)).name, root.find(uid(3)).parent().name)
+    print("find(id)    :", root.find(uid(3)).name, root.find(uid(3)).parent().name)
     print("find_by_name:", [n.id[-4:] for n in root.find_by_name("scratch")])
 
     sub = root.find(uid(2)).subtree()

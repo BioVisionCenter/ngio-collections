@@ -2,8 +2,8 @@
 
 The core (open / edit / save / resolve, the raw traits and fields, the
 structural validators) runs on the standard library. The typed value models
-(traits, scales, coordinate systems, transformations), the `node[Trait]`
-lenses, `MultiscaleNode.scales` / `.coordinate_systems` and the schema-shape
+(traits, arrays, coordinate systems, transformations), the `node[Trait]`
+lenses, `MultiscaleNode.arrays` / `.coordinate_systems` and the schema-shape
 validators need pydantic, installed with the `validate` extra. Every such entry
 point calls `require_pydantic` first so a missing install fails with one clear,
 actionable message instead of a bare `ModuleNotFoundError` deep in a stack.

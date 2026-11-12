@@ -1,6 +1,6 @@
 """Read-only HTTP store on the standard library (`urllib`).
 
-Part of this package's documented deviation from RFC-8 revision 1: `http`
+Part of this package's documented deviation from RFC-8 revision 2: `http`
 format paths resolve, so a local collection can point at published documents
 and arrays. This store is deliberately minimal (GET only, no authentication, no
 retries); `FsspecStore` is the seam for anything richer.

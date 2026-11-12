@@ -1,85 +1,72 @@
 {
   "attributes": {
     "ome": {
-      "version": "0.9dev42",
-      "root": {
-        "type": "multiscale",
-        "id": "0192f3a0-7c1e-7b00-9c22-00000000000a",
-        "name": "fov1",
-        "coordinate_systems": [
-          {
-            "type": "coordinate_system",
-            "id": "0192f3a0-7c1e-7b00-9c22-00000000002a",
-            "axes": [
-              {
-                "name": "y",
-                "type": "space",
-                "unit": "micrometer"
-              },
-              {
-                "name": "x",
-                "type": "space",
-                "unit": "micrometer"
-              }
-            ]
-          }
-        ],
-        "scales": [
-          {
-            "type": "scale",
-            "id": "0192f3a0-7c1e-7b00-9c22-00000000003a",
-            "path": {
-              "type": "zarr",
-              "format": "relative",
-              "href": "./s0"
+      "version": "0.9dev4",
+      "type": "multiscale",
+      "id": "0192f3a0-7c1e-7b00-9c22-00000000000a",
+      "name": "fov1",
+      "coordinateSystems": [
+        {
+          "type": "coordinate_system",
+          "id": "0192f3a0-7c1e-7b00-9c22-00000000002a",
+          "axes": [
+            {
+              "name": "y",
+              "type": "space",
+              "unit": "micrometer"
             },
-            "coordinate_transformations": [
-              {
-                "input": {
-                  "type": "scale",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-00000000003a"
-                },
-                "output": {
-                  "type": "coordinate_system",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-00000000002a"
-                },
-                "type": "scale",
-                "scale": [
-                  1.0,
-                  1.0
-                ]
-              }
-            ]
+            {
+              "name": "x",
+              "type": "space",
+              "unit": "micrometer"
+            }
+          ]
+        }
+      ],
+      "coordinateTransformations": [
+        {
+          "input": {
+            "type": "multiscale",
+            "ref": "0192f3a0-7c1e-7b00-9c22-00000000000a"
           },
-          {
-            "type": "scale",
-            "id": "0192f3a0-7c1e-7b00-9c22-00000000004a",
-            "path": {
-              "type": "zarr",
-              "format": "relative",
-              "href": "./s1"
-            },
-            "coordinate_transformations": [
-              {
-                "input": {
-                  "type": "scale",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-00000000004a"
-                },
-                "output": {
-                  "type": "coordinate_system",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-00000000002a"
-                },
-                "type": "scale",
-                "scale": [
-                  2.0,
-                  2.0
-                ]
-              }
-            ]
+          "output": {
+            "type": "coordinate_system",
+            "ref": "0192f3a0-7c1e-7b00-9c22-00000000002a"
+          },
+          "type": "scale",
+          "scale": [
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "data": [
+        {
+          "type": "array",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./s0"
           }
-        ],
-        "nodes": []
-      }
+        },
+        {
+          "type": "array",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./s1"
+          },
+          "downsamplingTransformations": [
+            {
+              "type": "scale",
+              "scale": [
+                2.0,
+                2.0
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "zarr_format": 3,

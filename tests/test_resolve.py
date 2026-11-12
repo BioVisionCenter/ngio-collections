@@ -24,15 +24,16 @@ from ngio_collections.resolve import (
 from tests.conftest import DATA, mk
 
 RENDER = "https://napari.org/ngff/rendering"
-SCALES = {
-    "coordinate_systems": [
+BODY = {
+    "coordinateSystems": [
         {"type": "coordinate_system", "id": mk(0x20), "axes": [{"name": "x"}]}
     ],
-    "scales": [
+    "data": [
         {
-            "type": "scale",
+            "type": "array",
             "id": mk(0xC),
             "path": {"type": "zarr", "format": "relative", "href": "./s0"},
+            "downsamplingTransformations": [{"type": "scale", "scale": [1.0]}],
         }
     ],
 }
@@ -59,7 +60,7 @@ def _collection(*children: dict, n: int = 0) -> dict:
 
 def _image(n: int = 1, *traits: dict, **extra: object) -> dict:
     """A multiscale document root (the usual target)."""
-    root: dict = {"type": "multiscale", "id": mk(n), **SCALES, **extra}
+    root: dict = {"type": "multiscale", "id": mk(n), **BODY, **extra}
     if traits:
         root["traits"] = list(traits)
     return root
@@ -107,7 +108,7 @@ def test_node_fields_and_traits_are_split() -> None:
     root = c.record(ROOT)
     assert root.name == "raw"
     assert list(root.traits) == ["labels"]
-    assert set(root.fields) == {"coordinate_systems", "scales"}
+    assert set(root.fields) == {"coordinateSystems", "data"}
     assert c.declarations(mk(0xC)) == (ROOT,) and c.declarations(mk(0x20)) == (ROOT,)
 
 
@@ -159,7 +160,7 @@ def test_resolved_merges_target_root_with_entry_traits_winning() -> None:
         "type": RENDER,
         "contrast_limits": [0, 1],
     }  # whole trait
-    assert set(rec.fields) == {"coordinate_systems", "scales"}  # never merged
+    assert set(rec.fields) == {"coordinateSystems", "data"}  # never merged
     assert rec.origin_url == f"{DATA}/image.json"
     assert c.mode == "resolved"
     assert c.declarations(mk(0xC)) == (key,)
@@ -306,9 +307,9 @@ def test_document_strips_version_and_manifest() -> None:
     content = {
         "attributes": {
             "ome": {
-                "version": "0.9dev42",
-                "extension_manifest": [{"id": "https://x.org/", "version": "1"}],
-                "root": root,
+                "version": "0.9dev4",
+                "extensionManifest": [{"id": "https://x.org/", "version": "1"}],
+                **root,
             }
         }
     }
@@ -319,8 +320,8 @@ def test_document_strips_version_and_manifest() -> None:
     assert doc.extension_manifest == ({"id": "https://x.org/", "version": "1"},)
 
 
-def test_document_without_root_is_not_an_ome_document() -> None:
-    content = {"ome": {"version": "0.9dev42", "type": "collection", "id": mk(1)}}
+def test_document_without_a_node_type_is_not_an_ome_document() -> None:
+    content = {"ome": {"version": "0.9dev4", "root": {"type": "collection"}}}
     with pytest.raises(ValueError):
         Document.from_content("/data/c.json", content)
 
@@ -353,7 +354,11 @@ async def test_revision_collection_resolves(revision_store) -> None:
     c = build(url, await fetch_all(url, revision_store), inline=True)
     raw, nuclei, remote = (c.record(k) for k in c.children_ids(ROOT))
     assert not raw.is_external and raw.traits[RENDER]["contrast_limits"] == [0, 1500]
-    assert [s["id"] for s in raw.fields["scales"]] == [mk(0xC), mk(0xD)]
+    assert [a["path"]["href"] for a in raw.fields["data"]] == ["./s0", "./s1"]
+    assert raw.fields["coordinateTransformations"][0]["input"] == {
+        "type": "multiscale",
+        "ref": raw.id,
+    }
     assert not nuclei.is_external and "labels" in nuclei.traits
     assert (
         remote.is_external and remote.path is not None and remote.path.format == "http"
@@ -382,7 +387,7 @@ async def test_bad_fixtures_report_their_defect(revision_store) -> None:
 def test_reference_targets_lists_node_paths_and_trait_refs() -> None:
     scene = {
         "type": "scene",
-        "coordinate_transformations": [
+        "coordinateTransformations": [
             {
                 "type": "translation",
                 "translation": [0, 0],

@@ -1,6 +1,6 @@
 """Tests for the public `Node` handle (no IO).
 
-Covers handle-rooted construction with minted UUIDs, typed subclasses,
+Covers handle-rooted construction with minted ids, typed subclasses,
 navigation, trait and field lenses, the embedding guard, validation through the
 handle, and the functional edits.
 """
@@ -23,15 +23,16 @@ def _tree() -> ngc.Node:
     return collection(0, external(1, "./img"), labels, name="root")
 
 
-def test_construction_mints_uuids_and_types_handles() -> None:
+def test_construction_mints_ids_and_types_handles() -> None:
     root = _tree()
     assert isinstance(root, ngc.CollectionNode)
     assert isinstance(root.find(mk(1)), ngc.MultiscaleNode)
     assert [c.id for c in root.children()] == [mk(1), mk(2)]
     fresh = ngc.new_collection(name="auto")
-    assert ngc.is_uuid(fresh.id) and fresh.name == "auto"
+    assert ngc.is_id(fresh.id) and fresh.name == "auto"
+    assert ngc.new_node("collection", id="img").id == "img"  # any id string
     with pytest.raises(ValueError):
-        ngc.new_node("collection", id="img")  # not a UUID
+        ngc.new_node("collection", id="img/0")  # not a valid id
 
 
 def test_walk_find_and_find_by_name_are_subtree_scoped() -> None:
@@ -78,14 +79,31 @@ def test_multiscale_handle_exposes_fields() -> None:
     ms = multiscale(4, axis_names=("z", "y", "x"), levels=3)
     assert isinstance(ms, ngc.MultiscaleNode)
     assert [a.name for a in ms.coordinate_systems[0].axes] == ["z", "y", "x"]
-    assert [s.path.href for s in ms.scales] == ["./s0", "./s1", "./s2"]
-    s1 = ms.scale(ms.scales[1].id)
-    assert s1 is not None and s1.coordinate_transformations[0].scale == [2.0, 2.0, 2.0]
+    assert [a.scale for a in ms.arrays] == [None, [2.0] * 3, [4.0] * 3]
+    assert [a.path.href for a in ms.arrays] == ["./s0", "./s1", "./s2"]
+    s1 = ms.arrays[1]
+    assert s1.type == "array" and s1.translation is None
+    assert "id" not in ms.fields["data"][0]  # arrays are not declarations
     assert ms.coordinate_system(mk(99)) is None
-    edited = ms.set_scales(ms.scales[:1])
-    assert len(edited.scales) == 1 and len(ms.scales) == 3
-    assert set(ms.fields) == {"coordinate_systems", "scales"}
-    assert ms.get_field("scales") == ms.fields["scales"]
+    (to_physical,) = ms.coordinate_transformations
+    assert to_physical.input == ngc.ReferenceObj(type="multiscale", ref=ms.id)
+    edited = ms.set_arrays(ms.arrays[:1])
+    assert len(edited.arrays) == 1 and len(ms.arrays) == 3
+    assert set(ms.fields) == {"coordinateSystems", "coordinateTransformations", "data"}
+    assert ms.get_field("data") == ms.fields["data"]
+    mapped = ms.set_coordinate_transformations(
+        [
+            ngc.ScaleTransformation(
+                scale=[1.0, 0.1, 0.1],
+                input=ngc.ReferenceObj(type="multiscale", ref=ms.id),
+                output=ngc.ReferenceObj(type="coordinate_system", ref=mk(0x1004)),
+            )
+        ]
+    )
+    (tf,) = mapped.coordinate_transformations
+    assert isinstance(tf, ngc.ScaleTransformation) and tf.scale == [1.0, 0.1, 0.1]
+    # a multiscale is a leaf: no `nodes` key on the wire
+    assert ms.record.children is None
 
 
 def test_add_rejects_an_embedded_multiscale() -> None:
@@ -159,7 +177,7 @@ def test_trait_lenses_and_typed_edits() -> None:
 
 
 @requires_pydantic
-def test_set_trait_drops_none_fields_and_writes_snake_case() -> None:
+def test_set_trait_drops_none_fields_and_writes_wire_keys() -> None:
     root = _tree()
     scene = ngc.SceneTrait(
         coordinate_systems=[ngc.CoordinateSystem(id=mk(5), axes=[ngc.Axis(name="x")])]
@@ -167,10 +185,10 @@ def test_set_trait_drops_none_fields_and_writes_snake_case() -> None:
     edited = root.set_trait(scene)
     assert edited.traits["scene"] == {
         "type": "scene",
-        "coordinate_systems": [
+        "coordinateSystems": [
             {"type": "coordinate_system", "id": mk(5), "axes": [{"name": "x"}]}
         ],
-        "coordinate_transformations": [],
+        "coordinateTransformations": [],
     }
 
 
@@ -247,4 +265,4 @@ def test_validate_through_handle() -> None:
     )
     errors = orphan.find(mk(1)).validate(ngc.RECOMMENDED_VALIDATORS)
     assert [e.validator for e in errors] == ["well_under_plate"]
-    assert errors[0].node_uuid == mk(1)
+    assert errors[0].declared_id == mk(1)

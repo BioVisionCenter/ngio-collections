@@ -1,7 +1,7 @@
 # benchmarks
 
 Performance benchmarks for ngio-collections. Builds a realistic RFC-8
-revision-1 HCS collection at a configurable scale (up to ~1M nodes), caches it
+revision-2 HCS collection at a configurable scale (up to ~1M nodes), caches it
 on disk, runs the core operations, and prints average run time + peak memory
 per operation. Standard-library only (no extra dependencies).
 
@@ -38,9 +38,9 @@ smallest whole number of scenes-per-well that reaches at least `target` nodes.
 Each step adds 91,200 nodes (4800 wells × 19), so the realized count rounds up:
 `--target 1000000` ⇒ 1,008,021 nodes.
 
-Node count means *declared nodes*: scales and coordinate systems are
+Node count means *declared nodes*: arrays and coordinate systems are
 declarations inside a multiscale document, not nodes. Every multiscale carries
-one coordinate system and three scales.
+one coordinate system and three arrays.
 
 ### Documents
 
@@ -72,7 +72,7 @@ elsewhere. If you change the builders in `dataset.py`, pass `--rebuild`.
 | ------------------- | ------------------------------------------------------------- |
 | `read (resolved)`   | `open_resolved` over the on-disk layout, cold cache           |
 | `walk`              | full depth-first traversal of the in-memory view              |
-| `find`              | `find(uuid)` for a random existing id (an index lookup, O(1)) |
+| `find`              | `find(id)` for a random existing id (an index lookup, O(1)) |
 | `edit`              | `set_trait` on a random node (new tree; copy-on-write map)    |
 | `validate`          | `CORE_VALIDATORS` over the whole view (each check O(neighbourhood)) |
 | `write (root doc)`  | `save` of the opened entry collection document                |

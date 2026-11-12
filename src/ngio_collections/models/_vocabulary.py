@@ -1,4 +1,4 @@
-"""Keyword vocabularies RFC-8 revision 1 names, usable without pydantic."""
+"""Keyword vocabularies RFC-8 revision 2 names, usable without pydantic."""
 
 from __future__ import annotations
 

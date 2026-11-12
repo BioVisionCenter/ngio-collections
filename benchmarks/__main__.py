@@ -4,13 +4,13 @@ Operations, in the spec's order of importance:
 
     read (resolved)   open_resolved over the on-disk layout, cold cache
     walk              traverse every node of the in-memory view
-    find              look up a random existing UUID (an index lookup)
+    find              look up a random existing id (an index lookup)
     edit              set_trait on a random node (returns a new tree)
     validate          CORE_VALIDATORS over the whole view (O(neighbourhood) each)
     write (root doc)  open + save the entry collection document
     write (image doc) open + save one multiscale document
 
-There is no single-snapshot write any more: RFC-8 revision 1 never embeds a
+There is no single-snapshot write any more: this package never embeds a
 multiscale in a collection, so a self-contained one-document copy of the tree
 cannot exist. The full-tree write is reported once as the dataset setup row.
 
@@ -117,7 +117,7 @@ def main() -> None:
     reused = not setup_results
 
     print()
-    print("ngio-collections benchmark (RFC-8 revision 1)")
+    print("ngio-collections benchmark (RFC-8 revision 2)")
     print(f"  shard level : {args.shard}")
     print(f"  target      : {args.target:,}")
     print(f"  total nodes : {total_nodes:,}")
@@ -161,9 +161,7 @@ def main() -> None:
     if "find" in ops:
         assert view is not None
         results.append(
-            measure(
-                "find (random uuid)", lambda: view.find(next(find_ids)), args.repeats
-            )
+            measure("find (random id)", lambda: view.find(next(find_ids)), args.repeats)
         )
     if "edit" in ops:
         assert view is not None

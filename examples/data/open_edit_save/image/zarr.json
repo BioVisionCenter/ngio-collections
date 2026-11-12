@@ -1,60 +1,56 @@
 {
   "attributes": {
     "ome": {
-      "version": "0.9dev42",
-      "root": {
-        "type": "multiscale",
-        "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
-        "name": "image-v2",
-        "coordinate_systems": [
-          {
-            "type": "coordinate_system",
-            "id": "0192f3a0-7c1e-7b00-9c22-000000000022",
-            "name": "stage",
-            "axes": [
-              {
-                "name": "y",
-                "type": "space",
-                "unit": "micrometer"
-              },
-              {
-                "name": "x",
-                "type": "space",
-                "unit": "micrometer"
-              }
-            ]
-          }
-        ],
-        "scales": [
-          {
-            "type": "scale",
-            "id": "0192f3a0-7c1e-7b00-9c22-000000000032",
-            "path": {
-              "type": "zarr",
-              "format": "relative",
-              "href": "./s0"
+      "version": "0.9dev4",
+      "type": "multiscale",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+      "name": "image-v2",
+      "coordinateSystems": [
+        {
+          "type": "coordinate_system",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000022",
+          "name": "stage",
+          "axes": [
+            {
+              "name": "y",
+              "type": "space",
+              "unit": "micrometer"
             },
-            "coordinate_transformations": [
-              {
-                "input": {
-                  "type": "scale",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000032"
-                },
-                "output": {
-                  "type": "coordinate_system",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000022"
-                },
-                "type": "scale",
-                "scale": [
-                  1.0,
-                  1.0
-                ]
-              }
-            ]
+            {
+              "name": "x",
+              "type": "space",
+              "unit": "micrometer"
+            }
+          ]
+        }
+      ],
+      "coordinateTransformations": [
+        {
+          "input": {
+            "type": "multiscale",
+            "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
+          },
+          "output": {
+            "type": "coordinate_system",
+            "ref": "0192f3a0-7c1e-7b00-9c22-000000000022"
+          },
+          "type": "scale",
+          "scale": [
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "data": [
+        {
+          "type": "array",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./s0"
           }
-        ],
-        "nodes": []
-      }
+        }
+      ]
     }
   },
   "zarr_format": 3,

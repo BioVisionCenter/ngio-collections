@@ -2,7 +2,7 @@
 
 A pure JSON walker: no node or IO dependency. Any object carrying the path-object
 shape (`{"type": "zarr"|"json"|<URI>, "format": ..., "href": ...}`) anywhere in a value
-(`scales[*].path`, `labels.source[*].path`, a scene transform's `input.path`, …)
+(`arrays[*].path`, `labels.source[*].path`, a scene transform's `input.path`, …)
 is relativized against the document when it is a local absolute path, while
 plain `path` strings (e.g. `ScaleTransformation.path`) are left untouched, since
 the match is on the path-object *shape*, not the key name.

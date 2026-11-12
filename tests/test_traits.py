@@ -21,7 +21,7 @@ ValidationError = pytest.importorskip("pydantic").ValidationError
 
 def test_plate_trait_follows_the_revision_example() -> None:
     plate_doc = json.loads((FIXTURES / "plate" / "zarr.json").read_text())
-    (plate_raw,) = plate_doc["attributes"]["ome"]["root"]["traits"]
+    (plate_raw,) = plate_doc["attributes"]["ome"]["traits"]
     plate = ngc.PlateTrait.model_validate(plate_raw)
     assert [r.name for r in plate.rows] == ["A", "B"]
     assert [c.name for c in plate.columns] == ["1", "2"]
@@ -64,7 +64,7 @@ def test_labels_trait_sources_are_typed_references() -> None:
     assert ngc.LabelsTrait.applies_to == {"multiscale"}
 
 
-def test_scene_trait_accepts_camel_case_and_writes_snake_case() -> None:
+def test_scene_trait_writes_the_camel_case_wire_keys() -> None:
     scene = ngc.SceneTrait.model_validate(
         {
             "type": "scene",
@@ -88,22 +88,28 @@ def test_scene_trait_accepts_camel_case_and_writes_snake_case() -> None:
     assert isinstance(seq, ngc.SequenceTransformation)
     assert isinstance(seq.transformations[0], ngc.ScaleTransformation)
     dumped = scene.model_dump(mode="json", exclude_none=True)
-    assert set(dumped) == {"type", "coordinate_systems", "coordinate_transformations"}
-    assert "coordinateSystems" not in dumped
+    assert set(dumped) == {"type", "coordinateSystems", "coordinateTransformations"}
+    # the Python attribute names are accepted on input and never written
+    by_name = ngc.SceneTrait.model_validate(
+        {"type": "scene", "coordinate_systems": dumped["coordinateSystems"]}
+    )
+    assert by_name.coordinate_systems == scene.coordinate_systems
+    assert "coordinate_systems" not in by_name.model_dump(mode="json")
 
 
-def test_reference_obj_is_typed_uuid_and_closed() -> None:
-    ref = ngc.ReferenceObj(type="scale", ref=mk(0xC))
+def test_reference_obj_is_typed_id_and_closed() -> None:
+    ref = ngc.ReferenceObj(type="array", ref=mk(0xC))
     assert ref.to_dict() == {
-        "type": "scale",
+        "type": "array",
         "ref": mk(0xC),
     }
+    assert ngc.ReferenceObj(type="array", ref="s0").ref == "s0"  # any id
     with pytest.raises(ValueError):
-        ngc.ReferenceObj(type="scale", ref="s0")  # not a UUID
+        ngc.ReferenceObj(type="array", ref="s 0")  # not a valid id
     with pytest.raises(ValueError):
-        ngc.ReferenceObj.from_dict({"type": "scale", "ref": mk(1), "name": "x"})
+        ngc.ReferenceObj.from_dict({"type": "array", "ref": mk(1), "name": "x"})
     with pytest.raises(ValueError):
-        ngc.ReferenceObj.from_dict({"type": "scale", "id": mk(1)})  # a declaration
+        ngc.ReferenceObj.from_dict({"type": "array", "id": mk(1)})  # a declaration
     with_path = ngc.ReferenceObj.from_dict(
         {
             "type": "coordinate_system",
@@ -114,21 +120,81 @@ def test_reference_obj_is_typed_uuid_and_closed() -> None:
     assert with_path.path is not None and with_path.path.href == "./raw"
 
 
-def test_multiscale_fields_validate_the_revision_example() -> None:
+def test_multiscale_fields_validate_the_raw_fixture() -> None:
     raw = json.loads((FIXTURES / "collection" / "raw" / "zarr.json").read_text())
-    ome = raw["attributes"]["ome"]["root"]
+    ome = raw["attributes"]["ome"]
     fields = ngc.MultiscaleFields.model_validate(
-        {k: v for k, v in ome.items() if k in ("coordinate_systems", "scales")}
+        {
+            k: v
+            for k, v in ome.items()
+            if k in ngc.models._multiscale_keys.MULTISCALE_FIELDS
+        }
     )
-    (system,) = fields.coordinate_systems
-    assert system.type == "coordinate_system" and system.id == mk(0x20)
-    assert [a.name for a in system.axes] == ["c", "z", "y", "x"]
-    s0, s1 = fields.scales
-    assert s0.type == "scale" and s0.path.href == "./s0"
-    (tf,) = s1.coordinate_transformations
-    assert isinstance(tf, ngc.ScaleTransformation) and tf.scale == [1, 0.5, 0.2, 0.2]
-    assert tf.input is not None and tf.input.type == "scale" and tf.input.ref == s1.id
+    (physical,) = fields.coordinate_systems
+    assert physical.id == mk(0x20)
+    assert [a.name for a in physical.axes] == ["c", "z", "y", "x"]
+    s0, s1 = fields.arrays
+    assert s0.type == "array" and "id" not in s0.model_dump()
+    assert s0.downsamplingTransformations is None and s0.scale is None
+    assert isinstance(s0.path, ngc.DocPath) and s0.path.href == "./s0"
+    assert (
+        s1.scale == [1, 1, 2, 2] and s1.translation is None and s1.path.href == "./s1"
+    )
+    (tf,) = fields.coordinate_transformations
+    assert isinstance(tf, ngc.ScaleTransformation) and tf.scale == [1, 0.5, 0.1, 0.1]
+    assert tf.input is not None
+    assert tf.input.type == "multiscale" and tf.input.ref == ome["id"]
     assert tf.output is not None and tf.output.ref == mk(0x20)
+    # the wire form keeps the camelCase spelling of the downsampling key
+    assert ngc.DOWNSAMPLING_KEY in s1.model_dump(mode="json")
+
+
+def test_multiscale_array_shapes() -> None:
+    both = ngc.MultiscaleArray.model_validate(
+        {
+            "type": "array",
+            "path": {"type": "zarr", "format": "relative", "href": "./s1"},
+            "downsamplingTransformations": [
+                {"type": "scale", "scale": [2, 2]},
+                {"type": "translation", "translation": [0.5, 0.5]},
+            ],
+        }
+    )
+    assert both.scale == [2, 2]
+    assert both.translation == [0.5, 0.5]
+    # the highest-resolution array carries no downsampling at all
+    finest = ngc.MultiscaleArray(path=both.path)
+    assert finest.scale is None and finest.translation is None
+    assert ngc.DOWNSAMPLING_KEY not in finest.model_dump(exclude_none=True)
+    for bad in (
+        [],
+        [{"type": "translation", "translation": [0.0]}],
+        [  # the translation follows the scale, never the other way round
+            {"type": "translation", "translation": [0.5]},
+            {"type": "scale", "scale": [2.0]},
+        ],
+        [{"type": "scale", "scale": [1.0]}, {"type": "scale", "scale": [2.0]}],
+        [{"type": "affine", "affine": []}],
+    ):
+        with pytest.raises(ValidationError):
+            ngc.MultiscaleArray.model_validate(
+                {"path": both.path.to_dict(), "downsamplingTransformations": bad}
+            )
+    with pytest.raises(ValidationError):  # the path is required
+        ngc.MultiscaleArray.model_validate(
+            {"downsamplingTransformations": [{"type": "scale", "scale": [1.0]}]}
+        )
+    # a remote level: the dataclass path checks surface as pydantic errors
+    remote = ngc.MultiscaleArray(
+        path=ngc.DocPath(type="zarr", format="http", href="https://h.org/img/0"),
+        downsamplingTransformations=[ngc.ScaleDownsampling(scale=[1.0])],
+    )
+    assert remote.model_dump(mode="json", exclude_none=True)["path"]["format"] == "http"
+    with pytest.raises(ValidationError):
+        ngc.MultiscaleArray(
+            path={"type": "zarr", "format": "http", "href": "/local"},
+            downsamplingTransformations=[ngc.ScaleDownsampling(scale=[1.0])],
+        )
 
 
 def test_unknown_transformation_falls_back_to_custom_and_round_trips() -> None:
@@ -156,9 +222,11 @@ def test_trait_type_helpers() -> None:
 
 def test_ids() -> None:
     fresh = ngc.new_id()
-    assert ngc.is_uuid(fresh) and fresh[14] == "7"  # UUIDv7
+    assert ngc.is_id(fresh) and fresh[14] == "7"  # the default is still a UUIDv7
     assert ngc.new_id() != fresh
-    assert ngc.is_uuid(mk(1)) and not ngc.is_uuid("img") and not ngc.is_uuid(None)
+    assert ngc.is_id(mk(1)) and ngc.is_id("img") and ngc.is_id("well_A1.0")
+    for bad in ("", "a b", "img/0", "x:y", None, 3):
+        assert not ngc.is_id(bad), bad
 
 
 def test_extension_manifest_registry_and_derivation() -> None:
@@ -199,22 +267,22 @@ def test_extension_manifest_entry_round_trips_the_upstream_fields() -> None:
         "schemas": [{"type": "linkml", "url": "https://viewer-a.example.com/s.yaml"}],
         "name": "Viewer-A settings",
         "description": "Display settings for Viewer A.",
-        "must_understand": True,
+        "mustUnderstand": True,
         "homepage": "https://viewer-a.example.com/",
         "unknown": "ignored",
     }
     entry = ngc.ExtensionManifestEntry.from_dict(wire)
     assert entry.name == "Viewer-A settings" and entry.must_understand is True
     assert entry.to_dict() == {k: v for k, v in wire.items() if k != "unknown"}
-    # optional fields are omitted when unset; `must_understand` defaults to False
+    # optional fields are omitted when unset; `mustUnderstand` defaults to False
     minimal = ngc.ExtensionManifestEntry.from_dict(
         {"id": "https://x.org/", "version": "1"}
     )
     assert minimal.must_understand is False
     assert minimal.to_dict() == {"id": "https://x.org/", "version": "1", "schemas": []}
-    with pytest.raises(ValueError, match="must_understand"):
+    with pytest.raises(ValueError, match="mustUnderstand"):
         ngc.ExtensionManifestEntry.from_dict(
-            {"id": "https://x.org/", "version": "1", "must_understand": "yes"}
+            {"id": "https://x.org/", "version": "1", "mustUnderstand": "yes"}
         )
     with pytest.raises(ValueError, match="`name`"):
         ngc.ExtensionManifestEntry(id="https://x.org/", version="1", name=3)  # type: ignore[arg-type]
@@ -223,31 +291,37 @@ def test_extension_manifest_entry_round_trips_the_upstream_fields() -> None:
 def test_dataclass_locators_work_as_pydantic_fields() -> None:
     """`DocPath` / `ReferenceObj` are stdlib dataclasses; pydantic coerces them."""
     wire = {
-        "type": "scale",
-        "id": mk(0x30),
-        "path": {"type": "zarr", "format": "relative", "href": "./s0"},
-        "coordinate_transformations": [
+        "type": "labels",
+        "source": [
             {
-                "type": "scale",
-                "scale": [1.0, 2.0],
-                "input": {"type": "scale", "ref": mk(0x30)},
-                "output": {"type": "coordinate_system", "ref": mk(0x20)},
+                "type": "multiscale",
+                "ref": mk(2),
+                "path": {"type": "zarr", "format": "relative", "href": "./raw"},
             }
         ],
+        "label_attributes": [],
     }
-    scale = ngc.Scale.model_validate(wire)
-    assert isinstance(scale.path, ngc.DocPath) and scale.path.href == "./s0"
-    (transform,) = scale.coordinate_transformations
-    assert isinstance(transform.input, ngc.ReferenceObj)
-    assert transform.input.path is None
-    assert scale.model_dump(mode="json", exclude_none=True) == wire
+    labels = ngc.LabelsTrait.model_validate(wire)
+    (source,) = labels.source
+    assert isinstance(source, ngc.ReferenceObj)
+    assert isinstance(source.path, ngc.DocPath) and source.path.href == "./raw"
+    assert labels.model_dump(mode="json", exclude_none=True) == wire
     # instances pass through, including the convenience subclasses
-    assert ngc.Scale(id=mk(0x30), path=ngc.ZarrPath(href="./s1")).path.href == "./s1"
+    ref = ngc.ReferenceObj(type="multiscale", ref=mk(2), path=ngc.ZarrPath(href="./s1"))
+    assert ngc.LabelsTrait(source=[ref]).source[0].path.href == "./s1"
     # the dataclass checks surface as pydantic validation errors
     with pytest.raises(ValidationError):
-        ngc.Scale.model_validate(
-            {**wire, "path": {"type": "zarr", "format": "http", "href": "/local"}}
+        ngc.LabelsTrait.model_validate(
+            {
+                **wire,
+                "source": [
+                    {
+                        "type": "multiscale",
+                        "ref": mk(2),
+                        "path": {"type": "zarr", "format": "http", "href": "/local"},
+                    }
+                ],
+            }
         )
     with pytest.raises(ValidationError):
-        ngc.ReferenceObj  # noqa: B018  (still importable)
-        ngc.ScaleTransformation(input={"type": "scale", "ref": "not-a-uuid"})
+        ngc.ScaleTransformation(input={"type": "coordinate_system", "ref": "not an id"})

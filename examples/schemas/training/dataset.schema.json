@@ -31,7 +31,7 @@
       "required": ["type", "ref"],
       "properties": {
         "type": { "type": "string" },
-        "ref": { "type": "string", "format": "uuid" },
+        "ref": { "type": "string", "pattern": "^[a-zA-Z0-9_.-]+$" },
         "path": { "type": "object" }
       },
       "additionalProperties": false

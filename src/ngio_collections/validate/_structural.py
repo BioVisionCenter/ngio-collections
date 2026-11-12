@@ -1,28 +1,37 @@
-"""CORE structural validators: the rules RFC-8 revision 1 states for every node.
+"""CORE structural validators: the rules RFC-8 revision 2 states for every node.
 
 Each check reads the focus node, at most its parent / children, and the
 index lookups its own references need, so one node costs O(neighbourhood):
 
-- `id_is_uuid`: the node id and every declaration it carries are UUIDs (§6).
-- `known_types`: node and trait types are keywords the revision names or URIs (§4, §5).
+- `id_is_valid`: the node id and every declaration it carries match
+  `ID_PATTERN` (upstream "IDs"; UUIDs are allowed, not required).
+- `known_types`: node and trait types are keywords the revision names or URIs.
 - `node_fields_allowed`: a collection has no node fields; a multiscale has only
-  `coordinate_systems` and `scales` (§2.1). No `attributes` bag survives.
-- `multiscale_is_complete`: a multiscale declares at least one coordinate system
-  and one scale, each well-formed (§8.2).
-- `no_embedded_multiscale`: a multiscale inside a collection is external (§8.1).
+  `coordinateSystems`, `coordinateTransformations` and `data`. No `attributes`
+  bag survives.
+- `multiscale_is_complete`: a multiscale carries `coordinateSystems`,
+  `coordinateTransformations` and `data`, with at least one coordinate system
+  and one array, each well-formed; every array but the first carries
+  `downsamplingTransformations`.
+- `multiscale_transformations_wellformed`: a multiscale's
+  `coordinateTransformations` go from the multiscale itself (its array space)
+  to one coordinate system it declares.
+- `no_embedded_multiscale`: a multiscale inside a collection is external (a
+  rule of this package, see the README).
 - `references_resolve`: a same-document `{type, ref}` points at a declaration of
-  that type (§7.2). References carrying a `path` are not checked here.
+  that type (upstream "`Reference` interface"). References carrying a `path`
+  are not checked here.
 - `extension_types_declared`: every URI type (node, trait or path type) is
-  covered by the document's `extension_manifest` (§4).
+  covered by the document's `extensionManifest` (upstream "Extension manifest").
 - `manifest_well_formed`: at each document root, the manifest parses, its ids
   are unique and every entry lists at least one `jsonschema` / `linkml` schema
   (upstream "Extension manifest" section).
-- `must_understand_supported`: a URI type from a `must_understand` extension is
+- `must_understand_supported`: a URI type from a `mustUnderstand` extension is
   only acceptable when this process registered the extension (upstream "The
   `mustUnderstand` flag").
 - `external_unresolved`: in a fully resolved view, no node is left external.
 - `paths_are_core` (opt-in): every path object uses the `relative` format, the
-  only core one (§7.3), and a built-in path type. Not bundled: this package
+  only core one (upstream "`Path` interface"), and a built-in path type. Not bundled: this package
   resolves all formats and accepts URI path types.
 
 All but `multiscale_is_complete` (which validates through the pydantic
@@ -36,11 +45,16 @@ from typing import TYPE_CHECKING, Iterator, Mapping
 from ngio_collections._optional import require_pydantic
 from ngio_collections._types import JSONValue
 from ngio_collections.graph import find_declaration, iter_declarations
-from ngio_collections.models._ids import is_uuid
+from ngio_collections.models._ids import ID_PATTERN, is_id
 from ngio_collections.models._manifest import (
     SCHEMA_TYPES,
     ExtensionManifestEntry,
     is_extension_type,
+)
+from ngio_collections.models._multiscale_keys import (
+    COORDINATE_SYSTEMS_KEY,
+    COORDINATE_TRANSFORMATIONS_KEY,
+    MULTISCALE_FIELDS,
 )
 from ngio_collections.models._paths import BUILTIN_PATH_TYPES
 from ngio_collections.models._vocabulary import BUILTIN_TRAIT_TYPES
@@ -51,19 +65,20 @@ if TYPE_CHECKING:
     from ngio_collections.api._node import Node
 
 NODE_TYPES = frozenset({"collection", "multiscale"})
-"""Keyword node types RFC-8 revision 1 defines."""
-
-MULTISCALE_FIELDS = frozenset({"coordinate_systems", "scales"})
+"""Keyword node types RFC-8 revision 2 defines."""
 
 
-def id_is_uuid(node: Node) -> None:
-    """The node id and every declaration it carries must be canonical UUIDs."""
-    if not is_uuid(node.id):
-        raise ValidationError(f"node id {node.id!r} is not a UUID")
+def id_is_valid(node: Node) -> None:
+    """The node id and every declaration it carries must match `ID_PATTERN`."""
+    if not is_id(node.id):
+        raise ValidationError(
+            f"node id {node.id!r} is not a valid id (pattern {ID_PATTERN})"
+        )
     for declaration in iter_declarations(node.record):
-        if not is_uuid(declaration["id"]):
+        if not is_id(declaration["id"]):
             raise ValidationError(
-                f"{declaration['type']} id {declaration['id']!r} is not a UUID"
+                f"{declaration['type']} id {declaration['id']!r} is not a valid id "
+                f"(pattern {ID_PATTERN})"
             )
 
 
@@ -86,7 +101,7 @@ def node_fields_allowed(node: Node) -> None:
     """Built-in node types carry only the fields the revision gives them."""
     if "attributes" in node.fields:
         raise ValidationError(
-            "node carries an `attributes` bag; RFC-8 revision 1 replaced it with "
+            "node carries an `attributes` bag; RFC-8 revision 2 replaced it with "
             "typed `traits`"
         )
     if node.type == "collection" and node.fields:
@@ -104,8 +119,10 @@ def node_fields_allowed(node: Node) -> None:
 
 
 def multiscale_is_complete(node: Node) -> None:
-    """A multiscale body declares well-formed coordinate systems and scales.
+    """A multiscale body declares well-formed coordinate systems and arrays.
 
+    `coordinateTransformations` is required. Every array but the first must
+    carry `downsamplingTransformations`.
     Validates the fields through `MultiscaleFields`, so it needs pydantic.
     """
     if node.type != "multiscale" or node.is_external:
@@ -119,8 +136,56 @@ def multiscale_is_complete(node: Node) -> None:
         raise ValidationError(f"multiscale fields do not validate: {exc}") from exc
     if not fields.coordinate_systems:
         raise ValidationError("multiscale declares no coordinate system")
-    if not fields.scales:
-        raise ValidationError("multiscale declares no scale")
+    if not fields.arrays:
+        raise ValidationError("multiscale declares no array")
+
+
+def _local_ref(value: object, kind: str) -> str | None:
+    """Return the `ref` of a same-document `{type: kind, ref}` reference, else `None`."""
+    if not isinstance(value, Mapping) or value.get("type") != kind:
+        return None
+    ref = value.get("ref")
+    return ref if isinstance(ref, str) and value.get("path") is None else None
+
+
+def multiscale_transformations_wellformed(node: Node) -> None:
+    """A multiscale's transformations map its array space into one of its systems.
+
+    Array objects have no id, so every `input` must be a same-document
+    reference to the multiscale itself (`{type: "multiscale", ref: <its id>}`),
+    standing for the array space of its highest-resolution array. Every
+    `output` must be a same-document `coordinate_system` reference to a system
+    the multiscale declares, and all outputs must name the same one.
+    """
+    if node.type != "multiscale" or node.is_external:
+        return
+    transforms = node.fields.get(COORDINATE_TRANSFORMATIONS_KEY)
+    systems = node.fields.get(COORDINATE_SYSTEMS_KEY)
+    if not isinstance(transforms, list) or not isinstance(systems, list):
+        return  # missing or malformed fields are `multiscale_is_complete`'s concern
+    system_ids = {s.get("id") for s in systems if isinstance(s, Mapping)}
+    outputs: set[str] = set()
+    for transform in transforms:
+        if not isinstance(transform, Mapping):
+            return
+        source, target = transform.get("input"), transform.get("output")
+        if _local_ref(source, "multiscale") != node.id:
+            raise ValidationError(
+                "multiscale transformation input must reference the multiscale "
+                f"itself ({{type: 'multiscale', ref: {node.id!r}}}), got {source!r}"
+            )
+        target_id = _local_ref(target, "coordinate_system")
+        if target_id is None or target_id not in system_ids:
+            raise ValidationError(
+                "multiscale transformation output must reference a coordinate "
+                f"system this multiscale declares, got {target!r}"
+            )
+        outputs.add(target_id)
+    if len(outputs) > 1:
+        raise ValidationError(
+            "multiscale transformations must all output to the same coordinate "
+            f"system, got {sorted(outputs)}"
+        )
 
 
 def no_embedded_multiscale(node: Node) -> None:
@@ -129,7 +194,7 @@ def no_embedded_multiscale(node: Node) -> None:
         return
     if node.record.path is None and node.record.edge is None:
         raise ValidationError(
-            "multiscale is embedded in its parent; RFC-8 revision 1 requires a "
+            "multiscale is embedded in its parent; this package requires a "
             "`path` to the image's own document"
         )
 
@@ -157,25 +222,25 @@ def _same_document_refs(node: Node) -> Iterator[Mapping[str, JSONValue]]:
 def references_resolve(node: Node) -> None:
     """Every same-document `{type, ref}` names a declaration of that type.
 
-    Node references are looked up in the id index, other declarations (scales,
+    Node references are looked up in the id index, other declarations (arrays,
     coordinate systems, acquisitions) in the declaration index of the tree the
     node belongs to. References carrying a `path` locate another document and
     are not checked here.
     """
     tree = node.tree
     for ref in _same_document_refs(node):
-        uuid, kind = str(ref["ref"]), str(ref["type"])
-        if any(tree.record(k).type == kind for k in tree.find(uuid)):
+        target, kind = str(ref["ref"]), str(ref["type"])
+        if any(tree.record(k).type == kind for k in tree.find(target)):
             continue
         found = False
-        for key in tree.declarations(uuid):
-            declaration = find_declaration(tree.record(key), uuid)
+        for key in tree.declarations(target):
+            declaration = find_declaration(tree.record(key), target)
             if declaration is not None and declaration.get("type") == kind:
                 found = True
                 break
         if not found:
             raise ValidationError(
-                f"reference {{type: {kind!r}, ref: {uuid!r}}} does not resolve to a "
+                f"reference {{type: {kind!r}, ref: {target!r}}} does not resolve to a "
                 f"{kind} declared in this document"
             )
 
@@ -213,7 +278,7 @@ def _require_declared(
     if not any(entry.covers(type_name) for entry in entries):
         raise ValidationError(
             f"extension type {type_name!r} is not declared in the "
-            f"`extension_manifest` of {where!r}"
+            f"`extensionManifest` of {where!r}"
         )
 
 
@@ -246,7 +311,7 @@ def extension_types_declared(node: Node) -> None:
 
 
 def manifest_well_formed(node: Node) -> None:
-    """At a document root, the `extension_manifest` meets the spec's MUSTs.
+    """At a document root, the `extensionManifest` meets the spec's MUSTs.
 
     Runs on the node that opens a document (the tree root, or a node whose
     document differs from its parent's). Every entry must parse, extension ids
@@ -265,12 +330,12 @@ def manifest_well_formed(node: Node) -> None:
             entry = ExtensionManifestEntry.from_dict(raw)
         except ValueError as exc:
             raise ValidationError(
-                f"malformed `extension_manifest` entry: {exc}"
+                f"malformed `extensionManifest` entry: {exc}"
             ) from exc
         if entry.id in seen:
             raise ValidationError(
                 f"extension {entry.id!r} is declared twice in the "
-                f"`extension_manifest` of {url!r}"
+                f"`extensionManifest` of {url!r}"
             )
         seen.add(entry.id)
         if not entry.schemas:
@@ -289,7 +354,7 @@ def manifest_well_formed(node: Node) -> None:
 def _require_understood(
     type_name: str, entries: list[ExtensionManifestEntry], registered: set[str]
 ) -> None:
-    """Raise if `type_name` belongs to a `must_understand` extension not in `registered`."""
+    """Raise if `type_name` belongs to a `mustUnderstand` extension not in `registered`."""
     if not is_extension_type(type_name):
         return
     for entry in entries:
@@ -300,13 +365,13 @@ def _require_understood(
         ):
             raise ValidationError(
                 f"extension type {type_name!r} belongs to {entry.id!r}, which is "
-                "flagged `must_understand` but is not registered in this process "
+                "flagged `mustUnderstand` but is not registered in this process "
                 "(`register_extension`)"
             )
 
 
 def must_understand_supported(node: Node) -> None:
-    """URI types of `must_understand` extensions are understood by this process.
+    """URI types of `mustUnderstand` extensions are understood by this process.
 
     "Understood" means the extension is registered in the default registry
     (`EXTENSIONS`, via `register_extension`). The declaring-entry / target split
@@ -389,10 +454,11 @@ def _require_core_path(type_: str, format_: str, href: str, what: str) -> None:
 
 
 CORE_VALIDATORS = (
-    id_is_uuid,
+    id_is_valid,
     known_types,
     node_fields_allowed,
     multiscale_is_complete,
+    multiscale_transformations_wellformed,
     no_embedded_multiscale,
     references_resolve,
     extension_types_declared,
@@ -400,4 +466,4 @@ CORE_VALIDATORS = (
     must_understand_supported,
     external_unresolved,
 )
-"""The structural checks every revision-1 document must pass."""
+"""The structural checks every revision-2 document must pass."""

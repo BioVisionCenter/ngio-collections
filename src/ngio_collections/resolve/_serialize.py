@@ -12,7 +12,7 @@ remote / cross-root paths stay verbatim) so a co-located collection stays
 relocatable. `None` fields and empty trait lists are dropped, so an unedited
 document re-serializes identically.
 
-RFC-8 revision 1 never embeds a multiscale inside a collection (§8.1); with
+This package never embeds a multiscale inside a collection; with
 `strict=True` serializing such a record raises `EmbeddedMultiscaleError`.
 """
 
@@ -30,7 +30,7 @@ from ngio_collections.graph import (
     traits_to_list,
 )
 from ngio_collections.models._paths import DocPath
-from ngio_collections.resolve._document import ROOT_KEY, VERSION
+from ngio_collections.resolve._document import MANIFEST_KEY, VERSION
 from ngio_collections.resolve._jsonrefs import relativize_paths
 
 
@@ -108,7 +108,7 @@ def node_dict(
         return data
     if strict and record.type == "multiscale" and not _is_root:
         raise EmbeddedMultiscaleError(
-            f"multiscale {record.id!r} is embedded in its parent; RFC-8 revision 1 "
+            f"multiscale {record.id!r} is embedded in its parent; this package "
             "requires every multiscale in a collection to be its own document "
             "(create() it first, then add_external())"
         )
@@ -138,14 +138,16 @@ def payload(
 ) -> dict:
     """Return the full OME payload for a document.
 
-    `version` and `extension_manifest` are document-envelope keys kept off the
-    nodes themselves so they never nest into embedded children; the manifest is
-    emitted only when non-empty. The root node dict sits under `root`.
+    `version` and `extensionManifest` are document keys kept off the nodes
+    themselves so they never nest into embedded children; the manifest is
+    emitted only when non-empty. The root node's own keys follow them.
     """
     body: dict = {"version": VERSION}
     if extension_manifest:
-        body["extension_manifest"] = [dict(entry) for entry in extension_manifest]
-    body[ROOT_KEY] = node_dict(
-        tree, root_id, base_url=base_url, relativize=relativize, strict=strict
+        body[MANIFEST_KEY] = [dict(entry) for entry in extension_manifest]
+    body.update(
+        node_dict(
+            tree, root_id, base_url=base_url, relativize=relativize, strict=strict
+        )
     )
     return body

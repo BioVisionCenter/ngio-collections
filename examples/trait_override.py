@@ -1,6 +1,6 @@
 """Traits on the declaring entry vs. traits in the image's own document.
 
-A multiscale can carry traits in two places (RFC-8 revision 1 §3.1):
+A multiscale can carry traits in two places (the trait-combination rule of the RFC-8 revision):
 
 * in its **own document** (`open()` the image, `set_trait`, `save()`);
 * on the **entry** that declares it in a collection (`set_trait` on the stub

@@ -26,17 +26,16 @@ SCRIPT = textwrap.dedent(
 
     # -- construction, write, read, resolve: all on raw dicts -----------------
     store = ngc.MemoryStore()
-    cs, sc = mk(0x10), mk(0x20)
+    cs = mk(0x10)
     image = ngc.new_multiscale(
         id=mk(1),
         name="img",
         coordinate_systems=[{"type": "coordinate_system", "id": cs,
                              "axes": [{"name": "y"}, {"name": "x"}]}],
-        scales=[{"type": "scale", "id": sc, "path": ngc.ZarrPath(href="./0").to_dict(),
-                 "coordinate_transformations": [
-                     {"type": "scale", "scale": [1.0, 1.0],
-                      "input": {"type": "scale", "ref": sc},
-                      "output": {"type": "coordinate_system", "ref": cs}}]}],
+        coordinate_transformations=[
+            {"type": "identity", "input": {"type": "multiscale", "ref": mk(1)},
+             "output": {"type": "coordinate_system", "ref": cs}}],
+        arrays=[{"type": "array", "path": ngc.ZarrPath(href="./0").to_dict()}],
         traits=[{"type": "https://example.org/ngff/render", "contrast": [0, 1]}],
     )
     stub = ngc.create("/data/img.zarr", image, store=store)
@@ -53,7 +52,7 @@ SCRIPT = textwrap.dedent(
     ngc.save(opened.rename("renamed"), store=store)
     view = ngc.open_resolved("/data/plate.zarr", store=store)
     child = view.children()[0]
-    assert child.type == "multiscale" and child.fields["scales"][0]["id"] == sc
+    assert child.type == "multiscale" and child.fields["data"][0]["path"]["href"] == "./0"
     edge = child.record.edge  # the declaring entry a resolved node collapsed
     assert isinstance(edge.path, ngc.DocPath) and edge.path.href == "../img.zarr"
     entry = opened.children()[0]
@@ -76,7 +75,7 @@ SCRIPT = textwrap.dedent(
         raise AssertionError("multiscale_is_complete ran without pydantic")
 
     # -- the typed tier raises a clear, actionable ImportError ----------------
-    for attr in ("WellTrait", "Scale", "CoordinateSystem", "BaseObj", "TraitType"):
+    for attr in ("WellTrait", "MultiscaleArray", "CoordinateSystem", "BaseObj", "TraitType"):
         try:
             getattr(ngc, attr)
         except ImportError as exc:
@@ -84,11 +83,11 @@ SCRIPT = textwrap.dedent(
         else:
             raise AssertionError(f"{attr} resolved without pydantic")
     try:
-        child.scales
+        child.arrays
     except ImportError as exc:
-        assert "MultiscaleNode.scales" in str(exc), exc
+        assert "MultiscaleNode.arrays" in str(exc), exc
     else:
-        raise AssertionError("MultiscaleNode.scales ran without pydantic")
+        raise AssertionError("MultiscaleNode.arrays ran without pydantic")
     assert not hasattr(ngc, "NotAThing")
     print("CORE-OK")
     """

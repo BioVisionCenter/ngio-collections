@@ -20,7 +20,13 @@ from ngio_collections.validate import (
     has_trait,
     read_fields,
 )
-from tests._builders import collection, external, multiscale, scale_id
+from tests._builders import (
+    array,
+    collection,
+    cs_id,
+    external,
+    multiscale,
+)
 from tests.conftest import DATA, mk
 
 # Lenses and validators read through the typed models: skip without pydantic.
@@ -61,7 +67,7 @@ def test_lenses_compose_on_one_record() -> None:
     assert well is not None and well.row_index == 0
     assert get_trait(record, ngc.LabelsTrait) is None
     ms = multiscale(4)
-    assert len(read_fields(ms.record, ngc.MultiscaleFields).scales) == 2
+    assert len(read_fields(ms.record, ngc.MultiscaleFields).arrays) == 2
 
 
 # --------------------------------------------------------------------------- #
@@ -73,7 +79,7 @@ async def test_revision_fixtures_validate(revision_store) -> None:
     view = await aio.open_resolved(f"{DATA}/collection/zarr.json", revision_store)
     errors = view.validate(ngc.ALL_VALIDATORS)
     # the only finding: the http node cannot be resolved from a memory store
-    assert [(e.validator, e.node_uuid) for e in errors] == [
+    assert [(e.validator, e.declared_id) for e in errors] == [
         ("external_unresolved", mk(4))
     ]
     opened = await aio.open(f"{DATA}/collection/zarr.json", revision_store)
@@ -85,7 +91,7 @@ async def test_revision_fixtures_validate(revision_store) -> None:
     )
     assert standalone.validate(ngc.ALL_VALIDATORS) == []
     # strict path conformance is opt-in; the fixture's http node fails it
-    assert [e.node_uuid for e in view.validate((ngc.paths_are_core,))] == [mk(4)]
+    assert [e.declared_id for e in view.validate((ngc.paths_are_core,))] == [mk(4)]
 
 
 # --------------------------------------------------------------------------- #
@@ -93,24 +99,21 @@ async def test_revision_fixtures_validate(revision_store) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_id_is_uuid() -> None:
+def test_id_is_valid() -> None:
     assert _names(collection(1), CORE_VALIDATORS) == []
-    assert "id_is_uuid" in _names(_wrap(NodeRecord(type="collection", id="img")))
-    bad_scale = multiscale(4).set_field(
-        "scales",
-        [
-            {
-                "type": "scale",
-                "id": "s0",
-                "path": {"type": "zarr", "format": "relative", "href": "./s0"},
-            }
-        ],
+    # any string of letters, digits, '_', '.' and '-' is an id; UUIDs are not required
+    assert "id_is_valid" not in _names(_wrap(NodeRecord(type="collection", id="img")))
+    assert "id_is_valid" in _names(_wrap(NodeRecord(type="collection", id="img/0")))
+    assert "id_is_valid" in _names(_wrap(NodeRecord(type="collection", id="a b")))
+    bad_array = multiscale(4).set_field("data", [{**array(4, 0, 2), "id": "s 0"}])
+    assert "id_is_valid" in _names(bad_array)
+    assert "id_is_valid" not in _names(
+        multiscale(4).set_field("data", [{**array(4, 0, 2), "id": "s0"}])
     )
-    assert "id_is_uuid" in _names(bad_scale)
 
 
 def test_known_types() -> None:
-    assert "known_types" in _names(ngc.new_node("singlescale", id=mk(1)))
+    assert "known_types" in _names(ngc.new_node("array", id=mk(1)))
     assert "known_types" in _names(collection(1, traits=[{"type": "fractal:table"}]))
     assert "known_types" not in _names(ngc.new_node("https://x.org/t", id=mk(1)))
     assert "known_types" not in _names(
@@ -134,8 +137,39 @@ def test_node_fields_allowed() -> None:
 
 def test_multiscale_is_complete() -> None:
     assert "multiscale_is_complete" not in _names(multiscale(4))
-    assert "multiscale_is_complete" in _names(multiscale(4).set_field("scales", []))
+    assert "multiscale_is_complete" in _names(multiscale(4).set_field("data", []))
+    # the array declaration itself must be well-formed
+    only_translation = [
+        {
+            **array(4, 0, 2),
+            "downsamplingTransformations": [
+                {"type": "translation", "translation": [0.0, 0.0]}
+            ],
+        }
+    ]
+    assert "multiscale_is_complete" in _names(
+        multiscale(4).set_field("data", only_translation)
+    )
+    # only the highest-resolution array may omit its downsampling
+    no_downsampling = [
+        array(4, 0, 2),
+        {k: v for k, v in array(4, 1, 2).items() if k != ngc.DOWNSAMPLING_KEY},
+    ]
+    assert "multiscale_is_complete" in _names(
+        multiscale(4).set_field("data", no_downsampling)
+    )
+    no_path = [{k: v for k, v in array(4, 0, 2).items() if k != "path"}]
+    assert "multiscale_is_complete" in _names(multiscale(4).set_field("data", no_path))
     assert "multiscale_is_complete" in _names(ngc.new_node("multiscale", id=mk(1)))
+    # `coordinateTransformations` is required on a multiscale
+    without_transforms = {
+        k: v
+        for k, v in multiscale(4).fields.items()
+        if k != "coordinateTransformations"
+    }
+    assert "multiscale_is_complete" in _names(
+        multiscale(4).set_fields(without_transforms)
+    )
     # an external entry carries no body, so nothing to check
     assert "multiscale_is_complete" not in _names(collection(1, external(2, "./img")))
 
@@ -201,15 +235,11 @@ def _with_manifest(entries: list[dict], store: MemoryStore) -> str:
         "node_type": "group",
         "attributes": {
             "ome": {
-                "version": "0.9dev42",
-                "extension_manifest": entries,
-                "root": {
-                    "type": "collection",
-                    "id": mk(0x40),
-                    "traits": [
-                        {"type": "https://napari.org/ngff/rendering", "opacity": 1}
-                    ],
-                },
+                "version": "0.9dev4",
+                "extensionManifest": entries,
+                "type": "collection",
+                "id": mk(0x40),
+                "traits": [{"type": "https://napari.org/ngff/rendering", "opacity": 1}],
             }
         },
     }
@@ -233,7 +263,7 @@ async def test_manifest_well_formed() -> None:
         [_napari(), _napari()],  # duplicate id
         [_napari(schemas=[])],  # no schema
         [_napari(schemas=[{"type": "json_schema", "url": "https://x"}])],  # kind
-        [_napari(must_understand="yes")],  # malformed entry
+        [_napari(mustUnderstand="yes")],  # malformed entry
     ):
         node = await aio.open(_with_manifest(bad, store), store)
         assert _names(node, CORE_VALIDATORS).count("manifest_well_formed") == 1, bad
@@ -248,10 +278,10 @@ async def test_must_understand_supported(monkeypatch) -> None:
     store = MemoryStore()
     relaxed = await aio.open(_with_manifest([_napari()], store), store)
     assert "must_understand_supported" not in _names(relaxed)
-    strict_url = _with_manifest([_napari(must_understand=True)], store)
+    strict_url = _with_manifest([_napari(mustUnderstand=True)], store)
     strict = await aio.open(strict_url, store)
     assert _names(strict, CORE_VALIDATORS).count("must_understand_supported") == 1
-    ngc.register_extension(_napari(must_understand=True))
+    ngc.register_extension(_napari(mustUnderstand=True))
     assert "must_understand_supported" not in _names(await aio.open(strict_url, store))
 
 
@@ -267,23 +297,21 @@ async def test_uri_path_types_are_data_declared_and_non_core() -> None:
             "node_type": "group",
             "attributes": {
                 "ome": {
-                    "version": "0.9dev42",
-                    "extension_manifest": manifest,
-                    "root": {
-                        "type": "collection",
-                        "id": mk(0x50),
-                        "nodes": [
-                            {
-                                "type": table,
-                                "id": mk(0x51),
-                                "path": {
-                                    "type": csv,
-                                    "format": "relative",
-                                    "href": "./t.csv",
-                                },
-                            }
-                        ],
-                    },
+                    "version": "0.9dev4",
+                    "extensionManifest": manifest,
+                    "type": "collection",
+                    "id": mk(0x50),
+                    "nodes": [
+                        {
+                            "type": table,
+                            "id": mk(0x51),
+                            "path": {
+                                "type": csv,
+                                "format": "relative",
+                                "href": "./t.csv",
+                            },
+                        }
+                    ],
                 },
             },
         }
@@ -309,15 +337,28 @@ async def test_uri_path_types_are_data_declared_and_non_core() -> None:
 
 
 def test_paths_are_core_is_opt_in() -> None:
-    remote = multiscale(4).set_field(
-        "scales",
+    remote_level = multiscale(4).set_field(
+        "data",
         [
             {
-                "type": "scale",
-                "id": scale_id(4, 0),
+                **array(4, 0, 2),
                 "path": {"type": "zarr", "format": "http", "href": "https://h.org/a/0"},
             }
         ],
+    )
+    assert _names(remote_level, (ngc.paths_are_core,)) == ["paths_are_core"]
+    remote = multiscale(4).set_trait(
+        ngc.LabelsTrait(
+            source=[
+                ngc.ReferenceObj(
+                    type="multiscale",
+                    ref=mk(2),
+                    path=ngc.DocPath(
+                        type="zarr", format="http", href="https://h.org/a"
+                    ),
+                )
+            ]
+        )
     )
     assert _names(remote, (ngc.paths_are_core,)) == ["paths_are_core"]
     absolute = collection(
@@ -354,18 +395,77 @@ def test_trait_applies_to() -> None:
     )
 
 
+def test_multiscale_transformations_wellformed() -> None:
+    name = "multiscale_transformations_wellformed"
+    own = {"type": "multiscale", "ref": mk(4)}
+    physical = {"type": "coordinate_system", "ref": cs_id(4)}
+
+    def mapped(source: dict, target: dict) -> ngc.Node:
+        transform = {
+            "type": "scale",
+            "scale": [0.5, 0.5],
+            "input": source,
+            "output": target,
+        }
+        return multiscale(4).set_field("coordinateTransformations", [transform])
+
+    assert _names(multiscale(4), CORE_VALIDATORS) == []
+    assert _names(mapped(own, physical), CORE_VALIDATORS) == []
+    # the input is the multiscale itself: arrays have no id to point at
+    assert name in _names(mapped(physical, physical))
+    assert name in _names(mapped({"type": "array", "ref": "s0"}, physical))
+    assert name in _names(mapped({"type": "multiscale", "ref": mk(5)}, physical))
+    # the output is a coordinate system this multiscale declares
+    assert name in _names(mapped(own, own))
+    assert name in _names(mapped(own, {"type": "coordinate_system", "ref": mk(0x99)}))
+    # and the same one for every transformation
+    second = {"type": "coordinate_system", "id": mk(0x77), "axes": [{"name": "y"}]}
+    ok = multiscale(4)
+    two_outputs = ok.set_field(
+        "coordinateSystems", [*ok.fields["coordinateSystems"], second]
+    ).set_field(
+        "coordinateTransformations",
+        [
+            *ok.fields["coordinateTransformations"],
+            {
+                "type": "identity",
+                "input": own,
+                "output": {"type": "coordinate_system", "ref": mk(0x77)},
+            },
+        ],
+    )
+    assert _names(two_outputs, CORE_VALIDATORS) == [name]
+
+
 def test_scale_matches_axes() -> None:
     ok = multiscale(4, axis_names=("z", "y", "x"))
     assert "scale_matches_axes" not in _names(ok)
-    scales = [s.model_dump(mode="json", exclude_none=True) for s in ok.scales]
-    scales[0]["coordinate_transformations"][0]["scale"] = [
-        1.0,
-        1.0,
+    arrays = [a.model_dump(mode="json", exclude_none=True) for a in ok.arrays]
+    arrays[1]["downsamplingTransformations"][0]["scale"] = [
+        2.0,
+        2.0,
     ]  # 2 factors, 3 axes
-    bad = ok.set_field("scales", scales)
+    bad = ok.set_field("data", arrays)
     errors = bad.validate(RECOMMENDED_VALIDATORS)
     assert [e.validator for e in errors] == ["scale_matches_axes"]
-    assert errors[0].node_uuid == mk(4)
+    assert errors[0].declared_id == mk(4)
+    # a multiscale-level scale transform is checked against its output system too
+    mapped = ok.set_field(
+        "coordinateTransformations",
+        [
+            {
+                "type": "scale",
+                "scale": [0.5, 0.1],  # 2 factors, 3 axes
+                "input": {"type": "multiscale", "ref": mk(4)},
+                "output": {"type": "coordinate_system", "ref": cs_id(4)},
+            }
+        ],
+    )
+    assert "scale_matches_axes" in _names(mapped, RECOMMENDED_VALIDATORS)
+    assert _names(mapped, CORE_VALIDATORS) == []
+    # a malformed scene is reported, not raised through
+    broken_scene = collection(1, traits=[{"type": "scene", "coordinateSystems": 3}])
+    assert "scale_matches_axes" in _names(broken_scene, RECOMMENDED_VALIDATORS)
     scene = ngc.SceneTrait(
         coordinate_systems=[ngc.CoordinateSystem(id=mk(5), axes=[ngc.Axis(name="x")])],
         coordinate_transformations=[
@@ -411,4 +511,4 @@ def test_raise_on_error_reraises_first_failure() -> None:
     with pytest.raises(ngc.ValidationError) as exc_info:
         orphan.validate(RECOMMENDED_VALIDATORS, raise_on_error=True)
     assert exc_info.value.validator == "well_under_plate"
-    assert exc_info.value.node_id == (mk(1),) and exc_info.value.node_uuid == mk(1)
+    assert exc_info.value.node_id == (mk(1),) and exc_info.value.declared_id == mk(1)

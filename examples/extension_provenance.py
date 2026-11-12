@@ -1,7 +1,7 @@
 """The smallest extension: one metadata trait on a collection entry.
 
-RFC-8 revision 1 identifies extension types by URI and requires every extension
-a document uses to be listed in its `extension_manifest`. The Fractal
+RFC-8 revision 2 identifies extension types by URI and requires every extension
+a document uses to be listed in its `extensionManifest`. The Fractal
 *provenance* trait (see `_extensions.py`) records which task produced a node
 and from which inputs. Three things to see:
 
@@ -40,7 +40,7 @@ def main() -> None:
     )
     root = ngc.new_collection(id=uid(1), name="experiment").add_external(raw, nuclei)
     ngc.create(url, root, overwrite=True)
-    print(Path(url).read_text())  # note the derived `extension_manifest`
+    print(Path(url).read_text())  # note the derived `extensionManifest`
 
     view = ngc.open_resolved(url)
     print("provenance :", view.find(uid(3)).traits[PROVENANCE]["task"])

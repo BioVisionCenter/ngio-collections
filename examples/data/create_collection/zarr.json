@@ -1,137 +1,135 @@
 {
   "attributes": {
     "ome": {
-      "version": "0.9dev42",
-      "root": {
-        "type": "collection",
-        "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
-        "name": "hela-nuclei-experiment",
-        "traits": [
-          {
-            "type": "scene",
-            "coordinate_systems": [
-              {
-                "type": "coordinate_system",
-                "id": "0192f3a0-7c1e-7b00-9c22-000000000005",
-                "axes": [
-                  {
-                    "name": "z",
-                    "type": "space",
-                    "unit": "micrometer"
-                  },
-                  {
-                    "name": "y",
-                    "type": "space",
-                    "unit": "micrometer"
-                  },
-                  {
-                    "name": "x",
-                    "type": "space",
-                    "unit": "micrometer"
-                  }
-                ]
-              }
-            ],
-            "coordinate_transformations": [
-              {
-                "input": {
-                  "type": "coordinate_system",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000020",
-                  "path": {
-                    "type": "zarr",
-                    "format": "relative",
-                    "href": "./raw"
-                  }
+      "version": "0.9dev4",
+      "type": "collection",
+      "id": "0192f3a0-7c1e-7b00-9c22-000000000001",
+      "name": "hela-nuclei-experiment",
+      "traits": [
+        {
+          "type": "scene",
+          "coordinateSystems": [
+            {
+              "type": "coordinate_system",
+              "id": "0192f3a0-7c1e-7b00-9c22-000000000005",
+              "axes": [
+                {
+                  "name": "z",
+                  "type": "space",
+                  "unit": "micrometer"
                 },
-                "output": {
-                  "type": "coordinate_system",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000005"
+                {
+                  "name": "y",
+                  "type": "space",
+                  "unit": "micrometer"
                 },
-                "type": "translation",
-                "translation": [
-                  0.0,
-                  0.0,
-                  100.0
-                ]
-              },
-              {
-                "input": {
-                  "type": "coordinate_system",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000021",
-                  "path": {
-                    "type": "zarr",
-                    "format": "relative",
-                    "href": "./nuclei"
-                  }
-                },
-                "output": {
-                  "type": "coordinate_system",
-                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000005"
-                },
-                "type": "translation",
-                "translation": [
-                  0.0,
-                  0.0,
-                  100.0
-                ]
-              }
-            ]
-          }
-        ],
-        "nodes": [
-          {
-            "type": "multiscale",
-            "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
-            "name": "raw",
-            "path": {
-              "type": "zarr",
-              "format": "relative",
-              "href": "./raw"
+                {
+                  "name": "x",
+                  "type": "space",
+                  "unit": "micrometer"
+                }
+              ]
             }
-          },
-          {
-            "type": "multiscale",
-            "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
-            "name": "nuclei",
-            "path": {
-              "type": "zarr",
-              "format": "relative",
-              "href": "./nuclei"
+          ],
+          "coordinateTransformations": [
+            {
+              "input": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000020",
+                "path": {
+                  "type": "zarr",
+                  "format": "relative",
+                  "href": "./raw"
+                }
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000005"
+              },
+              "type": "translation",
+              "translation": [
+                0.0,
+                0.0,
+                100.0
+              ]
             },
-            "traits": [
-              {
-                "type": "labels",
-                "source": [
-                  {
-                    "type": "multiscale",
-                    "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
-                  }
-                ],
-                "label_attributes": [
-                  {
-                    "label_value": 1,
-                    "rgba": [
-                      255,
-                      0,
-                      0,
-                      255
-                    ]
-                  },
-                  {
-                    "label_value": 2,
-                    "rgba": [
-                      0,
-                      255,
-                      0,
-                      255
-                    ]
-                  }
-                ]
-              }
-            ]
+            {
+              "input": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000021",
+                "path": {
+                  "type": "zarr",
+                  "format": "relative",
+                  "href": "./nuclei"
+                }
+              },
+              "output": {
+                "type": "coordinate_system",
+                "ref": "0192f3a0-7c1e-7b00-9c22-000000000005"
+              },
+              "type": "translation",
+              "translation": [
+                0.0,
+                0.0,
+                100.0
+              ]
+            }
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000002",
+          "name": "raw",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./raw"
           }
-        ]
-      }
+        },
+        {
+          "type": "multiscale",
+          "id": "0192f3a0-7c1e-7b00-9c22-000000000003",
+          "name": "nuclei",
+          "path": {
+            "type": "zarr",
+            "format": "relative",
+            "href": "./nuclei"
+          },
+          "traits": [
+            {
+              "type": "labels",
+              "source": [
+                {
+                  "type": "multiscale",
+                  "ref": "0192f3a0-7c1e-7b00-9c22-000000000002"
+                }
+              ],
+              "label_attributes": [
+                {
+                  "label_value": 1,
+                  "rgba": [
+                    255,
+                    0,
+                    0,
+                    255
+                  ]
+                },
+                {
+                  "label_value": 2,
+                  "rgba": [
+                    0,
+                    255,
+                    0,
+                    255
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "zarr_format": 3,

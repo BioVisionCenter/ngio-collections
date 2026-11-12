@@ -6,32 +6,39 @@
 > RFC-8 is in flux; this implementation targets a *proposed revision* and is
 > not complete. Design and API are expected to change significantly.
 
-## Spec version targeted: RFC-8 revision 1 (Fall 2026 proposal)
+## Spec version targeted: RFC-8 revision 2 (Fall 2026 proposal)
 
-This package implements the **revision-1 proposal** for
+This package implements the **revision-2 proposal** for
 [RFC-8](https://ngff.openmicroscopy.org/rfc/8/) (OME-Zarr collections and
-extensibility), not the text as published. The proposal lives in the
-`rfc8-revision1/` checkout (`rfc8_revision_changes.md`, the three example
-documents, and the upstream draft it amends). In short:
+extensibility), not the text as published. The reference is `upstream/rfc8.md`
+in [ngff-rfc8-revisions](https://github.com/lorenzocerrone/ngff-rfc8-revisions) at commit
+`a19d460` ("Remove singlescale node"). In short:
 
-- the `ome` payload is the envelope `{version: "0.9dev42", extension_manifest?,
-  root}` with the root node under `root` (the `rfc8_model` layout; the revision
-  text puts the node fields directly under `ome`, see Deviations);
+- the `ome` payload is the root node itself next to the document keys:
+  `{version: "0.9dev4", extensionManifest?, type, id, ...}`;
 - nodes are `{type, id, name?, traits?}`; `attributes` is gone, every piece of
   metadata is a typed **trait** (a keyword for built-in traits, a URI for
-  extensions), and extensions are declared per document in `extension_manifest`
-  as `{id, version, schemas, name?, description?, must_understand?, homepage?}`
-  with `schemas` a non-empty list of `{type: jsonschema | linkml, url}`
-  (the manifest fields follow the upstream draft at `ome/rfc8-revision1`
-  commit 1ce8f23, which has since adopted list traits, UUID ids and the
-  manifest; `must_understand` is upstream-only, the proposal omits it);
-- **ids are required UUIDs** (v7 minted by `new_id()`), names are optional and
-  free-form;
+  extensions), and extensions are declared per document in `extensionManifest`
+  as `{id, version, schemas, name?, description?, mustUnderstand?, homepage?}`
+  with `schemas` a non-empty list of `{type: jsonschema | linkml, url}`;
+- **ids are required strings** matching `^[a-zA-Z0-9_.-]+$`; `new_id()` mints a
+  UUIDv7 when the caller does not pick one; names are optional and free-form;
 - references are typed, `{type, ref, path?}`; paths are `{type, format, href}`;
-- a **multiscale is always its own document** (`coordinate_systems` + `scales`
-  directly on the node, no `singlescale` nodes), declared in a collection by an
-  entry that shares its UUID; traits on that entry override the image's own
-  traits per type;
+- a **multiscale** is a leaf node with `coordinateSystems`,
+  `coordinateTransformations` and `data`, one
+  `{type: "array", name?, path, downsamplingTransformations?}` object per
+  resolution level, finest first. Array objects are not nodes and have no
+  `id`. Every array but the first carries `downsamplingTransformations` (a
+  `scale`, optionally followed by a `translation`) relative to the first. The
+  node-level transformations map the array space of the first array into one
+  of the node's coordinate systems;
+- a **multiscale is always its own document** here (see Deviations), declared
+  in a collection by an entry that shares its id; traits on that entry override
+  the image's own traits per type;
+- wire keys follow the revision's spelling, camelCase and snake_case mixed
+  (`coordinateSystems`, `mustUnderstand`, `coordinate_system`); the Python
+  attributes stay snake_case (`coordinate_systems`, `arrays`,
+  `must_understand`);
 - HCS and labels are deferred to sub-RFCs but kept here as provisional traits
   (`PlateTrait`, `WellTrait`, `AcquisitionTrait`, `LabelsTrait`) following the
   revision's examples.
@@ -73,7 +80,7 @@ into RFC-8 discussions.
 - **Zero core dependencies.** The core (open / edit / save / resolve, the raw
   traits and fields, the structural validators) runs on the stdlib alone.
   Pydantic is the optional `validate` extra: it powers the typed value models
-  (`WellTrait`, `Scale`, …), the `node[Trait]` lenses, `MultiscaleNode.scales`
+  (`WellTrait`, `MultiscaleArray`, …), the `node[Trait]` lenses, `MultiscaleNode.arrays`
   and the schema-shape validators; without it those raise an `ImportError`
   naming the extra. Performance-critical seams (persistent maps, JSON) are thin
   interfaces so accelerated backends (`pyrsistent`, `orjson`) can drop in
@@ -157,35 +164,50 @@ a bug worth reporting rather than a reason to deep-import.
 
 ## Deviations and experimental extensions
 
+- **Multiscale transformations reference the multiscale itself, as a typed
+  reference.** Array objects have no `id` (the review of
+  [ngff-rfc8-revisions#43](https://github.com/ome/ngff-rfc8-revisions/pull/43)
+  removed it on purpose), so the input of a multiscale's
+  `coordinateTransformations` is the implicit array space of its
+  highest-resolution array. The revision's newest example writes that as the
+  multiscale's own id in a bare string; this package keeps typed references
+  everywhere and writes `{type: "multiscale", ref: <the node's id>}`, with a
+  `{type: "coordinate_system", ref}` output. Bare-string `input` / `output`
+  values are not read. The `multiscale_transformations_wellformed` validator
+  enforces this shape, that the output is a system the node declares, and that
+  all transformations share it.
+- **The physical reference is always the highest-resolution array.** A
+  consequence of the above: calibration cannot be attached to another level.
+  The first entry of `data` is taken as the highest resolution; the revision
+  does not say how to identify it.
+- **Not in sync with `rfc8_model`.** The pydantic draft in `ngff-rfc8-models`
+  still has the earlier layout (`ome.root`, `arrays` of `singlescale`,
+  snake_case keys), so documents do not round-trip with it until it follows
+  the revision.
 - **`absolute` and `http` paths are resolved.** The revision makes only
   `relative` a core format and defers the others to a sub-RFC. This package
   resolves all three (a read-only `HttpStore` behind a scheme-routed default
   store), so a collection or a multiscale document can point at existing local
-  or remote data, remote arrays as scales included, without bundling it. Strict
+  or remote data, remote arrays as levels included, without bundling it. Strict
   conformance is opt-in: `open_resolved(..., formats=CORE_FORMATS)` and the
   `paths_are_core` validator.
 - **Provisional recommended traits.** HCS and labels are deferred to sub-RFCs;
   the trait models here follow the revision's examples and may change.
-- **Envelope: `ome.root` and version `0.9dev42`.** The revision text keeps the
-  root node's fields directly under `ome`, next to `version`. This package
-  instead nests the node under `ome.root` and stamps `version: "0.9dev42"`,
-  matching the `rfc8_model` pydantic draft so documents round-trip between the
-  two. `extension_manifest` stays a list next to `root`.
-- **`json` path type kept.** The revision only shows `type: "zarr"`; the
-  upstream draft defines `json` too, and standalone `collection.json` documents
-  rely on it.
-- **Multiscales are never embedded, even in memory.** `add()` refuses a
-  multiscale without a `path`; the way to link an image is `create` then
+- **Version string `0.9dev4`.** The revision's examples only show the
+  placeholder `"0.x"`.
+- **Multiscales are never embedded, even in memory.** The revision allows a
+  multiscale with inline `data` inside a collection; here `add()` refuses a
+  multiscale without a `path`, and the way to link an image is `create` then
   `add_external`.
-- **Custom path types are accepted as data locators.** The upstream draft makes
+- **Custom path types are accepted as data locators.** The revision makes
   the path `type` an extension point (its `OMEROPath` example). Here a
   URI-typed path keeps the closed `{type, format, href}` shape (extra keys an
   extension defines are not kept), resolves and relativizes like any path, must
   be declared in the manifest, and is never fetched or opened as a node
   document (`DocPath.is_document` is false). The examples use one for a CSV
   table; `paths_are_core` flags them.
-- **`must_understand` is honoured through the process registry.** A custom type
-  of a `must_understand` extension is a validation finding unless the extension
+- **`mustUnderstand` is honoured through the process registry.** A custom type
+  of a `mustUnderstand` extension is a validation finding unless the extension
   was passed to `register_extension`; nothing is skipped or rejected on read.
 
 ## Feedback to the RFC
@@ -193,24 +215,36 @@ a bug worth reporting rather than a reason to deep-import.
 Points this implementation surfaced, for the revision's authors:
 
 - `traits` as a *list* keyed implicitly by `type` is harder to use than a dict
-  keyed by type: same-type duplicates are unspecified and the §3.1 override
-  rule is keyed by type anyway (this package rejects duplicates).
-- The upstream draft's examples put an informational `name` inside references
+  keyed by type: same-type duplicates are unspecified and the override rule is
+  keyed by type anyway (this package rejects duplicates).
+- The revision's examples put an informational `name` inside references
   (`{type, ref, name, path?}`) while its schema table says a reference MUST NOT
   carry other fields; `ReferenceObj` follows the table and rejects `name`.
-- `mustUnderstand` is in the upstream manifest but the proposal (§4.1) excludes
-  it; this package follows upstream. The schema kind is spelled `jsonschema`
-  upstream and `json_schema` in the proposal's examples; upstream is used here.
-- The upstream multiscale table still types `traits` as a required object, and
-  `extensionManifest` / `extension_manifest` casing waits on the snake_case
-  sub-RFC (snake_case here, as in the proposal).
+- Leftovers of the `singlescale` removal (PR #43): the `Declaration` section
+  still lists `data` entries and `"array"` as declarations with an `id`; the
+  context table still asks for `{type: "array", ref}` as the input of a
+  multiscale transformation; and the inlined-multiscale example still gives
+  its array an `id` and points the transformation at it.
+- The multiscale examples use bare strings for `input` / `output` where the
+  `Coordinate Transformation` interface requires typed references. If plain
+  ids stay allowed inside one document, the text should say so and say what a
+  multiscale's own id means as an `input`.
+- With the implicit input, the physical transformation can only start from the
+  highest-resolution array, and the text does not say how that array is
+  identified (first in `data`, or the one without downsampling).
+- `coordinateTransformations` is required on a multiscale, but the
+  single-level example omits it, and an image whose pixel size is unknown
+  still has to write one.
+- Key casing is mixed. Besides the camelCase / snake_case split that a later
+  RFC is meant to settle, the text still has `must_understand` in one example
+  and `extension_manifest` in the JSON-LD paragraph.
 - Without any free-form field, scratch metadata needs a URI trait and a
   manifest entry; one built-in opaque trait would absorb that.
-- "No conflict rules needed" (§8.1) is only half true: the trait-combination
-  rule still exists, and `name` precedence is unspecified (here the declaring
-  entry wins).
-- `input: {type: scale, ref: <self>}` on every scale transform is redundant.
-- §12's trait rules (`applies_to`, `excludes`, child constraints) have no
-  machine-readable home; they live in validator code here.
+- When an entry in a collection and the document it points at both carry
+  traits or a `name`, precedence is unspecified (here the declaring entry
+  wins).
+- Trait rules (which node types a trait applies to, exclusivity, child
+  constraints) have no machine-readable home; they live in validator code
+  here. The revision lists this as future work.
 - `http` for *scale* paths is low-risk (readers already fetch chunks by URL)
   and is what makes collections over existing remote data possible.

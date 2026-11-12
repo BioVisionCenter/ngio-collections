@@ -1,6 +1,6 @@
 """Builds the benchmark dataset and writes it to disk at a chosen sharding.
 
-The dataset mirrors a realistic RFC-8 revision-1 HCS collection:
+The dataset mirrors a realistic RFC-8 revision-2 HCS collection:
 
     root -> 20 plates (plate trait) -> 240 wells/plate (well trait) -> n scenes/well
 
@@ -12,14 +12,14 @@ is 19 declared nodes (scene + 18 children). Node count scales linearly with
     total = 4821 + 4800 * scenes_per_well * 19
 
 so ``scenes_per_well == 11`` yields ~1.0M nodes (see ``scenes_for_target``).
-Scales and coordinate systems are declarations inside a multiscale, not nodes.
+Arrays and coordinate systems are declarations inside a multiscale, not nodes.
 
 Under the revision a multiscale is always its own document, so every image and
 label is written as a ``zarr.json`` of its own regardless of sharding; the
 ``--shard`` level only decides the *collection* document boundaries (``scene`` /
 ``well`` / ``plate`` / ``none``). Tables are embedded in their scene's document.
 Ids are UUIDv5 of a readable key (``p3-w12-s0-img``), so datasets are
-deterministic. Datasets are cached under ``benchmarks/.data/<shard>-n<scenes>/``.
+deterministic (any id string would be valid; UUIDs keep them unique). Datasets are cached under ``benchmarks/.data/<shard>-n<scenes>/``.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ _BOUNDARY_DEPTH: dict[ShardLevel, int] = {"none": 0, "plate": 1, "well": 2, "sce
 
 
 def uid(key: str) -> str:
-    """Deterministic UUID for a readable key."""
+    """Deterministic id (a UUIDv5) for a readable key."""
     return str(uuid.uuid5(NAMESPACE, key))
 
 
@@ -113,28 +113,29 @@ def document_count(shard: ShardLevel, scenes_per_well: int) -> int:
 def _multiscale_record(
     key: str, name: str, *, labels_of: str | None = None
 ) -> NodeRecord:
-    """The root record of one image document (3 scales, 1 coordinate system)."""
+    """The root record of one image document (3 arrays, 1 coordinate system).
+
+    One `scale` transformation maps the image's array space into the system.
+    """
     ms_id, cs_id = uid(key), uid(key + "#cs")
-    scales = []
-    for level in range(SCALE_LEVELS):
-        sid = uid(f"{key}#s{level}")
-        scales.append(
-            {
-                "type": "scale",
-                "id": sid,
-                "path": {"type": "zarr", "format": "relative", "href": f"./s{level}"},
-                "coordinate_transformations": [
-                    {
-                        "type": "scale",
-                        "scale": [2.0**level, 2.0**level],
-                        "input": {"type": "scale", "ref": sid},
-                        "output": {"type": "coordinate_system", "ref": cs_id},
-                    }
-                ],
-            }
-        )
+    arrays = [
+        {
+            "type": "array",
+            "path": {"type": "zarr", "format": "relative", "href": f"./s{level}"},
+            **(
+                {
+                    "downsamplingTransformations": [
+                        {"type": "scale", "scale": [2.0**level, 2.0**level]}
+                    ]
+                }
+                if level
+                else {}
+            ),
+        }
+        for level in range(SCALE_LEVELS)
+    ]
     fields = {
-        "coordinate_systems": [
+        "coordinateSystems": [
             {
                 "type": "coordinate_system",
                 "id": cs_id,
@@ -144,7 +145,15 @@ def _multiscale_record(
                 ],
             }
         ],
-        "scales": scales,
+        "coordinateTransformations": [
+            {
+                "type": "scale",
+                "scale": [0.65, 0.65],
+                "input": {"type": "multiscale", "ref": ms_id},
+                "output": {"type": "coordinate_system", "ref": cs_id},
+            }
+        ],
+        "data": arrays,
     }
     traits = {}
     if labels_of is not None:

@@ -10,7 +10,7 @@ follow the revision's example and are marked provisional. Note the well is an
 *embedded* collection (nested collections may be inlined; only multiscales may
 not), and that `acquisition` on an image's entry is a typed reference to the
 acquisition *declared* in the plate trait. The generated document mirrors
-`rfc8-revision1/examples/plate.json`.
+the revision's `examples/plate.json`.
 
 Run with: pixi run --environment dev python examples/hcs_plate.py
 """
