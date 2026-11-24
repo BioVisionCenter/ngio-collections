@@ -1,0 +1,175 @@
+{
+  "ome": {
+    "version": "0.x",
+    "type": "collection",
+    "name": "idr_images",
+    "id": "idr_images",
+    "nodes": [
+      {
+        "type": "multiscale",
+        "name": "ExpD_chicken_embryo_MIP.ome",
+        "id": "ExpD_chicken_embryo_MIP.ome",
+        "path": {
+          "type": "zarr",
+          "path": "./ExpD_chicken_embryo_MIP.ome.zarr"
+        }
+      },
+      {
+        "type": "multiscale",
+        "name": "ExpA_VIP_ASLM_on",
+        "id": "ExpA_VIP_ASLM_on",
+        "path": {
+          "type": "zarr",
+          "path": "./ExpA_VIP_ASLM_on.zarr"
+        }
+      },
+      {
+        "type": "multiscale",
+        "name": "6001240_labels",
+        "id": "6001240_labels",
+        "path": {
+          "type": "zarr",
+          "path": "./6001240_labels.zarr"
+        }
+      },
+      {
+        "type": "multiscale",
+        "name": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome",
+        "id": "IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome",
+        "path": {
+          "type": "zarr",
+          "path": "./IMG_1033-1112_Asterella_gracilis_Mannia_gracilis_stature.ome.zarr"
+        }
+      },
+      {
+        "type": "collection",
+        "name": "4_bf2raw",
+        "id": "4_bf2raw",
+        "nodes": [
+          {
+            "type": "multiscale",
+            "name": "0",
+            "id": "0",
+            "path": {
+              "type": "zarr",
+              "path": "./180712_H2B_22ss_Courtney1_20180712-163837_p00_c00_preview/0.zarr"
+            }
+          }
+        ]
+      },
+      {
+        "type": "collection",
+        "name": "5_bf2raw",
+        "id": "5_bf2raw",
+        "nodes": [
+          {
+            "type": "multiscale",
+            "name": "0",
+            "id": "0",
+            "path": {
+              "type": "zarr",
+              "path": "./3.66.9-6.141020_15-41-29.00.ome/0.zarr"
+            }
+          }
+        ]
+      },
+      {
+        "type": "multiscale",
+        "name": "9822152",
+        "id": "9822152",
+        "path": {
+          "type": "zarr",
+          "path": "./9822152.zarr"
+        }
+      },
+      {
+        "type": "collection",
+        "name": "7_bf2raw",
+        "id": "7_bf2raw",
+        "nodes": [
+          {
+            "type": "multiscale",
+            "name": "0",
+            "id": "0",
+            "path": {
+              "type": "zarr",
+              "path": "./BR00109990_C2/0.zarr"
+            }
+          },
+          {
+            "type": "multiscale",
+            "name": "1",
+            "id": "1",
+            "path": {
+              "type": "zarr",
+              "path": "./BR00109990_C2/1.zarr"
+            }
+          },
+          {
+            "type": "multiscale",
+            "name": "2",
+            "id": "2",
+            "path": {
+              "type": "zarr",
+              "path": "./BR00109990_C2/2.zarr"
+            }
+          },
+          {
+            "type": "multiscale",
+            "name": "3",
+            "id": "3",
+            "path": {
+              "type": "zarr",
+              "path": "./BR00109990_C2/3.zarr"
+            }
+          },
+          {
+            "type": "multiscale",
+            "name": "4",
+            "id": "4",
+            "path": {
+              "type": "zarr",
+              "path": "./BR00109990_C2/4.zarr"
+            }
+          },
+          {
+            "type": "multiscale",
+            "name": "5",
+            "id": "5",
+            "path": {
+              "type": "zarr",
+              "path": "./BR00109990_C2/5.zarr"
+            }
+          },
+          {
+            "type": "multiscale",
+            "name": "6",
+            "id": "6",
+            "path": {
+              "type": "zarr",
+              "path": "./BR00109990_C2/6.zarr"
+            }
+          },
+          {
+            "type": "multiscale",
+            "name": "7",
+            "id": "7",
+            "path": {
+              "type": "zarr",
+              "path": "./BR00109990_C2/7.zarr"
+            }
+          },
+          {
+            "type": "multiscale",
+            "name": "8",
+            "id": "8",
+            "path": {
+              "type": "zarr",
+              "path": "./BR00109990_C2/8.zarr"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
