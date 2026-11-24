@@ -1,54 +1,56 @@
-"""Open an on-disk collection, edit a node, and save the change back.
+"""Open a document, edit names and fields, save it back, delete it.
 
-Single-document round-trip: `open()` reads one document into an editable tree; a
-positioned edit returns a new tree (the source is untouched); `save()` writes it
-back to the same file. Re-opening confirms the edit persisted.
+Two documents are edited: the collection (rename the image's *entry*) and the
+image itself (rename it and its coordinate system). Each `save` rewrites
+exactly one document; edits return a new tree and the opened one is untouched.
+On `open_resolved` the entry's name wins over the document's. Finally
+`delete(cascade=True)` removes a second, scratch image: its entry *and* the
+document it points at.
 
-Run with: pixi run python examples/open_edit_save.py
+Run with: pixi run --environment dev python examples/open_edit_save.py
 """
 
 from pathlib import Path
 
 import ngio_collections as ngc
-
-
-def _setup(url: str) -> None:
-    """Write a small starting collection to disk (so the example is standalone)."""
-    root = (
-        ngc.new_node("collection", id="root", name="experiment")
-        .add(
-            ngc.new_node(
-                "multiscale", id="image", name="image", attributes={"role": "raw"}
-            )
-        )
-        .add(
-            ngc.new_node(
-                "multiscale", id="nuclei", name="nuclei", attributes={"role": "label"}
-            )
-        )
-    )
-    ngc.create(url, root, overwrite=True)
+from _ids import uid
+from _images import image
 
 
 def main() -> None:
-    url = str(Path(__file__).parent / "data" / Path(__file__).stem / "collection.json")
-    _setup(url)
+    base = Path(__file__).parent / "data" / Path(__file__).stem
+    image_url, url = str(base / "image"), str(base / "zarr.json")
+    stub = ngc.create(image_url, image(2, "image"), overwrite=True)
+    scratch = ngc.create(str(base / "scratch"), image(3, "scratch"), overwrite=True)
+    root = ngc.new_collection(id=uid(1), name="experiment").add_external(stub, scratch)
+    ngc.create(url, root, overwrite=True)
 
-    # Open the document as an editable tree (it is now document-backed).
-    root = ngc.open(url)
-    print("opened :", [n.id for n in root.walk()], "->", root.document_url)
-
-    # Positioned edits return the new tree root, so they chain through `find`.
-    edited = root.find("image").set_attrs({"role": "raw", "channel": "DAPI"})
-    edited = edited.find("nuclei").rename("Nuclei segmentation")
-
-    # Write the edited tree back into its own document.
+    # Edit the collection: the image's entry gets a new name.
+    opened = ngc.open(url)
+    edited = opened.find(uid(2)).rename("Raw image")
     ngc.save(edited)
+    print("opened tree still :", opened.find(uid(2)).name)  # edits never mutate
 
-    # Re-open to confirm the edits are on disk.
-    reopened = ngc.open(url)
-    print("image  :", dict(reopened.find("image").attributes))
-    print("nuclei :", reopened.find("nuclei").name)
+    # Edit the image document itself: rename it and its coordinate system.
+    img = ngc.open(image_url)
+    assert isinstance(img, ngc.MultiscaleNode)  # narrows the type for the access below
+    (system,) = img.coordinate_systems
+    img = img.set_coordinate_systems([system.model_copy(update={"name": "stage"})])
+    ngc.save(img.rename("image-v2"))
+
+    view = ngc.open_resolved(url)
+    node = view.find(uid(2))
+    assert isinstance(node, ngc.MultiscaleNode)
+    print("entry name wins   :", node.name)
+    print("image document    :", ngc.open(image_url).name)
+    print("image system name :", node.coordinate_systems[0].name)
+
+    # Drop the scratch image: its entry from the collection and its own document.
+    touched = ngc.delete(ngc.open(url).find(uid(3)), cascade=True)
+    print(
+        "documents touched :", [Path(u).relative_to(base).as_posix() for u in touched]
+    )
+    print("after delete      :", [n.name for n in ngc.open(url).walk()])
 
 
 if __name__ == "__main__":

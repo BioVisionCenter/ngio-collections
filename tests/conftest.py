@@ -1,12 +1,51 @@
+"""Shared fixtures: spec-style readable ids and the revision fixture documents."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
 from pathlib import Path
 
 import pytest
 
-REFERENCE_DIR = Path(__file__).parent / "data"
+from ngio_collections.api import MemoryStore
+
+FIXTURES = Path(__file__).parent / "data" / "revision"
+DATA = "/data"
+
+HAS_PYDANTIC = importlib.util.find_spec("pydantic") is not None
+
+requires_pydantic = pytest.mark.skipif(
+    not HAS_PYDANTIC, reason="needs the optional pydantic dependency"
+)
+"""Mark tests that use the typed value models (the `validate` extra)."""
 
 
-@pytest.fixture(params=["inline", "externalised", "mixed"])
-def reference(request):
-    """(name, directory) for each RFC-8 reference layout under tests/data."""
-    name = request.param
-    return name, REFERENCE_DIR / name
+def mk(n: int) -> str:
+    """A readable id in the UUID style of the revision's examples (any id string is valid)."""
+    return f"0192f3a0-7c1e-7b00-9c22-{n:012x}"
+
+
+def load_fixtures(store: MemoryStore, *names: str, base: str = DATA) -> None:
+    """Seed `store` with every JSON document under `tests/data/revision/<name>`."""
+    for name in names:
+        root = FIXTURES / name
+        for path in sorted(root.rglob("*.json")):
+            url = f"{base}/{name}/{path.relative_to(root).as_posix()}"
+            store._data[url] = json.loads(path.read_text())
+
+
+@pytest.fixture
+def make_id():
+    """The `mk` helper as a fixture."""
+    return mk
+
+
+@pytest.fixture
+def revision_store() -> MemoryStore:
+    """A `MemoryStore` holding every fixture tree under `tests/data/revision`."""
+    store = MemoryStore()
+    load_fixtures(
+        store, "collection", "plate", "standalone", "inlined", "distinct_ids", "bad"
+    )
+    return store

@@ -12,9 +12,10 @@ from ngio_collections.api import (
     StoreReadOnlyError,
     SyncReadableStore,
     SyncWritableStore,
-    new_node,
 )
 from ngio_collections.io.store._adapt import as_async
+from tests._builders import collection, multiscale
+from tests.conftest import mk
 
 
 class SyncDictStore:
@@ -38,22 +39,16 @@ class SyncDictStore:
         self._data[url] = data
 
     def delete(self, url: str) -> None:
-        if self.read_only:
-            raise StoreReadOnlyError("SyncDictStore is read-only")
         self._data.pop(url, None)
 
 
-def test_sync_store_satisfies_the_sync_protocols() -> None:
+def test_sync_store_satisfies_the_sync_protocols_and_wraps() -> None:
     store = SyncDictStore()
-    assert isinstance(store, SyncReadableStore)
-    assert isinstance(store, SyncWritableStore)
-
-
-def test_as_async_wraps_a_sync_store() -> None:
-    store = SyncDictStore()
+    assert isinstance(store, SyncReadableStore) and isinstance(store, SyncWritableStore)
     wrapped = as_async(store)
-    assert isinstance(wrapped, AsyncReadableStore)
-    assert isinstance(wrapped, AsyncWritableStore)
+    assert isinstance(wrapped, AsyncReadableStore) and isinstance(
+        wrapped, AsyncWritableStore
+    )
 
 
 async def test_as_async_leaves_an_already_async_store_untouched() -> None:
@@ -64,23 +59,17 @@ async def test_as_async_leaves_an_already_async_store_untouched() -> None:
 
 
 async def test_as_async_forwards_read_only() -> None:
-    wrapped = as_async(SyncDictStore(read_only=True))
     with pytest.raises(StoreReadOnlyError):
         await aio.create(
-            "/c.json", new_node("collection", id="root", name="root"), wrapped
+            "/c.json", collection(1), as_async(SyncDictStore(read_only=True))
         )
 
 
 async def test_sync_store_roundtrips_through_the_async_api() -> None:
     store = SyncDictStore()
-    image = new_node("multiscale", id="image", name="test", attributes={"role": "raw"})
-    stub = await aio.create("/data/image.zarr", image, store)
-    root = new_node("collection", id="root", name="test", children=[stub])
-    await aio.create("/data/c.json", root, store)
-
+    stub = await aio.create("/data/image.zarr", multiscale(2), store)
+    await aio.create("/data/c.json", collection(1).add_external(stub), store)
     opened = await aio.open("/data/c.json", store)
-    edited = opened.find("image").set_attrs({"role": "edited"})
-    await aio.save(edited, store)
-
-    inlined = await aio.open_inlined("/data/c.json", store)
-    assert inlined.find("image").attributes["role"] == "edited"
+    await aio.save(opened.find(mk(2)).rename("edited"), store)
+    view = await aio.open_resolved("/data/c.json", store)
+    assert view.find(mk(2)).name == "edited" and not view.find(mk(2)).is_external

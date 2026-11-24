@@ -24,9 +24,15 @@ def _to_path(url: str) -> Path:
 
     Returns:
         Corresponding `pathlib.Path` object.
+
+    Raises:
+        ValueError: If `url` carries a non-local scheme (e.g. `https://`).
     """
-    if split_scheme(url)[0] == "file":
+    scheme = split_scheme(url)[0]
+    if scheme == "file":
         return Path(url2pathname(urlparse(url).path))
+    if scheme:
+        raise ValueError(f"LocalStore cannot address {url!r}: not a local path")
     return Path(url)
 
 
@@ -37,9 +43,8 @@ class LocalStore:
         """Return the parsed JSON content of the file at `url`.
 
         The blocking read runs on a worker thread (`asyncio.to_thread`) so that
-        concurrent `get` calls overlap instead of serializing on the event loop —
-        the file read releases the GIL. This is what lets `Resolver`'s prefetch
-        pass fan out many document reads at once.
+        concurrent `get` calls overlap instead of serializing on the event loop.
+        This is what lets `fetch_all` fan out many document reads at once.
 
         Args:
             url: Filesystem path or `file://` URL to read.
@@ -49,6 +54,7 @@ class LocalStore:
 
         Raises:
             FileNotFoundError: If the file does not exist.
+            ValueError: If `url` is not a local path.
         """
         raw = await asyncio.to_thread(_to_path(url).read_bytes)
         return _json.loads(raw)

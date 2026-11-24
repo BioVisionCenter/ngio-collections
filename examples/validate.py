@@ -1,83 +1,120 @@
-"""Validate a collection with cheap, composable validators.
+"""Validate collections with cheap, composable validators.
 
-A validator is just a `Callable[[ngc.Node], None]` that `raise`s a
-`ngc.ValidationError` when a node fails its check. `ngc.validate(node, validators)`
-runs them over a node and its descendants and *collects* the failures (it tags
-each with the node and validator name); pass `raise_on_error=True` to re-raise the
-first instead. You pass the validators you want explicitly; the example checks:
+A validator is a `Callable[[ngc.Node], None]` that raises `ngc.ValidationError`
+when a node fails its check. `ngc.validate(node, validators)` runs them over a
+node and its descendants and collects the failures. Three bundles ship:
 
-* a `well` node must be a child of a `plate` node (reads *up*);
-* a `scale` transform's factor count must match its coordinate system's axes
-  (follows a *reference*).
+* `CORE_VALIDATORS`: the structural rules of RFC-8 revision 2 (valid ids, known
+  types, no `attributes` bag, complete multiscales, unique ids per document,
+  same-document references resolve, extension types declared, among others);
+* `RECOMMENDED_VALIDATORS`: the provisional trait rules (well under plate,
+  `applies_to`, scale factors vs axes, labels sources, among others);
+* `ALL_VALIDATORS`: both. `paths_are_core` is opt-in (this package resolves
+  `absolute` / `http` paths on purpose).
 
-Validators key off the *capabilities* a node carries (its attributes), so one
-node carrying several roles runs every check — composition over inheritance.
-
-Run with: pixi run python examples/validate.py
+Run with: pixi run --environment dev python examples/validate.py
 """
 
 import ngio_collections as ngc
+from _ids import uid
+from _images import image
+
+
+def report(label: str, node: ngc.Node, validators=ngc.ALL_VALIDATORS) -> None:
+    errors = ngc.validate(node, validators)
+    print(f"{label:<22}", "ok" if not errors else "")
+    for error in errors:
+        print(f"{'':<22} {error.validator}: {error}")
 
 
 def main() -> None:
-    # Pick the validators to run as a plain tuple of callables.
-    validators = (ngc.well_under_plate, ngc.scale_matches_axes)
-
-    plate_attrs = {"plate": {"columns": [{"id": "1"}], "rows": [{"id": "A"}]}}
-    well_attrs = {"well": {"column": {"id": "1"}, "row": {"id": "A"}}}
-
-    # A well placed correctly under a plate: no issues.
-    plate = ngc.new_node(
-        "collection", id="plate", name="plate", attributes=plate_attrs
-    ).add(ngc.new_node("collection", id="A1", name="A1", attributes=well_attrs))
-    print("well under plate :", ngc.validate(plate.find("A1"), validators=validators))
-
-    # An orphan well (parent is not a plate): one issue.
-    orphan = ngc.new_node("collection", id="root", name="root").add(
-        ngc.new_node("collection", id="A1", name="A1", attributes=well_attrs)
+    well = ngc.WellTrait(row_index=0, column_index=0)
+    plate = ngc.PlateTrait(
+        rows=[ngc.RowObj(name="A")], columns=[ngc.ColumnObj(name="1")]
     )
-    for error in ngc.validate(orphan.find("A1"), validators=validators):
-        print("orphan well      :", error.validator, "—", error)
 
-    # A multiscale whose single scale's scale factors do not match its axes.
-    bad = ngc.new_node(
-        "multiscale",
-        id="img",
-        name="img",
-        attributes={
-            "coordinateSystems": [
-                {"id": "space", "axes": [{"name": "z"}, {"name": "y"}, {"name": "x"}]}
-            ]
-        },
-    ).add(
-        ngc.new_node(
-            "singlescale",
-            id="0",
-            name="0",
-            attributes={
-                "coordinateTransformations": [
-                    {"type": "scale", "output": {"id": "space"}, "scale": [2.0, 2.0]}
-                ]
-            },
-        )
+    report(
+        "well under plate",
+        ngc.new_collection(
+            id=uid(1),
+            traits=[plate],
+            children=[ngc.new_collection(id=uid(2), traits=[well])],
+        ),
     )
-    for error in ngc.validate(bad, validators=validators):
-        print("scale vs axes    :", error.validator, "—", error)
+    report(
+        "orphan well",
+        ngc.new_collection(
+            id=uid(1), children=[ngc.new_collection(id=uid(2), traits=[well])]
+        ),
+    )
+    report(
+        "labels on collection",
+        ngc.new_collection(id=uid(1), traits=[ngc.LabelsTrait()]),
+    )
+    report("unknown node type", ngc.new_node("singlescale", id=uid(1)))
+    report(  # a prefixed name is not a URI, so it is not an extension type either
+        "unknown trait type",
+        ngc.new_collection(id=uid(1), traits=[{"type": "fractal:table"}]),
+    )
 
-    # A custom validator is just a function that raises; pass it alongside the
-    # example checks. `raise_on_error` turns validate into an assertion.
-    def multiscale_has_scales(node: ngc.Node) -> None:
-        if node.type == "multiscale" and not node.children():
-            raise ngc.ValidationError("a multiscale needs at least one scale")
+    good = image(3, axes=("z", "y", "x"), levels=2)
+    report("complete multiscale", good)
+    bad_arrays = [a.model_dump(mode="json", exclude_none=True) for a in good.arrays]
+    two_factors = [2.0, 2.0]  # but the multiscale has 3 axes
+    bad_arrays[1]["downsamplingTransformations"][0]["scale"] = two_factors
+    report("downsampling vs axes", good.set_field("data", bad_arrays))
+    report("empty multiscale", good.set_field("data", []))
+    report(  # the typed models reject a bad id early; a raw trait reaches the validator
+        "invalid id",
+        ngc.new_collection(id=uid(1)).set_trait(
+            {
+                "type": "plate",
+                "rows": [],
+                "columns": [],
+                "acquisitions": [{"type": "acquisition", "id": "t 0"}],  # no spaces
+            }
+        ),
+    )
+    report(
+        "dangling reference",
+        good.set_trait(
+            ngc.LabelsTrait(source=[ngc.ReferenceObj(type="multiscale", ref=uid(9))])
+        ),
+    )
+    report(
+        "remote array (strict)",
+        good.set_field(
+            "data",
+            [
+                {
+                    "type": "array",
+                    "path": {
+                        "type": "zarr",
+                        "format": "http",
+                        "href": "https://h.org/img/0",
+                    },
+                }
+            ],
+        ),
+        (ngc.paths_are_core,),
+    )
+
+    # A custom validator is just a function that raises; `raise_on_error` turns
+    # `validate` into an assertion.
+    def has_a_name(node: ngc.Node) -> None:
+        if node.name is None:
+            raise ngc.ValidationError("every node in this project is named")
 
     try:
         ngc.validate(
-            ngc.new_node("multiscale", id="empty", name="empty"),
-            validators=(*validators, multiscale_has_scales),
+            ngc.new_collection(id=uid(1)),
+            validators=(*ngc.CORE_VALIDATORS, has_a_name),
             raise_on_error=True,
         )
     except ngc.ValidationError as error:
-        print("custom (raised)  :", error.validator, "—", error)
+        print(
+            f"{'custom (raised)':<22} {error.validator}: {error} (node ...{error.declared_id[-4:]})"
+        )
 
 
 if __name__ == "__main__":

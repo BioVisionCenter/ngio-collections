@@ -1,10 +1,10 @@
 """Benchmark-only store wrappers.
 
 `DelayStore` injects a fixed per-read latency so the payoff of concurrent
-document I/O is measurable deterministically — independent of the OS page cache
+document I/O is measurable deterministically, independent of the OS page cache
 (which makes warm local reads ~µs and hides the win). It models the real target:
 high-latency / remote stores. With sequential reads the cost is ~``N * delay``;
-with `Resolver(prefetch_concurrency=k)` it drops toward ~``ceil(N/k) * delay``.
+with `fetch_all(concurrency=k)` it drops toward ~``ceil(N/k) * delay``.
 """
 
 from __future__ import annotations
@@ -28,9 +28,11 @@ class DelayStore:
         await asyncio.sleep(self.delay_s)
         return await self.inner.get(url)
 
-    async def put(self, url: str, data: dict[str, JSONValue]) -> None:
+    async def put(
+        self, url: str, data: dict[str, JSONValue], *, overwrite: bool = False
+    ) -> None:
         """Delegate the write to the wrapped store (no injected delay)."""
-        await _writable(self.inner).put(url, data)
+        await _writable(self.inner).put(url, data, overwrite=overwrite)
 
     async def delete(self, url: str) -> None:
         """Delegate the delete to the wrapped store (no injected delay)."""
@@ -38,7 +40,7 @@ class DelayStore:
 
 
 def _writable(store: AsyncReadableStore) -> AsyncWritableStore:
-    """Narrow `store` to a `WritableStore`, raising if it is read-only."""
+    """Narrow `store` to an `AsyncWritableStore`, raising if it is read-only."""
     if not isinstance(store, AsyncWritableStore):
         raise TypeError(f"{type(store).__name__} is not writable")
     return store
